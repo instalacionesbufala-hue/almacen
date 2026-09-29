@@ -137,7 +137,8 @@ Los **cargadores VE** y los **cuadros de protecciones** los entrega Esmove y que
 - **Propiedad del artículo:** `propiedad` (propia | custodia) y `propietario_id`. Se crea una tabla `propietarios` (nombre, contacto, correos de reposición e informes), con Esmove como primer registro, preparada por si mañana hay otro depositante.
 - **Precio opcional:** en custodia el precio es `null`, y en ningún sitio se inventa ni se exige.
 - **Nueva categoría** `cuadros` (cuadros de protecciones), además de `cargadores`.
-- **N.º de serie obligatorio** en cargadores y en cuadros de protecciones (confirmado por el usuario): toda entrada, salida, devolución o incidencia de estos artículos va con su número de serie, igual que los cargadores hoy.
+- **Cargadores:** n.º de serie obligatorio en toda entrada, salida, devolución o incidencia, como hoy.
+- **Cuadros de protecciones: sin n.º de serie** (corrección del usuario). Solo llevan una pegatina con el código del modelo. Se controlan por **referencia de modelo y cantidad**, como el material por unidades, y el código de la pegatina se guarda en `supplierRef` para buscarlo y emparejar albaranes. Para escanearlos, la app imprime una etiqueta QR propia `BUF:<SKU>` por modelo, pensada para la estantería o la caja. En el móvil se puede leer el código de la pegatina con la cámara (lectura de texto) o escribirlo a mano. Las salidas de cuadros siguen exigiendo la obra de destino.
 - **Datos de demostración:** los cargadores pasan a custodia de Esmove sin precio y se añaden un par de cuadros de ejemplo.
 
 **2. Valoración y panel**
@@ -167,7 +168,7 @@ Los **cargadores VE** y los **cuadros de protecciones** los entrega Esmove y que
 
 **7. Hecho cuando**
 - Hay pruebas de que el valor del inventario excluye la custodia.
-- Hay pruebas de que una salida de custodia sin obra se rechaza.
+- Hay pruebas de que una salida de custodia sin obra se rechaza, y de que los cuadros se mueven por cantidad sin pedir n.º de serie.
 - Hay pruebas de que el aviso de reposición de custodia va al borrador de Esmove y no al de proveedores.
 - Hay pruebas de que el informe no contiene ningún importe.
 
