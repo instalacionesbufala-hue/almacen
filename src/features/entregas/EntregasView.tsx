@@ -13,10 +13,12 @@ import { toast } from '../../ui/toast';
 import { BTN_P, BTN_S, CARD, ESTADO_EQ, FirmaImg, Icon, INP, LBL, Tag, TagCustodia } from '../../ui/base';
 import { alternarSerie, anadirACesta, disponible, fijarCantidad, quitarDeCesta } from './cesta';
 import { Firma, firmaPNG, type Trazo } from '../../ui/firma';
+import { abrirInformeEntregas, abrirPlantillas, abrirPreparar, enviarJustificante, Preparadas } from './Plantillas';
+import { usePermisos } from '../../store/permisos';
 
 
 export default function EntregasView() {
-  const E = useAlmacen();
+  const E = useAlmacen(), perm = usePermisos();
   const [cat, setCat] = useState('cargadores'), [q, setQ] = useState(''), [verSN, setVerSN] = useState<string | null>(null);
   const [firma, setFirma] = useState<Trazo[]>([]), [certifica, setCertifica] = useState(false);
   let eq = E.equipos.find(e => e.id === E.cesta.equipo);
@@ -26,6 +28,7 @@ export default function EntregasView() {
   const rec = E.tecnicos.find(t => t.id === E.cesta.receptor);
   const prods = searchProducts(E, q, { cat: q ? 'all' : cat }).slice(0, 12);
   const lineas = E.cesta.lineas.filter(l => find(E, l.sku));
+  // E-007: las entregas preparadas se firman desde su lista; aquí sigue la entrega directa (cesta + firma)
   const nextId = modoNube ? 'se asigna al enviar' : `ENT-${new Date().getFullYear()}-${String(E.seq.ent + 1).padStart(4, '0')}`;
   const firmado = firma.length > 0, puede = !!(lineas.length && rec && firmado && certifica);
 
@@ -49,6 +52,10 @@ export default function EntregasView() {
       <div className="hidden lg:flex items-end justify-between"><div><span className={LBL}>Custodia de material · almacén → furgoneta</span><h1 className="text-headline-lg font-bold">Entrega y firma de material</h1></div>
         <button onClick={() => ir('equipos')} className={`${BTN_S} px-4 h-11`}><Icon n="verified_user" className="ico-20" />Auditoría de entregas</button></div>
       <div className="lg:hidden flex items-center justify-between gap-2 bg-surface-container-low rounded-xl px-3 py-2.5 font-mono text-label-sm"><span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-tertiary-container pulso" />SYNC LOCAL</span><span className="text-primary">{eq?.id} · Doc #{nextId}</span></div>
+      <div className="flex flex-wrap gap-2"><button onClick={() => abrirPreparar(E.cesta.equipo)} className={`${BTN_P} h-12 px-4`}><Icon n="playlist_add_check" className="ico-20" />Preparar desde plantilla</button>
+        {perm.admin && <button onClick={abrirPlantillas} className={`${BTN_S} h-12 px-4`}><Icon n="list_alt" className="ico-20" />Plantillas</button>}
+        <button onClick={abrirInformeEntregas} className={`${BTN_S} h-12 px-4`}><Icon n="summarize" className="ico-20" />Entregas por técnico</button></div>
+      <Preparadas />
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-space-lg items-start">
         <div className="lg:col-span-7 flex flex-col gap-4 lg:gap-space-lg">
           <section className={`${CARD} p-4 lg:p-space-md flex flex-col gap-3`}>
@@ -143,8 +150,9 @@ function Recibo({ id }: { id: string }) {
         <tbody>{e.lineas.map(l => { const p = find(E, l.sku); return <tr key={l.sku} className="border-t border-surface-container"><td className="py-1.5">{p ? p.name : l.sku}<div className="font-mono text-label-sm text-secondary">{l.sku}</div></td><td className="font-mono text-label-sm">{(l.serials || []).map(s => <div key={s}>{s}</div>)}</td><td className="text-right font-semibold">{p ? qtyTxt(p, l.qty) : num(l.qty)}</td></tr>; })}</tbody></table>
       <div className="flex items-end justify-between gap-3 border-t border-surface-container pt-3"><div><FirmaImg f={e.firma} className="h-16 w-44" /><div className="text-body-sm text-secondary">Firma del receptor</div></div>
         <div className="font-mono text-[9px] text-secondary break-all max-w-[55%] text-right">Huella SHA-256<br />{e.hash || 'Se calcula en el servidor al sincronizar'}</div></div>
+      {(e.obra || e.plantilla) && <p className="text-body-sm">{e.obra ? <>Obra: <b>{e.obra}</b></> : null}{e.plantilla ? <> · Plantilla: {E.plantillas.find(p => p.id === e.plantilla)?.nombre || '—'}</> : null}</p>}
       <p className="text-body-sm text-secondary">Aceptación de la entrega por el receptor. Registrado por {e.operator}.</p>
     </div>
-    <SheetFoot className="flex gap-2"><button onClick={closeModal} className={`${BTN_S} h-12 px-5`}>Cerrar</button><button onClick={() => print()} className={`${BTN_P} h-12 flex-1`}><Icon n="print" className="ico-20" />Imprimir o guardar PDF</button></SheetFoot>
+    <SheetFoot className="flex flex-wrap gap-2"><button onClick={closeModal} className={`${BTN_S} h-12 px-5`}>Cerrar</button><button onClick={() => void enviarJustificante(e)} className={`${BTN_S} h-12 px-4`}><Icon n="cloud_upload" className="ico-20" />{modoNube ? 'Justificante PDF (guardar y enviar)' : 'Descargar PDF'}</button><button onClick={() => print()} className={`${BTN_P} h-12 flex-1`}><Icon n="print" className="ico-20" />Imprimir o guardar PDF</button></SheetFoot>
   </>);
 }

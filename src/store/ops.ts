@@ -2,8 +2,9 @@
    - aplicarse en local (validación previa con src/domain y respuesta inmediata en pantalla), y
    - traducirse a su función SQL del servidor (la fuente de verdad en modo nube).
    En modo nube la operación se guarda en la cola y se reaplica en local hasta que el servidor la confirma. */
-import type { ConfigAvisos, Propietario, Rol, CatId, EstadoEquipo, Estado, Herramienta, LineaEntrega, Producto, TipoIncidencia, TipoMov } from '../data/tipos';
-import { applyMovement, find, delta } from '../domain/reglas';
+import type { Plantilla, Tallas, ConfigAvisos, Propietario, Rol, CatId, EstadoEquipo, Estado, Herramienta, LineaEntrega, Producto, TipoIncidencia, TipoMov } from '../data/tipos';
+import { applyMovement, find, delta, disponibleReal, seriesReservadas } from '../domain/reglas';
+import { herramientasLibres } from '../domain/plantillas';
 import { redondea } from '../domain/formato';
 import { asignarHerramienta, registrarIncidencia } from '../domain/herramientas';
 
@@ -39,6 +40,11 @@ export type Op =
   | { op: 'propietario'; args: Propietario }
   | { op: 'cambiarPropiedad'; args: { sku: string; propiedad: 'propia' | 'custodia'; propietario?: string } }
   | { op: 'envio'; args: { canal: 'correo' | 'push' | 'telegram'; tipo: 'prueba' | 'solicitud' | 'informe'; asunto: string; cuerpo: string; destinatarios: string[]; csv?: string } }
+  | { op: 'prepararEntrega'; args: { id: string; equipo: string; receptor: string; obra: string; plantilla?: string; lineas: LineaEntrega[]; numero?: string; caduca?: number } }
+  | { op: 'confirmarEntrega'; args: { id: string; firma: string; hash?: string } }
+  | { op: 'anularEntrega'; args: { id: string } }
+  | { op: 'plantilla'; args: Plantilla }
+  | { op: 'tallas'; args: { tecnico: string; tallas: Tallas } }
   | { op: 'acta'; args: { id: string; propietario: string; representante: string; firma: string; lineas: { sku: string; contado: number }[] } };
 
 type Def<A> = { local: (S: Estado, a: A) => void; rpc: (a: A) => [string, Record<string, unknown>]; desc: (S: Estado, a: A) => string };
@@ -289,6 +295,94 @@ export const OPS: Defs = {
     },
     rpc: a => ['registrar_acta_custodia', { p_id: a.id, p_propietario: a.propietario, p_representante: a.representante, p_firma: a.firma, p_lineas: a.lineas }],
     desc: (_S, a) => `Acta de recuento de custodia (${a.lineas.length} referencias)`,
+  },
+  prepararEntrega: {
+    local: (S, a) => {
+      if (S.entregas.some(e => e.id === a.id)) return;
+      const eq = S.equipos.find(e => e.id === a.equipo); if (!eq) throw new Error('Equipo no encontrado');
+      const t = S.tecnicos.find(x => x.id === a.receptor); if (!t) throw new Error('Receptor no encontrado');
+      if (!eq.tecnicos.includes(t.id)) throw new Error(`${t.nombre} no pertenece a ese equipo`);
+      if (!a.lineas.length) throw new Error('La entrega no tiene material');
+      for (const l of a.lineas) {
+        if (l.tipo === 'herramienta') {
+          const h = S.herramientas.find(x => x.id === l.dotacion); if (!h) throw new Error('Herramienta no encontrada');
+          if (!h.modelo || !herramientasLibres(S, h.modelo).some(x => x.id === h.id)) throw new Error(`${h.nombre} (${h.serie}) no está libre en el almacén`);
+          continue;
+        }
+        const p = find(S, l.sku); if (!p) throw new Error('Producto no encontrado: ' + l.sku);
+        if (p.borrador) throw new Error(`${p.sku} está en borrador`);
+        if (!(l.qty > 0)) throw new Error(`Cantidad no válida en ${p.name}`);
+        const disp = disponibleReal(S, p);
+        if (disp < l.qty) throw new Error(`Solo hay ${Math.max(disp, 0)} disponibles de ${p.name} (el resto está reservado o no hay stock)`);
+        if (p.serialized) {
+          if (l.serials.length !== l.qty) throw new Error(`${p.name}: indica los n.º de serie`);
+          const sr = seriesReservadas(S, p.sku), mal = l.serials.find(x => !(p.serials || []).includes(x) || sr.includes(x));
+          if (mal) throw new Error(`El n.º de serie ${mal} no está libre`);
+        }
+      }
+      const numero = a.numero || (/^ENT-/.test(a.id) ? a.id : undefined);
+      S.entregas.unshift({ id: a.id, numero, ts: Date.now(), equipo: a.equipo, receptor: a.receptor, dni: t.dni, lineas: JSON.parse(JSON.stringify(a.lineas)), firma: '', operator: S.operator,
+        estado: 'preparada', plantilla: a.plantilla, obra: a.obra, caduca: a.caduca || Date.now() + (S.configAvisos.horasReserva || 48) * 3600e3 });
+    },
+    rpc: a => ['preparar_entrega', { p_id: a.id, p_equipo: a.equipo, p_receptor: a.receptor, p_obra: a.obra, p_plantilla: a.plantilla ?? null,
+      p_lineas: a.lineas.map(l => l.tipo === 'herramienta' ? { tipo: 'herramienta', dotacion_id: l.dotacion } : { tipo: 'stock', sku: l.sku, cantidad: l.qty, series: l.serials }) }],
+    desc: (S, a) => `Preparar entrega para ${S.tecnicos.find(t => t.id === a.receptor)?.nombre || a.receptor}`,
+  },
+  confirmarEntrega: {
+    local: (S, a) => {
+      const e = S.entregas.find(x => x.id === a.id); if (!e) throw new Error('Entrega no encontrada');
+      if (e.estado === 'firmada' || !e.estado) return;
+      if (e.estado === 'anulada') throw new Error('La entrega está anulada');
+      if ((e.caduca ?? 0) <= Date.now()) throw new Error('La reserva ha caducado: prepárala de nuevo');
+      if (!a.firma) throw new Error('Falta la firma del receptor');
+      const copia = JSON.stringify({ products: S.products, herramientas: S.herramientas, movements: S.movements });
+      try {
+        for (const l of e.lineas) {
+          if (l.tipo === 'herramienta') {
+            const h = S.herramientas.find(x => x.id === l.dotacion);
+            if (!h || h.estado !== 'operativa') throw new Error('Una herramienta de la entrega ya no está disponible');
+            h.equipo = e.equipo; h.tecnico = e.receptor;
+            h.historial.push({ id: nuevoId(), ts: Date.now(), tipo: 'asignacion', nota: `Entregada en ${e.numero || 'entrega'}`, operator: S.operator });
+            continue;
+          }
+          applyMovement(S, { sku: l.sku, type: 'salida', qty: l.qty, reason: 'Entrega a equipo', ref: (e.numero || 'Entrega') + (e.obra ? ' · ' + e.obra : ''), serials: l.serials, equipo: e.equipo, entrega: e.id });
+          const p = find(S, l.sku);
+          if (p && (p.cat === 'ropa' || p.cat === 'epis')) S.herramientas.push({ id: (p.cat === 'epis' ? 'E' : 'R') + nuevoId().slice(0, 6).toUpperCase(), clase: p.cat === 'epis' ? 'epi' : 'ropa', nombre: p.modelo || p.name,
+            marca: p.supplier, serie: '', talla: p.talla, cantidad: Math.ceil(l.qty), valor: p.price, estado: 'operativa', equipo: e.equipo, tecnico: e.receptor,
+            historial: [{ id: nuevoId(), ts: Date.now(), tipo: 'alta', nota: `Entregada en ${e.numero || 'entrega'}`, operator: S.operator }] });
+        }
+      } catch (err) { const c = JSON.parse(copia); S.products = c.products; S.herramientas = c.herramientas; S.movements = c.movements; throw err; }
+      e.estado = 'firmada'; e.firma = a.firma; e.ts = Date.now(); e.hash = a.hash; e.caduca = undefined;
+    },
+    rpc: a => ['confirmar_entrega', { p_id: a.id, p_firma: a.firma }],
+    desc: (S, a) => `Firma de la entrega ${S.entregas.find(e => e.id === a.id)?.numero || ''}`,
+  },
+  anularEntrega: {
+    local: (S, a) => {
+      const e = S.entregas.find(x => x.id === a.id); if (!e || e.estado === 'anulada') return;
+      if (e.estado !== 'preparada') throw new Error('Una entrega firmada no se anula: corrígela con una devolución');
+      e.estado = 'anulada'; e.caduca = undefined;
+    },
+    rpc: a => ['anular_entrega', { p_id: a.id }],
+    desc: () => 'Anular entrega preparada',
+  },
+  plantilla: {
+    local: (S, a) => {
+      if (S.rol !== 'admin') throw new Error('Solo el administrador edita las plantillas');
+      if (!a.nombre.trim()) throw new Error('Indica el nombre de la plantilla');
+      if (a.lineas.some(l => !(l.cantidad > 0))) throw new Error('Las cantidades deben ser mayores que cero');
+      const i = S.plantillas.findIndex(x => x.id === a.id);
+      if (!a.activa) { if (i >= 0) S.plantillas.splice(i, 1); return; }
+      if (i >= 0) S.plantillas[i] = JSON.parse(JSON.stringify(a)); else S.plantillas.push(JSON.parse(JSON.stringify(a)));
+    },
+    rpc: a => ['guardar_plantilla', { p: { id: a.id, nombre: a.nombre, descripcion: a.descripcion, modo_kit: a.modoKit, activa: a.activa,
+      lineas: a.lineas.map(l => ({ tipo: l.tipo, sku: l.sku ?? '', modelo: l.modelo ?? '', tipo_talla: l.tipoTalla ?? '', cantidad: l.cantidad, editable: l.editable })) } }],
+    desc: (_S, a) => `Plantilla ${a.nombre}`,
+  },
+  tallas: {
+    local: (S, a) => { if (S.rol !== 'admin') throw new Error('Solo el administrador edita las tallas'); const t = S.tecnicos.find(x => x.id === a.tecnico); if (!t) throw new Error('Técnico no encontrado'); t.tallas = { ...a.tallas }; },
+    rpc: a => ['guardar_tallas', { p_tecnico: a.tecnico, p_camiseta: a.tallas.camiseta ?? '', p_pantalon: a.tallas.pantalon ?? '', p_calzado: a.tallas.calzado ?? '', p_guantes: a.tallas.guantes ?? '' }],
+    desc: (S, a) => `Tallas de ${S.tecnicos.find(t => t.id === a.tecnico)?.nombre || a.tecnico}`,
   },
 };
 

@@ -1,6 +1,6 @@
 /* Estado inicial de demostración (movimientos, entregas y albaranes de ejemplo) */
 import type { Albaran, Entrega, Estado, Herramienta, Movimiento, TipoMov } from './tipos';
-import { CONFIG_AVISOS_DEFECTO, FIRMAS_DEMO, OFICINA, SEED_EQUIPOS, SEED_PRODUCTS, SEED_PROPIETARIOS, SEED_TECNICOS } from './catalogo';
+import { SEED_PLANTILLAS, CONFIG_AVISOS_DEFECTO, FIRMAS_DEMO, OFICINA, SEED_EQUIPOS, SEED_PRODUCTS, SEED_PROPIETARIOS, SEED_TECNICOS } from './catalogo';
 
 const clone = <T,>(o: T): T => JSON.parse(JSON.stringify(o));
 
@@ -77,7 +77,7 @@ export function seedHerramientas(): Herramienta[] {
 export function fresh(): Estado {
   return {
     v: 3, products: clone(SEED_PRODUCTS), movements: seedMovements(), albaranes: seedAlbaranes(),
-    equipos: clone(SEED_EQUIPOS), tecnicos: clone(SEED_TECNICOS), entregas: seedEntregas(), herramientas: seedHerramientas(), propietarios: clone(SEED_PROPIETARIOS), pendientes: [], perfiles: [], rol: 'admin', avisos: [], minimosHerramienta: [{ modelo: 'Makita DDF484', minimo: 1, proveedor: 'Saltoki Alcobendas' }], configAvisos: clone(CONFIG_AVISOS_DEFECTO), envios: [], actas: [],
+    equipos: clone(SEED_EQUIPOS), tecnicos: clone(SEED_TECNICOS), entregas: seedEntregas(), herramientas: seedHerramientas(), propietarios: clone(SEED_PROPIETARIOS), pendientes: [], perfiles: [], rol: 'admin', avisos: [], minimosHerramienta: [{ modelo: 'Makita DDF484', minimo: 1, proveedor: 'Saltoki Alcobendas' }], configAvisos: clone(CONFIG_AVISOS_DEFECTO), envios: [], actas: [], plantillas: clone(SEED_PLANTILLAS),
     operator: OFICINA, pedidos: {}, cesta: { equipo: 'F01', receptor: 'T1', lineas: [] }, seq: { ent: 412 },
   };
 }

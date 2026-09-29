@@ -14,10 +14,10 @@ import { encolar, enlazar } from './nube/sync';
 import { toast } from '../ui/toast';
 
 // v4: datos de demostración con custodia, cuadros, ropa y EPIs (E-006/E-008)
-const LS = modoNube ? 'almacen-bufala-nube-cache-v1' : 'almacen-bufala-v4';
+const LS = modoNube ? 'almacen-bufala-nube-cache-v1' : 'almacen-bufala-v5';
 const LS_OLD = 'almacen-bufala-v2';
 
-export const vacio = (): Estado => ({ v: 3, products: [], movements: [], albaranes: [], equipos: [], tecnicos: [], entregas: [], herramientas: [], propietarios: [], pendientes: [], perfiles: [], rol: 'almacen', avisos: [], minimosHerramienta: [], configAvisos: { ...CONFIG_AVISOS_DEFECTO }, envios: [], actas: [],
+export const vacio = (): Estado => ({ v: 3, products: [], movements: [], albaranes: [], equipos: [], tecnicos: [], entregas: [], herramientas: [], propietarios: [], pendientes: [], perfiles: [], rol: 'almacen', avisos: [], minimosHerramienta: [], configAvisos: { ...CONFIG_AVISOS_DEFECTO }, envios: [], actas: [], plantillas: [],
   operator: '', pedidos: {}, cesta: { equipo: '', receptor: null, lineas: [] }, seq: { ent: 0 } });
 
 function migrate(s: Partial<Estado>): Estado {

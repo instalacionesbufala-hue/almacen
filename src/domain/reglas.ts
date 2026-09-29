@@ -27,6 +27,17 @@ export const valorProducto = (p: Producto) => esCustodia(p) ? 0 : p.stock * (p.p
 export const invValue = (S: Estado) => S.products.reduce((a, p) => a + valorProducto(p), 0);
 export const aisles = (S: Estado) => [...new Set(S.products.map(p => aisle(p.loc)))].sort();
 
+/** E-007: lo apartado para entregas preparadas y vigentes (excepto la indicada) */
+export function reservado(S: Estado, sku: string, excepto?: string, ahora = Date.now()) {
+  let n = 0;
+  for (const e of S.entregas) if (e.estado === 'preparada' && (e.caduca ?? 0) > ahora && e.id !== excepto)
+    for (const l of e.lineas) if ((l.tipo ?? 'stock') === 'stock' && l.sku === sku) n += l.qty;
+  return redondea(n);
+}
+export const seriesReservadas = (S: Estado, sku: string, excepto?: string, ahora = Date.now()) =>
+  S.entregas.filter(e => e.estado === 'preparada' && (e.caduca ?? 0) > ahora && e.id !== excepto).flatMap(e => e.lineas.filter(l => l.sku === sku).flatMap(l => l.serials));
+export const disponibleReal = (S: Estado, p: Producto, excepto?: string) => redondea(p.stock - reservado(S, p.sku, excepto));
+
 export interface MovInput { id?: string; sku: string; type: TipoMov; qty: number; reason: string; ref?: string; serials?: string[]; equipo?: string; entrega?: string }
 /** Variación de stock de un movimiento (el ajuste lleva su signo) */
 export const delta = (type: TipoMov, qty: number) => type === 'entrada' || type === 'ajuste' ? qty : -qty;
@@ -47,6 +58,12 @@ export function applyMovement(S: Estado, { id, sku, type, qty, reason, ref = '',
     if (d > 0) { const dup = serials.find(s => (p.serials || []).includes(s)); if (dup) throw new Error(`El n.º de serie ${dup} ya está en stock`); }
     else { const f = serials.find(s => !(p.serials || []).includes(s)); if (f) throw new Error(`El n.º de serie ${f} no está en stock`); }
   } else if (serials.length) throw new Error(`${p.name} no lleva control por n.º de serie`);
+  if (d < 0 && S.entregas?.length) {
+    const r = reservado(S, sku, entrega);
+    if (p.stock + d < r) throw new Error(`Hay ${qtyTxt(p, r)} reservadas para entregas preparadas de ${p.name}: no se pueden usar`);
+    const sr = seriesReservadas(S, sku, entrega), choca = serials.find(s => sr.includes(s));
+    if (choca) throw new Error(`El n.º de serie ${choca} está reservado para otra entrega preparada`);
+  }
   const before = status(p);
   if (d > 0) { if (p.serialized) p.serials = [...(p.serials || []), ...serials]; }
   else if (p.serialized) p.serials = (p.serials || []).filter(s => !serials.includes(s));
@@ -119,7 +136,9 @@ export function resolveCode(S: Estado, raw: string): { p: Producto; serial: stri
 /** Stock a bordo de una furgoneta: entregado − devuelto */
 export function vanStock(S: Estado, eqId: string): LineaEntrega[] {
   const m: Record<string, LineaEntrega> = {};
-  for (const e of S.entregas) if (e.equipo === eqId) for (const l of e.lineas) {
+  // solo lo firmado está a bordo: lo preparado sigue reservado en el almacén y lo anulado no salió
+  for (const e of S.entregas) if (e.equipo === eqId && (e.estado ?? 'firmada') === 'firmada') for (const l of e.lineas) {
+    if (l.tipo === 'herramienta') continue;
     m[l.sku] = m[l.sku] || { sku: l.sku, qty: 0, serials: [] };
     m[l.sku].qty = redondea(m[l.sku].qty + l.qty); m[l.sku].serials.push(...(l.serials || []));
   }

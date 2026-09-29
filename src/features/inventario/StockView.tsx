@@ -34,7 +34,7 @@ function Kpis() {
   const val = invValue(E), cust = E.products.filter(esCustodia), custMal = cust.filter(p => status(p) !== 'green').length, custRojo = cust.filter(p => status(p) === 'red').length;
   const aparamenta = E.products.filter(p => p.cat === 'aparamenta' && !esCustodia(p)).reduce((a, p) => a + valorProducto(p), 0);
   const crit = critical(E), sup = new Set(crit.map(p => p.supplier)).size, n = E.products.length || 1;
-  const entHoy = E.entregas.filter(e => esHoy(e.ts)), firm = entHoy.filter(e => e.firma).length;
+  const entHoy = E.entregas.filter(e => esHoy(e.ts) && e.estado !== 'anulada'), firm = entHoy.filter(e => (e.estado ?? 'firmada') === 'firmada').length;
   const enRuta = E.equipos.filter(e => e.estado === 'ruta').length, green = E.products.filter(p => status(p) === 'green').length;
   return (
     <div className={`grid grid-cols-1 sm:grid-cols-2 gap-space-md ${verCostes ? 'xl:grid-cols-5' : 'xl:grid-cols-4'}`}>

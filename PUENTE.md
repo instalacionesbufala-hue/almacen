@@ -104,7 +104,7 @@ Objetivo: que el administrador reciba un aviso cuando algo baje de su mínimo, p
 - Se puede enviar un correo de prueba y una notificación push de prueba.
 - La guía de E-005 incluye cómo activar cada canal.
 
-### E-007 · Plantillas de entrega a técnicos · PENDIENTE
+### E-007 · Plantillas de entrega a técnicos · HECHO
 Objetivo: no añadir material a mano en cada entrega. Se elige una plantilla, se ajusta si hace falta y el técnico solo firma.
 
 **1. La plantilla (la crea y edita el administrador)**
@@ -321,3 +321,40 @@ Decisiones posteriores del usuario (29/09/2026, misma sesión):
 **Pruebas:** 15 de E-006 y E-008 en la base de datos (trigger, duplicados, cierre, custodia a Esmove, cantidad sugerida, pedido, repuestos, resumen a la hora, recordatorio, visibilidad de envíos, incidencia de custodia, acta, propiedad), informe sin importes, lectura de la pegatina y el contrato ampliado. En total, 103 en verde.
 
 **Pendiente de verificar con las cuentas reales:** el envío de correo, push y Telegram necesita las claves. La función `notificar` no se ha podido ejecutar aquí (no hay Deno ni Supabase en esta máquina). La guía E-005 incluye cómo activar cada canal y cómo hacer la prueba.
+
+### 29/09/2026 · E-007 · HECHO
+**Datos** (`supabase/migrations/20260930000300_e007_plantillas.sql`):
+- `plantillas_entrega` y `plantilla_lineas`. Una línea puede ser de tres tipos:
+  - `stock`: una referencia concreta.
+  - `modelo` + `tipo_talla`: ropa o EPI; la talla sale de la ficha del técnico.
+  - `herramienta`: un modelo de dotación.
+- `tallas_tecnico` (camiseta, pantalón, calzado, guantes) y `reservas`.
+- `entregas` gana `estado` (preparada | firmada | anulada), `plantilla_id`, `obra`, `caduca`, `firmada_ts` y `anulada_*`. `entrega_lineas` puede ser una herramienta (`dotacion_id`).
+- El trigger de inmutabilidad solo deja pasar de preparada a firmada o anulada. Una firmada no se toca: se corrige con una devolución.
+
+**Flujo:**
+- `preparar_entrega`: comprueba disponible = stock − reservado por otras preparadas vigentes, series libres y herramientas libres, y **reserva** hasta `caduca` (48 h, configurable en `config_avisos.horas_reserva`).
+- Mientras tanto, ninguna salida, merma, ajuste ni otra entrega puede usar lo reservado. Lo comprueba un trigger sobre `movimientos`, así que vale para cualquier vía.
+- `confirmar_entrega` (atómica):
+  - libera la reserva y crea las salidas;
+  - la ropa y los EPIs entregados pasan a la dotación del técnico con su talla;
+  - las herramientas se le asignan;
+  - calcula la huella.
+  Si algo falla (por ejemplo, la herramienta se rompió entretanto), no se aplica nada. La huella ahora incluye obra y herramienta.
+- `anular_entrega` libera la reserva. `limpiar_reservas` con pg_cron cada 15 minutos (las caducadas ya no cuentan aunque sigan en la tabla).
+- La entrega directa de E-002 (cesta y firma) sigue igual para lo imprevisto.
+
+**App:**
+- En Entregas: "Preparar desde plantilla" (con el modo kit y los avisos de lo que falta: se propone entregar lo disponible, con series y herramientas preseleccionadas), lista de **preparadas** con su caducidad (Firmar o Anular) y firma **en pantalla grande** con un solo botón, "Firmar y recibir".
+- Editor de plantillas (administrador), tallas por técnico (Equipos → Técnicos → Tallas) e informe **entregas por técnico y plantilla** por mes, con obras y coste del material propio para el administrador.
+- **Justificante PDF** con jsPDF (se carga al usarlo): en la nube se sube a Storage (bucket `justificantes`, privado) y se envía por correo al administrador con un enlace firmado de 7 días; en la demo se descarga.
+- Plantillas de ejemplo: punto de recarga monofásico, dotación inicial de técnico nuevo y reposición semanal de furgoneta (kit).
+
+**Pruebas:**
+- Base de datos: 7 pruebas (la reserva bloquea otras salidas y series, anular y caducar la liberan, no se firma lo caducado, confirmación con ropa a la dotación, herramienta y huella, atomicidad, firmada inalterable, permisos de plantillas y tallas).
+- Dominio: 7 pruebas (tallas resueltas, falta de talla o de variante, entregar lo disponible, modo kit, series, reserva y confirmación atómica en local).
+- Contrato app ↔ servidor ampliado. En total, 118 en verde.
+
+**Sin verificar aquí:** la subida a Storage y el enlace firmado necesitan el proyecto real.
+
+**Decisión:** el PDF se genera en el navegador, no dentro de `confirmar_entrega`, porque una función SQL no puede generar un PDF. La confirmación sigue siendo atómica; el PDF es un justificante posterior que se puede regenerar siempre desde los datos inalterables.

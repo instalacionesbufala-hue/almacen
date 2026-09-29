@@ -39,7 +39,7 @@ describe('contrato de operaciones', () => {
     expect(E.products.find(p => p.sku === 'WBX-PULSAR-22')!.serials).not.toContain('WBX-22-899281');
     const e = E.entregas[0];
     expect(e).toMatchObject({ numero: ent.numero, equipo: 'F01', receptor: 'T1' });
-    expect(e.lineas).toEqual([{ sku: 'WBX-PULSAR-22', qty: 1, serials: ['WBX-22-899281'] }, { sku: 'CAB-RZ1K-5G6', qty: 25, serials: [] }]);
+    expect(e.lineas).toEqual([{ sku: 'WBX-PULSAR-22', qty: 1, serials: ['WBX-22-899281'], tipo: 'stock' }, { sku: 'CAB-RZ1K-5G6', qty: 25, serials: [], tipo: 'stock' }]);
     expect(E.avisos.find(a => a.sku === 'BF-FIX-SX6' && a.estado === 'abierto')).toBeTruthy();
     expect(E.herramientas.find(h => h.id === 'H001')!.estado).toBe('deteriorada');
     expect(E.movements[0].operator).toBe('Operario Pruebas');
@@ -112,5 +112,26 @@ describe('contrato de operaciones', () => {
     expect(E.products.find(p => p.sku === '8909080510')).toMatchObject({ propiedad: 'custodia', price: 0 });
     expect(E.envios.some(e => e.tipo === 'prueba')).toBe(true);
     expect(E.actas[0]).toMatchObject({ representante: 'Ana', lineas: [{ sku: 'ESM-CPVE-TRI', sistema: E.products.find(p => p.sku === 'ESM-CPVE-TRI')!.stock, contado: 1 }] });
+  });
+
+  it('operaciones de E-007: plantilla, tallas, preparar, confirmar y anular', async () => {
+    await como(db, ADMIN);
+    const pid = nuevoId();
+    await rpc(db, { op: 'plantilla', args: { id: pid, nombre: 'Dotación inicial', descripcion: '', modoKit: false, activa: true, lineas: [{ tipo: 'modelo', modelo: 'Polo alta visibilidad', tipoTalla: 'camiseta', cantidad: 2, editable: true }] } });
+    await rpc(db, { op: 'tallas', args: { tecnico: 'T2', tallas: { camiseta: 'M', pantalon: '42' } } });
+    await como(db, ALMACEN);
+    const e1 = nuevoId(), e2 = nuevoId();
+    await rpc(db, { op: 'prepararEntrega', args: { id: e1, equipo: 'F01', receptor: 'T2', obra: 'C/ Eros 10', plantilla: pid, lineas: [{ tipo: 'stock', sku: 'ROPA-POLO-M', qty: 2, serials: [] }] } });
+    await rpc(db, { op: 'prepararEntrega', args: { id: e2, equipo: 'F01', receptor: 'T2', obra: '', lineas: [{ tipo: 'stock', sku: 'BF-FIX-SX8', qty: 50, serials: [] }] } });
+    let E = await estado(db);
+    expect(E.entregas.find(e => e.id === e1)).toMatchObject({ estado: 'preparada', plantilla: pid, obra: 'C/ Eros 10' });
+    expect(E.plantillas.find(p => p.id === pid)!.lineas[0]).toMatchObject({ tipo: 'modelo', tipoTalla: 'camiseta' });
+    expect(E.tecnicos.find(t => t.id === 'T2')!.tallas).toMatchObject({ camiseta: 'M', pantalon: '42' });
+    await rpc(db, { op: 'confirmarEntrega', args: { id: e1, firma: 'data:image/png;base64,AA' } });
+    await rpc(db, { op: 'anularEntrega', args: { id: e2 } });
+    E = await estado(db);
+    expect(E.entregas.find(e => e.id === e1)!.estado).toBe('firmada');
+    expect(E.entregas.find(e => e.id === e2)!.estado).toBe('anulada');
+    expect(E.herramientas.some(h => h.clase === 'ropa' && h.talla === 'M' && h.tecnico === 'T2')).toBe(true);
   });
 });

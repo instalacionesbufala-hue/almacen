@@ -16,6 +16,7 @@ import { closeModal, openModal, SheetFoot, SheetHead } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 import { Avatar, BTN_P, BTN_S, BTN_T, CARD, Campo, ESTADO_EQ, FirmaImg, Icon, INP, LBL, Vacio } from '../../ui/base';
 import { abrirRecibo } from '../entregas/EntregasView';
+import { abrirPreparar, abrirTallas } from '../entregas/Plantillas';
 
 export default function EquiposView() {
   const E = useAlmacen(), u = useUI(), { gestionarFlota } = usePermisos();
@@ -37,7 +38,8 @@ export default function EquiposView() {
         ? <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4 lg:gap-space-lg">{E.equipos.map(e => <CardEquipo key={e.id} e={e} />)}</div>
         : <div className={`${CARD} overflow-hidden`}>{E.tecnicos.map(t => { const e = E.equipos.find(x => x.tecnicos.includes(t.id)), dot = herramientasDe(E, { tecnico: t.id }); return (
           <div key={t.id} className="flex flex-wrap items-center gap-3 p-4 border-b border-surface-container"><Avatar n={t.nombre} />
-            <div className="flex-1 min-w-[160px]"><div className="font-semibold">{t.nombre}</div><div className="font-mono text-label-sm text-secondary">{t.rol} · DNI {t.dni} · {dot.length} en dotación</div></div>
+            <div className="flex-1 min-w-[160px]"><div className="font-semibold">{t.nombre}</div><div className="font-mono text-label-sm text-secondary">{t.rol} · DNI {t.dni} · {dot.length} en dotación · tallas {t.tallas ? Object.values(t.tallas).filter(Boolean).join('/') || '—' : '—'}</div></div>
+            {gestionarFlota && <button onClick={() => abrirTallas(t.id)} className="text-primary text-body-sm font-semibold">Tallas</button>}
             <label className="flex items-center gap-2"><span className={LBL}>Equipo</span>
               <select disabled={!gestionarFlota} value={e?.id || ''} onChange={ev => { if (ejecutar({ op: 'asignarTecnico', args: { tecnico: t.id, equipo: ev.target.value || undefined } })) toast('Asignación actualizada.', 'ok'); }} className={`${INP} !w-auto h-11`}>
                 <option value="">— Sin equipo —</option>{E.equipos.map(x => <option key={x.id} value={x.id}>{x.nombre} ({x.matricula})</option>)}</select></label>
@@ -76,7 +78,8 @@ function CardEquipo({ e }: { e: Equipo }) {
       <div className="mt-auto flex flex-col gap-2">
         {!gestionarFlota ? null : e.tecnicos.length > 1 ? <button onClick={() => abrirFormEquipo(e)} className={`${BTN_T} h-11`}><Icon n="call_split" className="ico-20" />Desdoblar en técnicos (1+1)</button>
           : <button onClick={() => abrirEmparejar(e.id)} className={`${BTN_T} h-11`}><Icon n="call_merge" className="ico-20" />Formar pareja</button>}
-        <button onClick={cargar} className={`${BTN_P} h-12`}><Icon n="inventory" className="ico-20" />{e.estado === 'depot' ? 'Asignar material para la ruta de hoy' : 'Gestionar carga de furgoneta'}</button>
+        <div className="grid grid-cols-[1fr_auto] gap-2"><button onClick={cargar} className={`${BTN_P} h-12`}><Icon n="inventory" className="ico-20" />{e.estado === 'depot' ? 'Asignar material para la ruta de hoy' : 'Gestionar carga de furgoneta'}</button>
+          <button onClick={() => abrirPreparar(e.id)} title="Preparar desde plantilla (p. ej. reposición semanal)" className={`${BTN_T} h-12 px-3`}><Icon n="playlist_add_check" className="ico-20" /></button></div>
       </div>
     </article>
   );
@@ -84,7 +87,7 @@ function CardEquipo({ e }: { e: Equipo }) {
 
 export function AuditoriaEntregas() {
   const E = useAlmacen(), desk = useEsEscritorio();
-  const es = [...E.entregas].sort((a, b) => b.ts - a.ts);
+  const es = E.entregas.filter(e => (e.estado ?? 'firmada') === 'firmada').sort((a, b) => b.ts - a.ts);
   const resumen = (e: typeof es[0]) => e.lineas.map(l => { const p = find(E, l.sku); return `${num(l.qty)}${p?.unit === 'm' ? ' m' : '×'} ${(p?.name || l.sku).split(' ').slice(0, 3).join(' ')}`; }).join(', ');
   const verificar = async () => {
     let bad: string[] = [], total = E.entregas.length;

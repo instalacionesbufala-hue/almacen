@@ -60,6 +60,8 @@ export interface ConfigAvisos {
   pushActivo: boolean; pushModo: ModoEnvio; pushHora: string;
   telegramActivo: boolean; telegramModo: ModoEnvio; telegramHora: string; telegramChatId: string;
   diasRecordatorio: number; custodiaEnvio: 'manual' | 'automatico'; informeCustodia: 'semanal' | 'mensual' | 'ninguno';
+  /** E-007: horas que dura la reserva de una entrega preparada */
+  horasReserva: number;
 }
 export interface EnvioAviso { id: string; ts: number; canal: 'correo' | 'push' | 'telegram'; tipo: string; asunto: string; estado: 'pendiente' | 'enviado' | 'error' | 'descartado'; error?: string }
 export interface ActaCustodia { id: string; numero?: string; ts: number; propietario: string; representante: string; firma: string; lineas: { sku: string; sistema: number; contado: number }[]; hash?: string; operator: string }
@@ -94,12 +96,17 @@ export interface Albaran {
   modo: 'ia' | 'sim';
 }
 
+export type TipoTalla = 'camiseta' | 'pantalon' | 'calzado' | 'guantes';
+export type Tallas = Partial<Record<TipoTalla, string>>;
+
 export interface Tecnico {
   id: string;
   nombre: string;
   rol: string;
   /** Solo enmascarado: ***1234-X */
   dni: string;
+  /** E-007: tallas para resolver la ropa y los EPIs de las plantillas */
+  tallas?: Tallas;
 }
 
 export interface Equipo {
@@ -115,6 +122,9 @@ export interface LineaEntrega {
   sku: string;
   qty: number;
   serials: string[];
+  /** E-007: línea de herramienta de la dotación (en lugar de stock) */
+  tipo?: 'stock' | 'herramienta';
+  dotacion?: string;
 }
 
 export interface Entrega {
@@ -131,7 +141,16 @@ export interface Entrega {
   firma: string;
   hash?: string;
   operator: string;
+  /** E-007: preparada (stock reservado hasta 'caduca') → firmada | anulada. Sin estado = firmada. */
+  estado?: 'preparada' | 'firmada' | 'anulada';
+  plantilla?: string;
+  obra?: string;
+  caduca?: number;
 }
+
+/* E-007 · Plantillas de entrega */
+export interface LineaPlantilla { tipo: 'stock' | 'modelo' | 'herramienta'; sku?: string; modelo?: string; tipoTalla?: TipoTalla; cantidad: number; editable: boolean }
+export interface Plantilla { id: string; nombre: string; descripcion: string; modoKit: boolean; activa: boolean; lineas: LineaPlantilla[] }
 
 /* Dotación: herramientas, EPIs y ropa de trabajo, con asignación a equipo y/o técnico e historial de incidencias */
 export type ClaseDotacion = 'herramienta' | 'epi' | 'ropa';
@@ -196,6 +215,7 @@ export interface Estado {
   configAvisos: ConfigAvisos;
   envios: EnvioAviso[];
   actas: ActaCustodia[];
+  plantillas: Plantilla[];
   cesta: { equipo: string; receptor: string | null; lineas: LineaEntrega[] };
   seq: { ent: number };
 }
