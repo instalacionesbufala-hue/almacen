@@ -73,7 +73,7 @@ Escribe `docs/PUESTA-EN-MARCHA.md` para el usuario, paso a paso y sin dar nada p
 - dar de alta al usuario de almacén;
 - probar la sincronización entre móvil y escritorio.
 
-### E-006 · Mínimos y avisos de reposición · PENDIENTE
+### E-006 · Mínimos y avisos de reposición · HECHO
 Objetivo: que el administrador reciba un aviso cuando algo baje de su mínimo, para hacer el pedido a tiempo. Vale para material, EPIs, ropa y herramientas de repuesto.
 
 **1. Dónde se pone el mínimo**
@@ -130,7 +130,7 @@ Objetivo: no añadir material a mano en cada entrega. Se elige una plantilla, se
 - Hay pruebas de: plantilla con tallas resueltas, modo kit (solo la diferencia), reserva y su caducidad, y confirmación atómica.
 - Una entrega de 15 líneas se prepara en menos de un minuto y se firma en un solo paso.
 
-### E-008 · Material en custodia de Esmove · PENDIENTE
+### E-008 · Material en custodia de Esmove · HECHO
 Los **cargadores VE** y los **cuadros de protecciones** los entrega Esmove y quedan en nuestro almacén **en custodia**. No son nuestros y no tenemos su precio. Aun así hay que controlar su stock, para saber si hay unidades cuando se necesitan y para pedir la reposición a Esmove.
 
 **1. Modelo de datos**
@@ -281,3 +281,43 @@ Decisiones posteriores del usuario (29/09/2026, misma sesión):
 **Pruebas:** 13 de E-004 en PGlite (entre ellas, el almacén intenta editar precios o borrar un movimiento y el servidor lo rechaza, incluso desde el panel), 6 de operaciones locales por rol y el contrato app ↔ servidor ampliado. En total, 84 en verde.
 
 **Decisión:** las mermas de custodia del almacén siempre quedan pendientes, porque no tienen precio y E-008 pide avisar a Esmove de los daños. Si el usuario prefiere otra regla, es una línea en `registrar_movimiento`.
+
+### 29/09/2026 · E-006 + E-008 · HECHO
+**Mínimos (E-006.1)**
+- Productos con `objetivo` (por defecto 2 × mínimo) y `proveedor_habitual`. Cantidad a pedir = objetivo − stock, redondeada al formato de compra. La misma regla está en SQL (`cantidad_sugerida`) y en la app (`pedidoSugerido`), con pruebas en ambos.
+- Ropa y EPIs de almacén: son productos de las categorías `ropa` y `epis`, con `modelo` y `talla` (una variante por talla, cada una con su mínimo). Así reutilizan stock, movimientos, avisos y entregas sin tablas nuevas.
+- Herramientas de repuesto: `minimos_herramienta` por `modelo`, que cuenta las unidades operativas y sin asignar.
+- EPIs que caducan en 30 días: aparecen en la bandeja (se reutiliza el aviso existente).
+- Mínimos y objetivos, uno a uno o en bloque (por categoría, pasillo o propiedad): `fijar_minimos` (solo administrador).
+
+**Avisos en el servidor (E-006.2)**
+- Trigger en `productos`: crea la fila de `avisos_reposicion` solo al **cruzar** el mínimo hacia abajo (también al subir el mínimo por encima del stock).
+- Un único aviso abierto por artículo o modelo (índice único parcial).
+- Ciclo abierto → pedido (`marcar_pedido`, administrador) → cerrado. Se cierra solo cuando el stock vuelve al mínimo.
+- Pedido sin recibir en X días (`dias_recordatorio`): `encolar_programados` lo vuelve a avisar, sin repetirlo cada minuto.
+- La tabla provisional `pedidos_reposicion` de E-002 desaparece.
+
+**Canales (E-006.3)**
+- Cola `envios_aviso` con estado, error y reintentos, más el registro de envíos.
+- Función `supabase/functions/notificar`: correo con Resend, Web Push (`npm:web-push`) y Telegram. La llama pg_cron cada minuto con la cabecera `x-clave-cron` (vía pg_net y Vault); también el administrador para "Enviar prueba" e informes.
+- `config_avisos`: activo, modo (inmediato o resumen diario a una hora) y hora de cada canal; destinatarios; chat_id; días de recordatorio.
+- Por defecto: app inmediata, push inmediato y correo en resumen a las 8:00.
+- App instalable (PWA): `manifest.webmanifest`, `sw.js` (push y última copia sin conexión) e iconos generados con `scripts/generar-iconos.mjs`. "Activar en este dispositivo" guarda la suscripción (`suscripciones_push`).
+- Secretos solo en Supabase: `RESEND_API_KEY`, `TELEGRAM_BOT_TOKEN`, `VAPID_PUBLICA`, `VAPID_PRIVADA`, `VAPID_CONTACTO`, `CLAVE_CRON`. La clave pública VAPID va también en `VITE_VAPID_PUBLICA`, porque es pública por diseño.
+- Interfaz: campana con contador y bandeja **Reposición**, agrupada por proveedor y, para la custodia, por propietario. Cada grupo lleva borrador (copiar, PDF, CSV, correo) y "Marcar como pedido". Configuración → Avisos.
+
+**Custodia de Esmove (E-008)**
+- Valor del inventario solo con material propio; indicador "En custodia de Esmove"; etiqueta en listas, fichas, escáner y entregas; filtro por propiedad; ni un euro en la custodia.
+- Nueva vista **Custodia Esmove** con el stock, la solicitud preparada y los datos del propietario (correos de reposición e informes).
+- El aviso de un artículo en custodia va con `destino = 'propietario'`, `grupo = 'ESMOVE'`: sale como **solicitud a Esmove sin importes** y nunca en el pedido a proveedores (probado).
+- Envío a Esmove: "reviso y envío con un toque" (por defecto) o "automático" (`custodia_envio`).
+- Entradas desde un albarán de Esmove → "Recepción en custodia" (función y app). Salida sin obra → rechazada.
+- Daños y pérdidas (mermas de custodia) → aviso al administrador y, en modo automático, al correo de Esmove. No cuentan como coste propio.
+- **Informe** (`supabase/functions/_compartido/informe.ts`, compartido entre la app y el servidor): stock por referencia, entradas, salidas por obra con n.º de serie y fecha, incidencias y diferencias de recuento; mensual por defecto, en CSV y PDF. Se envía desde la vista o programado (día 1 o lunes, `informe_custodia`). Prueba: el CSV, el HTML y el JSON no contienen ningún importe.
+- **Acta de recuento de custodia** (`actas_custodia`): lo contado y la firma del representante. El stock del sistema se toma en el servidor al firmar; lleva huella SHA-256 y es inalterable.
+- **Cuadros sin n.º de serie** (corrección del usuario): se leen con "Leer el código impreso", que usa Tesseract.js cargado solo al usarse y reconoce el código del modelo (`supplierRef`), o se escribe a mano. Tienen su etiqueta QR propia `BUF:<SKU>`.
+- Permisos: el almacén registra entradas y salidas de custodia; cambiar la propiedad (`cambiar_propiedad`, que borra el precio), editar el propietario y enviar informes o solicitudes es solo del administrador.
+
+**Pruebas:** 15 de E-006 y E-008 en la base de datos (trigger, duplicados, cierre, custodia a Esmove, cantidad sugerida, pedido, repuestos, resumen a la hora, recordatorio, visibilidad de envíos, incidencia de custodia, acta, propiedad), informe sin importes, lectura de la pegatina y el contrato ampliado. En total, 103 en verde.
+
+**Pendiente de verificar con las cuentas reales:** el envío de correo, push y Telegram necesita las claves. La función `notificar` no se ha podido ejecutar aquí (no hay Deno ni Supabase en esta máquina). La guía E-005 incluye cómo activar cada canal y cómo hacer la prueba.

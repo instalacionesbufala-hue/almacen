@@ -63,6 +63,7 @@ export default function DotacionView() {
         </select>
         <label className="flex items-center gap-2 px-3 h-12 rounded-lg bg-surface-container-low whitespace-nowrap"><input type="checkbox" checked={soloAvisos} onChange={e => setSoloAvisos(e.target.checked)} className="w-5 h-5 accent-primary" />Solo avisos</label>
       </div>
+      {perm.gestionarFlota && (clase === 'all' || clase === 'herramienta') && <Repuestos />}
       <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-3">{lista.length ? lista.map(h => (
         <article key={h.id} className={`${CARD} p-4 flex flex-col gap-3 ${h.estado === 'baja' ? 'opacity-60' : ''} ${avisos.has(h.id) ? 'ring-1 ring-error/25' : ''}`}>
           <button onClick={() => abrirFichaDotacion(h.id)} className="flex gap-3 text-left">
@@ -156,14 +157,14 @@ function Asignar({ id }: { id: string }) {
 export const abrirAltaDotacion = (clase: ClaseDotacion = 'herramienta', preset: { equipo?: string; tecnico?: string } = {}) => openModal(<Alta clase0={clase} preset={preset} />);
 function Alta({ clase0, preset }: { clase0: ClaseDotacion; preset: { equipo?: string; tecnico?: string } }) {
   const E = useAlmacen();
-  const [f, setF] = useState({ clase: clase0, nombre: '', marca: '', serie: '', talla: '', cantidad: '1', caduca: '', valor: '', equipo: preset.equipo || '', tecnico: preset.tecnico || '' });
+  const [f, setF] = useState({ clase: clase0, nombre: '', marca: '', modelo: '', serie: '', talla: '', cantidad: '1', caduca: '', valor: '', equipo: preset.equipo || '', tecnico: preset.tecnico || '' });
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setF({ ...f, [k]: e.target.value });
   const crear = () => {
     if (!f.nombre.trim()) return toast('Indica el nombre.', 'err');
     const cantidad = Math.max(1, Math.round(toNum(f.cantidad) || 1)), valor = toNum(f.valor) || 0;
     if (valor < 0) return toast('El valor no puede ser negativo.', 'err');
     const pref = f.clase === 'epi' ? 'E' : f.clase === 'ropa' ? 'R' : 'H';
-    const h: Herramienta = { id: `${pref}${uid('').slice(-5).toUpperCase()}`, clase: f.clase as ClaseDotacion, nombre: f.nombre.trim(), marca: f.marca.trim(), serie: f.serie.trim(), talla: f.talla.trim() || undefined, cantidad, caduca: f.caduca || undefined, valor, estado: 'operativa',
+    const h: Herramienta = { id: `${pref}${uid('').slice(-5).toUpperCase()}`, clase: f.clase as ClaseDotacion, nombre: f.nombre.trim(), marca: f.marca.trim(), modelo: f.clase === 'herramienta' ? (f.modelo.trim() || f.marca.trim() || undefined) : undefined, serie: f.serie.trim(), talla: f.talla.trim() || undefined, cantidad, caduca: f.caduca || undefined, valor, estado: 'operativa',
       historial: [{ id: uid('I'), ts: Date.now(), tipo: 'alta', nota: 'Alta en la dotación', operator: E.operator }] };
     if (!ejecutar({ op: 'altaDotacion', args: h })) return;
     if (f.equipo || f.tecnico) ejecutar({ op: 'asignarDotacion', args: { id: nuevoId(), dotacion: h.id, equipo: f.equipo || undefined, tecnico: f.tecnico || undefined } });
@@ -177,6 +178,7 @@ function Alta({ clase0, preset }: { clase0: ClaseDotacion; preset: { equipo?: st
         <button key={k} onClick={() => setF({ ...f, clase: k })} className={`h-12 rounded-lg font-semibold flex items-center justify-center gap-1.5 ${f.clase === k ? 'bg-white text-primary shadow-sm' : 'text-on-surface-variant'}`}><Icon n={CLASE[k].icon} className="ico-20" />{CLASE[k].t}</button>)}</div>
       <Campo label="Nombre *" className="sm:col-span-2"><input autoFocus value={f.nombre} onChange={set('nombre')} className={`${INP} h-12`} placeholder={f.clase === 'epi' ? 'Guantes dieléctricos clase 0' : f.clase === 'ropa' ? 'Pantalón de trabajo' : 'Pinza amperimétrica'} /></Campo>
       <Campo label="Marca / modelo"><input value={f.marca} onChange={set('marca')} className={`${INP} h-12`} /></Campo>
+      {f.clase === 'herramienta' && <Campo label="Modelo (para contar repuestos)"><input value={f.modelo} onChange={set('modelo')} placeholder={f.marca || 'Hilti TE 30-A36'} className={`${INP} h-12`} /></Campo>}
       <Campo label="N.º de serie o lote"><input value={f.serie} onChange={set('serie')} className={`${INP} h-12 font-mono`} /></Campo>
       {f.clase !== 'herramienta' && <Campo label="Talla"><input value={f.talla} onChange={set('talla')} className={`${INP} h-12`} placeholder="M, 44, 9…" /></Campo>}
       {f.clase !== 'herramienta' && <Campo label="Cantidad"><input value={f.cantidad} onChange={set('cantidad')} inputMode="numeric" className={`${INP} h-12`} /></Campo>}
@@ -187,4 +189,25 @@ function Alta({ clase0, preset }: { clase0: ClaseDotacion; preset: { equipo?: st
     </div>
     <SheetFoot className="flex gap-2"><button onClick={closeModal} className={`${BTN_S} h-12 px-5`}>Cancelar</button><button onClick={crear} className={`${BTN_P} h-12 flex-1`}><Icon n="save" className="ico-20" />Dar de alta</button></SheetFoot>
   </>);
+}
+
+/* ---------- E-006: herramientas de repuesto (mínimo de unidades operativas y sin asignar por modelo) ---------- */
+function Repuestos() {
+  const E = useAlmacen(), [abierto, setAbierto] = useState(false);
+  const modelos = [...new Set(E.herramientas.filter(h => h.clase === 'herramienta' && h.modelo && h.estado !== 'baja').map(h => h.modelo!))].sort();
+  const libres = (m: string) => E.herramientas.filter(h => h.clase === 'herramienta' && h.modelo === m && h.estado === 'operativa' && !h.equipo && !h.tecnico).length;
+  const faltan = E.minimosHerramienta.filter(m => libres(m.modelo) < m.minimo);
+  return (
+    <section className={`${CARD} p-4 flex flex-col gap-2`}>
+      <button onClick={() => setAbierto(!abierto)} className="flex items-center justify-between gap-2 text-left">
+        <span className="font-semibold flex items-center gap-2"><Icon n="inventory" className="text-primary" />Herramientas de repuesto</span>
+        <span className="text-body-sm text-secondary">{faltan.length ? <span className="text-error">{faltan.length} modelo{faltan.length === 1 ? '' : 's'} bajo mínimo</span> : 'Todo cubierto'} · {abierto ? 'Ocultar' : 'Ver'}</span></button>
+      {abierto && <div className="flex flex-col">{modelos.map(m => { const def = E.minimosHerramienta.find(x => x.modelo === m); return (
+        <div key={m} className="flex flex-wrap items-center gap-2 py-2 border-b border-surface-container">
+          <span className="flex-1 min-w-[160px]"><b>{m}</b><span className="text-body-sm text-secondary"> · {libres(m)} libres de repuesto</span></span>
+          <label className="flex items-center gap-1 text-body-sm">Mínimo<input type="number" min={0} defaultValue={def?.minimo ?? 0} onBlur={e => { const v = Number(e.target.value) || 0; if (v !== (def?.minimo ?? 0)) ejecutar({ op: 'minimoHerramienta', args: { modelo: m, minimo: v, proveedor: def?.proveedor || '' } }); }} className={`${INP} !w-20 h-10 text-center`} aria-label={`Mínimo de repuesto de ${m}`} /></label>
+          <input defaultValue={def?.proveedor || ''} placeholder="Proveedor" onBlur={e => { if (def && e.target.value !== def.proveedor) ejecutar({ op: 'minimoHerramienta', args: { modelo: m, minimo: def.minimo, objetivo: def.objetivo, proveedor: e.target.value } }); }} className={`${INP} !w-44 h-10`} aria-label={`Proveedor de ${m}`} />
+        </div>); })}{!modelos.length && <p className="text-body-sm text-secondary">Da de alta herramientas con su modelo para controlar los repuestos.</p>}</div>}
+    </section>
+  );
 }

@@ -11,6 +11,9 @@ import { Avatar, BTN_BASE, BTN_P, BTN_S, CARD, Icon } from '../../ui/base';
 import { usePermisos } from '../../store/permisos';
 import { Usuarios } from './Usuarios';
 import { abrirPendientes } from '../shell/Pendientes';
+import { ConfigAvisosPanel } from './Avisos';
+import { abrirMinimos } from '../reposicion/Minimos';
+import { abrirReposicion } from '../reposicion/Reposicion';
 import { abrirPerfil } from '../inventario/hojas';
 import { exportarMovimientosCsv, exportarStockCsv } from '../inventario/StockView';
 import { iaReal, URL_IA } from '../albaranes/lector';
@@ -44,6 +47,7 @@ export default function ConfigView() {
         {perm.validar && <Bloque icon="pending_actions" t="Pendientes de validar"><p className="text-body-sm text-secondary">{nPend ? `Hay ${nPend} pendiente${nPend === 1 ? '' : 's'} de validar.` : 'No hay nada pendiente.'}</p><button onClick={abrirPendientes} className={`${BTN_S} h-12`}><Icon n="pending_actions" className="ico-20" />Abrir la bandeja</button></Bloque>}
         <Bloque icon="person" t={modoNube ? 'Mi usuario' : 'Operario activo'}><p className="text-body-sm text-secondary">Cada entrada, salida, merma e incidencia queda a su nombre.</p>
           <button onClick={abrirPerfil} className="flex items-center gap-3 bg-surface-container-low rounded-xl p-3 text-left"><Avatar n={E.operator} /><span className="flex-1 font-semibold">{E.operator}</span><span className="text-primary text-body-sm">Cambiar</span></button></Bloque>
+        {perm.configurar && <div className="lg:col-span-2"><Bloque icon="notifications" t="Avisos de reposición"><div className="flex flex-wrap gap-2"><button onClick={abrirReposicion} className={`${BTN_S} h-11 px-4`}><Icon n="inventory" className="ico-20" />Bandeja de reposición</button><button onClick={abrirMinimos} className={`${BTN_S} h-11 px-4`}><Icon n="tune" className="ico-20" />Mínimos y objetivos</button></div><ConfigAvisosPanel /></Bloque></div>}
         <Bloque icon="traffic" t="Semáforo de stock">
           <ul className="text-body-sm flex flex-col gap-2">
             <li className="flex gap-2"><span className="w-3 h-3 mt-1 rounded-full bg-error shrink-0" /><span><b>Rojo</b>: stock por debajo del mínimo (p. ej. tacos &lt; 100 ud, cargadores &lt; 2 ud). Salta un aviso al instante.</span></li>

@@ -1,16 +1,18 @@
 /* Filas de Supabase → estado de la app (src/data/tipos.ts) */
-import type { Pendiente, PerfilUsuario, Rol, Albaran, CatId, ClaseDotacion, Entrega, Equipo, EstadoEquipo, EstadoHerramienta, Estado, Herramienta, Movimiento, Producto, Tecnico, TipoIncidencia, TipoMov, Unidad } from '../../data/tipos';
+import type { ActaCustodia, AvisoReposicion, ConfigAvisos, EnvioAviso, MinimoHerramienta, Pendiente, PerfilUsuario, Rol, Albaran, CatId, ClaseDotacion, Entrega, Equipo, EstadoEquipo, EstadoHerramienta, Estado, Herramienta, Movimiento, Producto, Tecnico, TipoIncidencia, TipoMov, Unidad } from '../../data/tipos';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Fila = Record<string, any>;
 export interface Tablas {
   productos: Fila[]; costes_producto: Fila[]; series: Fila[]; equipos: Fila[]; tecnicos: Fila[]; movimientos: Fila[];
   albaranes: Fila[]; entregas: Fila[]; entrega_lineas: Fila[]; dotacion: Fila[]; costes_dotacion: Fila[];
-  dotacion_historial: Fila[]; costes_incidencia: Fila[]; pedidos_reposicion: Fila[]; propietarios: Fila[];
+  dotacion_historial: Fila[]; costes_incidencia: Fila[]; avisos_reposicion: Fila[]; propietarios: Fila[];
+  minimos_herramienta: Fila[]; config_avisos: Fila[]; envios_aviso: Fila[]; actas_custodia: Fila[];
   perfiles: Fila[]; pendientes: Fila[]; valores_pendientes?: Fila[];
 }
 export const TABLAS: (keyof Tablas)[] = ['productos', 'costes_producto', 'series', 'equipos', 'tecnicos', 'movimientos', 'albaranes', 'entregas',
-  'entrega_lineas', 'dotacion', 'costes_dotacion', 'dotacion_historial', 'costes_incidencia', 'pedidos_reposicion', 'propietarios', 'perfiles', 'pendientes'];
+  'entrega_lineas', 'dotacion', 'costes_dotacion', 'dotacion_historial', 'costes_incidencia', 'avisos_reposicion', 'propietarios', 'perfiles', 'pendientes',
+  'minimos_herramienta', 'config_avisos', 'envios_aviso', 'actas_custodia'];
 /** Columnas legibles por cada rol (en pendientes el importe se lee aparte, solo el administrador) */
 export const COLUMNAS: Partial<Record<keyof Tablas, string>> = {
   pendientes: 'id, ts, tipo, sku, cantidad, motivo, referencia, series, operario, estado, resuelto_por, nota_resolucion',
@@ -28,6 +30,7 @@ export function aEstado(t: Tablas, base: Pick<Estado, 'cesta' | 'seq'>, operador
     pack: n(p.formato) || 1, packLabel: p.formato_texto || '', stock: n(p.stock), min: n(p.minimo), loc: p.ubicacion, supplier: p.proveedor || '',
     price: precio.get(p.sku) ?? 0, serialized: !!p.con_serie, serials: p.con_serie ? (series.get(p.sku) || []) : undefined, borrador: !!p.borrador,
     propiedad: p.propiedad === 'custodia' ? 'custodia' : 'propia', propietario: p.propietario_id ?? undefined,
+    objetivo: p.objetivo == null ? undefined : n(p.objetivo), proveedorHabitual: p.proveedor_habitual ?? undefined, modelo: p.modelo ?? undefined, talla: p.talla ?? undefined,
   }));
   const activos = t.equipos.filter(e => e.activo);
   const equipos: Equipo[] = activos.map(e => ({ id: e.id, nombre: e.nombre, flota: e.flota, matricula: e.matricula, estado: e.estado as EstadoEquipo,
@@ -46,16 +49,28 @@ export function aEstado(t: Tablas, base: Pick<Estado, 'cesta' | 'seq'>, operador
   const hist = new Map<string, Fila[]>();
   for (const h of t.dotacion_historial) hist.set(h.dotacion_id, [...(hist.get(h.dotacion_id) || []), h]);
   const herramientas: Herramienta[] = t.dotacion.map(d => ({
-    id: d.id, clase: d.clase as ClaseDotacion, nombre: d.nombre, marca: d.marca, serie: d.serie, talla: d.talla ?? undefined, cantidad: d.cantidad, caduca: d.caduca ?? undefined,
+    id: d.id, clase: d.clase as ClaseDotacion, modelo: d.modelo ?? undefined, nombre: d.nombre, marca: d.marca, serie: d.serie, talla: d.talla ?? undefined, cantidad: d.cantidad, caduca: d.caduca ?? undefined,
     valor: valor.get(d.id) ?? 0, estado: d.estado as EstadoHerramienta, equipo: d.equipo_id ?? undefined, tecnico: d.tecnico_id ?? undefined,
     historial: (hist.get(d.id) || []).sort((a, b) => ms(a.ts) - ms(b.ts)).map(h => ({ id: h.id, ts: ms(h.ts), tipo: h.tipo as TipoIncidencia, nota: h.nota, operator: h.operario,
       coste: coste.get(h.id), serieAnterior: h.serie_anterior ?? undefined })),
   }));
-  const pedidos = Object.fromEntries(t.pedidos_reposicion.map(p => [p.sku, { ts: ms(p.ts), qty: n(p.cantidad) }]));
+  const avisos: AvisoReposicion[] = t.avisos_reposicion.map(a => ({ id: a.id, sku: a.sku ?? undefined, modeloHerramienta: a.modelo_herramienta ?? undefined, destino: a.destino, grupo: a.grupo, estado: a.estado,
+    creado: ms(a.creado), cantidadPedida: a.cantidad_pedida == null ? undefined : n(a.cantidad_pedida), proveedorPedido: a.proveedor_pedido ?? undefined, pedidoTs: a.pedido_ts ? ms(a.pedido_ts) : undefined, pedidoPor: a.pedido_por ?? undefined }));
+  // compatibilidad: "pedido en curso" por artículo
+  const pedidos = Object.fromEntries(avisos.filter(a => a.estado === 'pedido' && a.sku).map(a => [a.sku!, { ts: a.pedidoTs || a.creado, qty: a.cantidadPedida || 0 }]));
+  const minimosHerramienta: MinimoHerramienta[] = t.minimos_herramienta.map(m => ({ modelo: m.modelo, minimo: m.minimo, objetivo: m.objetivo ?? undefined, proveedor: m.proveedor || '' }));
+  const c = t.config_avisos[0];
+  const configAvisos: ConfigAvisos = c ? { correoActivo: c.correo_activo, correoModo: c.correo_modo, correoHora: String(c.correo_hora).slice(0, 5), correoRemitente: c.correo_remitente, correoDestinatarios: c.correo_destinatarios || [],
+    pushActivo: c.push_activo, pushModo: c.push_modo, pushHora: String(c.push_hora).slice(0, 5), telegramActivo: c.telegram_activo, telegramModo: c.telegram_modo, telegramHora: String(c.telegram_hora).slice(0, 5),
+    telegramChatId: c.telegram_chat_id, diasRecordatorio: c.dias_recordatorio, custodiaEnvio: c.custodia_envio, informeCustodia: c.informe_custodia }
+    : { correoActivo: false, correoModo: 'resumen', correoHora: '08:00', correoRemitente: '', correoDestinatarios: [], pushActivo: true, pushModo: 'inmediato', pushHora: '08:00', telegramActivo: false, telegramModo: 'inmediato', telegramHora: '08:00', telegramChatId: '', diasRecordatorio: 7, custodiaEnvio: 'manual', informeCustodia: 'mensual' };
+  const envios: EnvioAviso[] = t.envios_aviso.map(e => ({ id: e.id, ts: ms(e.ts), canal: e.canal, tipo: e.tipo, asunto: e.asunto, estado: e.estado, error: e.error ?? undefined })).sort((a, b) => b.ts - a.ts);
+  const actas: ActaCustodia[] = t.actas_custodia.map(a => ({ id: a.id, numero: a.numero, ts: ms(a.ts), propietario: a.propietario_id, representante: a.representante, firma: a.firma,
+    lineas: (a.lineas || []).map((l: Fila) => ({ sku: l.sku, sistema: n(l.sistema), contado: n(l.contado) })), hash: a.hash, operator: a.operario })).sort((a, b) => b.ts - a.ts);
   const propietarios = t.propietarios.filter(o => o.activo).map(o => ({ id: o.id, nombre: o.nombre, contacto: o.contacto || '', correosReposicion: o.correos_reposicion || [], correosInformes: o.correos_informes || [] }));
   const valorPend = new Map((t.valores_pendientes || []).map(v => [v.id, v.valor == null ? undefined : n(v.valor)]));
   const pendientes: Pendiente[] = t.pendientes.map(p => ({ id: p.id, ts: ms(p.ts), tipo: p.tipo, sku: p.sku, qty: n(p.cantidad), reason: p.motivo, ref: p.referencia || '',
     serials: p.series || [], operator: p.operario, estado: p.estado, resueltoPor: p.resuelto_por ?? undefined, nota: p.nota_resolucion ?? undefined, valor: valorPend.get(p.id) })).sort((a, b) => b.ts - a.ts);
   const perfiles: PerfilUsuario[] = t.perfiles.map(p => ({ id: p.id, nombre: p.nombre, email: p.email ?? null, rol: p.rol, activo: !!p.activo }));
-  return { v: 3, products, movements, albaranes, equipos, tecnicos, entregas, herramientas, propietarios, pendientes, perfiles, rol, operator: operador, pedidos, cesta: base.cesta, seq: base.seq };
+  return { v: 3, products, movements, albaranes, equipos, tecnicos, entregas, herramientas, propietarios, pendientes, perfiles, rol, avisos, minimosHerramienta, configAvisos, envios, actas, operator: operador, pedidos, cesta: base.cesta, seq: base.seq };
 }

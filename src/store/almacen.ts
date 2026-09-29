@@ -4,7 +4,7 @@
    Todas las escrituras pasan por ejecutar(op): validación inmediata en local y, en nube, envío a la función SQL. */
 import type { Estado, Producto } from '../data/tipos';
 import { fresh } from '../data/semilla';
-import { OFICINA, SEED_PRODUCTS } from '../data/catalogo';
+import { CONFIG_AVISOS_DEFECTO, OFICINA, SEED_PRODUCTS } from '../data/catalogo';
 import { find, qtyTxt, status, type MovInput } from '../domain/reglas';
 import { hashEntrega } from '../domain/hash';
 import { crearStore } from './crear';
@@ -13,10 +13,11 @@ import { modoNube } from './nube/cliente';
 import { encolar, enlazar } from './nube/sync';
 import { toast } from '../ui/toast';
 
-const LS = modoNube ? 'almacen-bufala-nube-cache-v1' : 'almacen-bufala-v3';
+// v4: datos de demostración con custodia, cuadros, ropa y EPIs (E-006/E-008)
+const LS = modoNube ? 'almacen-bufala-nube-cache-v1' : 'almacen-bufala-v4';
 const LS_OLD = 'almacen-bufala-v2';
 
-export const vacio = (): Estado => ({ v: 3, products: [], movements: [], albaranes: [], equipos: [], tecnicos: [], entregas: [], herramientas: [], propietarios: [], pendientes: [], perfiles: [], rol: 'almacen',
+export const vacio = (): Estado => ({ v: 3, products: [], movements: [], albaranes: [], equipos: [], tecnicos: [], entregas: [], herramientas: [], propietarios: [], pendientes: [], perfiles: [], rol: 'almacen', avisos: [], minimosHerramienta: [], configAvisos: { ...CONFIG_AVISOS_DEFECTO }, envios: [], actas: [],
   operator: '', pedidos: {}, cesta: { equipo: '', receptor: null, lineas: [] }, seq: { ent: 0 } });
 
 function migrate(s: Partial<Estado>): Estado {

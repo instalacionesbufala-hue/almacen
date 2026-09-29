@@ -6,7 +6,8 @@ import { avisosDotacion } from '../../domain/herramientas';
 import { useAlmacen } from '../../store/almacen';
 import { ir, setUI, useEsEscritorio, useUI, VISTAS, type Vista } from '../../store/ui';
 import { Avatar, BTN_P, Icon } from '../../ui/base';
-import { abrirAvisos, abrirMenu, abrirPerfil } from '../inventario/hojas';
+import { abrirMenu, abrirPerfil } from '../inventario/hojas';
+import { abrirReposicion, useContadorAvisos } from '../reposicion/Reposicion';
 import { procesarArchivo } from '../albaranes/AlbaranesView';
 import { IndicadorSync } from './Sincronizacion';
 import { BotonPendientes } from './Pendientes';
@@ -30,7 +31,7 @@ function SelectorAlmacen({ ancho }: { ancho: string }) {
 }
 
 export function Sidebar({ vista }: { vista: Vista }) {
-  const E = useAlmacen(), nCrit = critical(E).length, nDot = avisosDotacion(E).length;
+  const E = useAlmacen(), nCrit = critical(E).length, nDot = avisosDotacion(E).length, nCust = E.products.filter(p => p.propiedad === 'custodia' && p.stock < p.min).length;
   const item = (v: Vista, badge = 0) => {
     const on = vista === v;
     return <a key={v} href={`#${v}`} className={`flex items-center gap-space-sm px-space-md py-2.5 rounded-lg transition-colors ${on ? 'bg-primary-container text-on-primary font-semibold' : 'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface'}`}>
@@ -46,7 +47,7 @@ export function Sidebar({ vista }: { vista: Vista }) {
           <div className="flex flex-col"><span className="text-headline-sm font-semibold tracking-tight leading-none">{MARCA.nombre}</span><span className="font-mono text-label-sm uppercase tracking-wider text-secondary mt-1">{MARCA.sub}</span></div>
         </div>
         <div className="px-space-md pt-space-md pb-space-xs"><span className={LBLS}>Operaciones</span></div>
-        <nav className="flex flex-col gap-space-xs px-space-sm">{item('stock', nCrit)}{item('albaranes')}{item('equipos')}{item('entregas')}{item('dotacion', nDot)}{item('scan')}{item('movimientos')}</nav>
+        <nav className="flex flex-col gap-space-xs px-space-sm">{item('stock', nCrit)}{item('albaranes')}{item('equipos')}{item('entregas')}{item('dotacion', nDot)}{item('custodia', nCust)}{item('scan')}{item('movimientos')}</nav>
         <div className="px-space-md pt-space-lg pb-space-xs"><span className={LBLS}>Sistema</span></div>
         <nav className="flex flex-col gap-space-xs px-space-sm">{item('config')}</nav>
       </div>
@@ -61,7 +62,7 @@ export function Sidebar({ vista }: { vista: Vista }) {
 
 export function CabeceraEscritorio() {
   const E = useAlmacen(), u = useUI(), busc = useRef<HTMLInputElement>(null);
-  const nAvisos = critical(E).length + Object.keys(E.pedidos).length;
+  const nAvisos = useContadorAvisos();
   useEffect(() => {
     const f = (e: KeyboardEvent) => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); busc.current?.focus(); } };
     addEventListener('keydown', f); return () => removeEventListener('keydown', f);
@@ -79,7 +80,7 @@ export function CabeceraEscritorio() {
         <button onClick={nuevoAlbaran} className={`${BTN_P} px-space-md py-2`}><Icon n="auto_awesome" className="ico-20" /><span>Nuevo Albarán IA</span></button>
         <IndicadorSync />
         <BotonPendientes />
-        <button onClick={abrirAvisos} className="relative p-2 rounded-lg text-on-surface-variant hover:bg-surface-container-high" aria-label="Avisos de stock"><Icon n="notifications" />
+        <button onClick={abrirReposicion} className="relative p-2 rounded-lg text-on-surface-variant hover:bg-surface-container-high" aria-label="Reposición: avisos de stock"><Icon n="notifications" />
           {nAvisos > 0 && <span className="absolute top-1 right-1 min-w-4 h-4 px-1 rounded-full bg-error text-white font-mono text-[10px] leading-4">{nAvisos}</span>}</button>
         <button onClick={abrirPerfil} className="flex items-center gap-space-sm pl-space-xs text-left rounded-lg hover:bg-surface-container-low pr-2 py-1"><Avatar n={E.operator} c="bg-inverse-surface text-white" />
           <span className="hidden xl:flex flex-col"><span className="text-headline-sm font-semibold leading-tight">{E.operator}</span><span className="font-mono text-label-sm text-secondary">{modoNube ? 'Sesión iniciada' : 'Operario activo'}</span></span></button>
@@ -89,7 +90,7 @@ export function CabeceraEscritorio() {
 }
 
 export function CabeceraMovil({ vista }: { vista: Vista }) {
-  const E = useAlmacen(), nAvisos = critical(E).length + avisosDotacion(E).length;
+  const E = useAlmacen(), nAvisos = useContadorAvisos() + avisosDotacion(E).length;
   const [online, setOnline] = useState(navigator.onLine);
   useEffect(() => { const f = () => setOnline(navigator.onLine); addEventListener('online', f); addEventListener('offline', f); return () => { removeEventListener('online', f); removeEventListener('offline', f); }; }, []);
   return (

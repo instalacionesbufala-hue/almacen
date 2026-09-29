@@ -11,13 +11,14 @@ import DotacionView from './features/dotacion/DotacionView';
 import ScanView from './features/escaner/ScanView';
 import MovimientosView from './features/movimientos/MovimientosView';
 import ConfigView from './features/config/ConfigView';
+import CustodiaView from './features/custodia/CustodiaView';
 import Acceso from './features/shell/Acceso';
 import { modoNube } from './store/nube/cliente';
 import { sesion } from './store/nube/sync';
 
 const PANTALLAS: Record<Vista, ComponentType> = {
   stock: StockView, albaranes: AlbaranesView, equipos: EquiposView, entregas: EntregasView,
-  dotacion: DotacionView, scan: ScanView, movimientos: MovimientosView, config: ConfigView,
+  dotacion: DotacionView, custodia: CustodiaView, scan: ScanView, movimientos: MovimientosView, config: ConfigView,
 };
 
 export default function App() {

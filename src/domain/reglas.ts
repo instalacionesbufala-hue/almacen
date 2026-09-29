@@ -133,8 +133,10 @@ export function vanStock(S: Estado, eqId: string): LineaEntrega[] {
 /** Número visible de una entrega: el del servidor, el local (modo demo) o "pendiente" mientras está en la cola */
 export const numEntrega = (e: { id: string; numero?: string }) => e.numero || (/^ENT-/.test(e.id) ? e.id : 'Pendiente de envío');
 
-/** Cantidad sugerida para reponer: hasta 2 × mínimo, redondeada al formato de compra */
-export function pedidoSugerido(p: Producto) {
-  const pack = p.pack || 1;
-  return Math.max(pack, Math.ceil((p.min * 2 - p.stock) / pack) * pack);
+/** Cantidad sugerida para reponer (E-006): objetivo − stock (objetivo por defecto 2 × mínimo), redondeada al formato de compra.
+    Misma regla que la función SQL cantidad_sugerida. */
+export function pedidoSugerido(p: Pick<Producto, 'stock' | 'min' | 'pack'> & { objetivo?: number }) {
+  const pack = p.pack || 1, objetivo = p.objetivo ?? p.min * 2, falta = objetivo - p.stock;
+  if (falta <= 0) return 0;
+  return Math.max(pack, Math.ceil(falta / pack) * pack);
 }

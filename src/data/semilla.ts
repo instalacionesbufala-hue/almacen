@@ -1,6 +1,6 @@
 /* Estado inicial de demostración (movimientos, entregas y albaranes de ejemplo) */
 import type { Albaran, Entrega, Estado, Herramienta, Movimiento, TipoMov } from './tipos';
-import { FIRMAS_DEMO, OFICINA, SEED_EQUIPOS, SEED_PRODUCTS, SEED_PROPIETARIOS, SEED_TECNICOS } from './catalogo';
+import { CONFIG_AVISOS_DEFECTO, FIRMAS_DEMO, OFICINA, SEED_EQUIPOS, SEED_PRODUCTS, SEED_PROPIETARIOS, SEED_TECNICOS } from './catalogo';
 
 const clone = <T,>(o: T): T => JSON.parse(JSON.stringify(o));
 
@@ -51,7 +51,7 @@ const fechaEn = (dias: number) => { const d = new Date(); d.setDate(d.getDate() 
 
 export function seedHerramientas(): Herramienta[] {
   const H = (id: string, nombre: string, marca: string, serie: string, valor: number, equipo: string | undefined, tecnico: string | undefined, extra: Herramienta['historial'] = [], estado: Herramienta['estado'] = 'operativa', mas: Partial<Herramienta> = {}): Herramienta =>
-    ({ id, clase: 'herramienta', cantidad: 1, nombre, marca, serie, valor, estado, equipo, tecnico, ...mas, historial: [{ id: id + '-0', ts: seedTs(60, 9, 0), tipo: 'alta', nota: 'Alta en inventario de herramientas', operator: OFICINA }, ...extra] });
+    ({ id, clase: 'herramienta', cantidad: 1, nombre, marca, modelo: (mas.clase ?? 'herramienta') === 'herramienta' ? marca : undefined, serie, valor, estado, equipo, tecnico, ...mas, historial: [{ id: id + '-0', ts: seedTs(60, 9, 0), tipo: 'alta', nota: 'Alta en inventario de herramientas', operator: OFICINA }, ...extra] });
   return [
     H('H001', 'Comprobador de instalaciones VE (EVSE)', 'Metrel A1532', 'MT-1532-0091', 1450, 'F01', undefined),
     H('H002', 'Martillo perforador SDS-Plus', 'Hilti TE 30-A36', 'HI-TE30-5521', 890, 'F01', 'T1'),
@@ -77,7 +77,7 @@ export function seedHerramientas(): Herramienta[] {
 export function fresh(): Estado {
   return {
     v: 3, products: clone(SEED_PRODUCTS), movements: seedMovements(), albaranes: seedAlbaranes(),
-    equipos: clone(SEED_EQUIPOS), tecnicos: clone(SEED_TECNICOS), entregas: seedEntregas(), herramientas: seedHerramientas(), propietarios: clone(SEED_PROPIETARIOS), pendientes: [], perfiles: [], rol: 'admin',
+    equipos: clone(SEED_EQUIPOS), tecnicos: clone(SEED_TECNICOS), entregas: seedEntregas(), herramientas: seedHerramientas(), propietarios: clone(SEED_PROPIETARIOS), pendientes: [], perfiles: [], rol: 'admin', avisos: [], minimosHerramienta: [{ modelo: 'Makita DDF484', minimo: 1, proveedor: 'Saltoki Alcobendas' }], configAvisos: clone(CONFIG_AVISOS_DEFECTO), envios: [], actas: [],
     operator: OFICINA, pedidos: {}, cesta: { equipo: 'F01', receptor: 'T1', lineas: [] }, seq: { ent: 412 },
   };
 }

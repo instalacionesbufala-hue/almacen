@@ -43,13 +43,6 @@ describe('movimientos', () => {
     expect(await stock(db, 'BF-FIX-SX8')).toBe(1085);
     await como(db, ALMACEN);
   });
-  it('una entrada que recupera el mínimo cierra el pedido de reposición', async () => {
-    await db.query('select marcar_pedido($1, $2)', ['BF-FIX-SX6', 200]);
-    await db.query(MOV, [uuid(), 'BF-FIX-SX6', 'entrada', 10, 'Compra', '', [], null]);
-    expect(await valor(db, "select count(*)::int from pedidos_reposicion where sku = 'BF-FIX-SX6'")).toBe(1);
-    await db.query(MOV, [uuid(), 'BF-FIX-SX6', 'entrada', 20, 'Compra', '', [], null]);
-    expect(await valor(db, "select count(*)::int from pedidos_reposicion where sku = 'BF-FIX-SX6'")).toBe(0);
-  });
 });
 
 describe('seguridad', () => {

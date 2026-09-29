@@ -31,7 +31,6 @@ describe('contrato de operaciones', () => {
     expect(ent.numero).toMatch(/^ENT-/);
     await rpc(db, { op: 'albaran', args: { id: nuevoId(), cabecera: { numero: 'A-1', proveedor: 'Esmove', cif: '', fecha: '', confianza: .9, modo: 'sim' },
       lineas: [{ sku: 'ESM-CPVE-TRI', cantidad: 2, series: [] }] } });
-    await rpc(db, { op: 'pedido', args: { sku: 'BF-FIX-SX6', qty: 200 } });
     await rpc(db, { op: 'incidencia', args: { id: nuevoId(), dotacion: 'H001', tipo: 'deterioro', nota: 'Pantalla rayada' } });
 
     const E = await estado(db);
@@ -41,7 +40,7 @@ describe('contrato de operaciones', () => {
     const e = E.entregas[0];
     expect(e).toMatchObject({ numero: ent.numero, equipo: 'F01', receptor: 'T1' });
     expect(e.lineas).toEqual([{ sku: 'WBX-PULSAR-22', qty: 1, serials: ['WBX-22-899281'] }, { sku: 'CAB-RZ1K-5G6', qty: 25, serials: [] }]);
-    expect(E.pedidos['BF-FIX-SX6'].qty).toBe(200);
+    expect(E.avisos.find(a => a.sku === 'BF-FIX-SX6' && a.estado === 'abierto')).toBeTruthy();
     expect(E.herramientas.find(h => h.id === 'H001')!.estado).toBe('deteriorada');
     expect(E.movements[0].operator).toBe('Operario Pruebas');
   });
@@ -91,5 +90,27 @@ describe('contrato de operaciones', () => {
     expect(E.products.find(p => p.sku === '6040615316')!.stock).toBe(295);
     expect(E.products.find(p => p.sku === 'BORR-8412345678905')).toBeUndefined();
     expect(E.perfiles.find(p => p.id === ALMACEN)!.nombre).toBe('Operario Renombrado');
+  });
+
+  it('operaciones de E-006 y E-008: mínimos, pedido, configuración, propietario, propiedad, envío y acta', async () => {
+    await como(db, ADMIN);
+    await rpc(db, { op: 'minimos', args: { cambios: [{ sku: '7501013532', minimo: 10, objetivo: 20, proveedorHabitual: 'Saltoki Móstoles' }] } });
+    await rpc(db, { op: 'pedido', args: { sku: '7501013532', qty: 14, proveedor: 'Saltoki Móstoles' } });
+    await rpc(db, { op: 'minimoHerramienta', args: { modelo: 'Fluke 376 FC', minimo: 1, proveedor: 'Fluke' } });
+    await rpc(db, { op: 'configAvisos', args: { correoActivo: true, correoModo: 'resumen', correoHora: '07:30', correoRemitente: '', correoDestinatarios: ['a@b.es'], pushActivo: true, pushModo: 'inmediato', pushHora: '08:00',
+      telegramActivo: false, telegramModo: 'inmediato', telegramHora: '08:00', telegramChatId: '', diasRecordatorio: 5, custodiaEnvio: 'manual', informeCustodia: 'semanal' } });
+    await rpc(db, { op: 'propietario', args: { id: 'ESMOVE', nombre: 'Esmove', contacto: 'Ana', correosReposicion: ['r@esmove.es'], correosInformes: ['i@esmove.es'] } });
+    await rpc(db, { op: 'cambiarPropiedad', args: { sku: '8909080510', propiedad: 'custodia', propietario: 'ESMOVE' } });
+    await rpc(db, { op: 'envio', args: { canal: 'push', tipo: 'prueba', asunto: 'Prueba', cuerpo: 'ok', destinatarios: [] } });
+    await rpc(db, { op: 'acta', args: { id: nuevoId(), propietario: 'ESMOVE', representante: 'Ana', firma: 'data:image/png;base64,AA', lineas: [{ sku: 'ESM-CPVE-TRI', contado: 1 }] } });
+    const E = await estado(db);
+    expect(E.products.find(p => p.sku === '7501013532')).toMatchObject({ min: 10, objetivo: 20, proveedorHabitual: 'Saltoki Móstoles' });
+    expect(E.avisos.find(a => a.sku === '7501013532')).toMatchObject({ estado: 'pedido', cantidadPedida: 14 });
+    expect(E.avisos.find(a => a.modeloHerramienta === 'Fluke 376 FC')).toBeTruthy();   // la única está asignada: 0 de repuesto
+    expect(E.configAvisos).toMatchObject({ correoHora: '07:30', diasRecordatorio: 5, informeCustodia: 'semanal' });
+    expect(E.propietarios[0]).toMatchObject({ contacto: 'Ana', correosReposicion: ['r@esmove.es'] });
+    expect(E.products.find(p => p.sku === '8909080510')).toMatchObject({ propiedad: 'custodia', price: 0 });
+    expect(E.envios.some(e => e.tipo === 'prueba')).toBe(true);
+    expect(E.actas[0]).toMatchObject({ representante: 'Ana', lineas: [{ sku: 'ESM-CPVE-TRI', sistema: E.products.find(p => p.sku === 'ESM-CPVE-TRI')!.stock, contado: 1 }] });
   });
 });

@@ -1,5 +1,5 @@
 /* Entrega de material a una furgoneta con firma del receptor */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { CATS, MARCA, UNIT } from '../../data/catalogo';
 import { find, numEntrega, qtyTxt, searchProducts, status } from '../../domain/reglas';
 import { fechaHora, num } from '../../domain/formato';
@@ -10,10 +10,10 @@ import { modoNube } from '../../store/nube/cliente';
 import { ir } from '../../store/ui';
 import { openModal, SheetFoot, SheetHead, closeModal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
-import { BTN_P, BTN_S, CARD, ESTADO_EQ, FirmaImg, Icon, INP, LBL, Tag } from '../../ui/base';
+import { BTN_P, BTN_S, CARD, ESTADO_EQ, FirmaImg, Icon, INP, LBL, Tag, TagCustodia } from '../../ui/base';
 import { alternarSerie, anadirACesta, disponible, fijarCantidad, quitarDeCesta } from './cesta';
+import { Firma, firmaPNG, type Trazo } from '../../ui/firma';
 
-type Trazo = [number, number][];
 
 export default function EntregasView() {
   const E = useAlmacen();
@@ -71,7 +71,7 @@ export default function EntregasView() {
             <div className="grid grid-cols-2 xl:grid-cols-3 gap-2">{prods.length ? prods.map(p => { const d = disponible(p.sku); return (
               <button key={p.sku} onClick={() => anadirACesta(p.sku)} disabled={d <= 0} className="text-left bg-surface-container-low hover:bg-surface-container rounded-xl p-3 flex flex-col gap-1 disabled:opacity-40 relative">
                 <span className="absolute top-2.5 right-2.5 text-primary"><Icon n="add_circle" /></span>
-                <span className="self-start"><Tag c="bg-white text-secondary">{p.packLabel || CATS[p.cat].label}</Tag></span>
+                <span className="self-start flex flex-wrap gap-1"><Tag c="bg-white text-secondary">{p.packLabel || CATS[p.cat].label}</Tag><TagCustodia p={p} /></span>
                 <span className="font-semibold leading-snug line-clamp-2 pr-5">{p.name}</span>
                 <span className="font-mono text-label-sm text-secondary truncate">{p.serialized ? `SN: ${(p.serials || [])[0] || '—'}` : p.loc}</span>
                 <span className="flex justify-between items-end mt-1"><span className="font-mono text-label-sm">Disp: <b>{num(d)}</b> {UNIT[p.unit]}</span><span className="font-mono text-label-sm text-primary">+{p.unit === 'm' ? 10 : 1}</span></span>
@@ -85,7 +85,7 @@ export default function EntregasView() {
               {lineas.length > 0 && <button onClick={() => { E.cesta.lineas = []; guardar(); }} className="text-error text-body-sm flex items-center gap-1"><Icon n="delete" className="ico-18" />Limpiar</button>}</div>
             {lineas.length ? lineas.map(l => { const p = find(E, l.sku)!; return (
               <div key={l.sku} className="bg-surface-container-low rounded-xl p-3 flex flex-col gap-2">
-                <div className="flex items-center gap-3"><div className="flex-1 min-w-0"><div className="font-semibold leading-snug">{p.name}</div>
+                <div className="flex items-center gap-3"><div className="flex-1 min-w-0"><div className="font-semibold leading-snug">{p.name} <TagCustodia p={p} /></div>
                   <div className="font-mono text-label-sm text-secondary">{p.serialized ? <>S/N: {l.serials.map(s => <span key={s} className="bg-primary-fixed text-primary px-1 rounded mr-1">{s}</span>)}</> : `${p.loc} · ${p.packLabel || ''}`}</div></div>
                   <div className="flex items-center bg-white rounded-lg shrink-0">
                     <button onClick={() => quitarDeCesta(p.sku)} className="w-11 h-11 grid place-items-center" aria-label="Menos"><Icon n="remove" /></button>
@@ -125,37 +125,6 @@ function CantidadCesta({ sku, qty }: { sku: string; qty: number }) {
   useEffect(() => setV(String(qty)), [qty]);
   return <input value={v} onChange={e => setV(e.target.value)} onBlur={() => fijarCantidad(sku, Number(v.replace(',', '.')))} onKeyDown={e => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
     inputMode="decimal" className="w-14 text-center font-bold bg-transparent focus:outline-none" aria-label="Cantidad" />;
-}
-
-/** Lienzo de firma: guarda los trazos normalizados (0–1) para redibujar al cambiar de tamaño */
-function Firma({ trazos, onChange }: { trazos: Trazo[]; onChange: (t: Trazo[]) => void }) {
-  const ref = useRef<HTMLCanvasElement>(null), actual = useRef<Trazo | null>(null), lista = useRef(trazos);
-  lista.current = trazos;
-  const dibujar = () => {
-    const cv = ref.current; if (!cv) return;
-    const r = cv.getBoundingClientRect(), dpr = devicePixelRatio || 1;
-    if (cv.width !== Math.round(r.width * dpr)) { cv.width = Math.round(r.width * dpr); cv.height = Math.round(r.height * dpr); }
-    const ctx = cv.getContext('2d')!; ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, r.width, r.height);
-    ctx.lineWidth = 2.6; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#0037b0';
-    for (const st of [...lista.current, ...(actual.current ? [actual.current] : [])]) {
-      ctx.beginPath(); st.forEach(([x, y], i) => i ? ctx.lineTo(x * r.width, y * r.height) : ctx.moveTo(x * r.width, y * r.height));
-      if (st.length === 1) ctx.lineTo(st[0][0] * r.width + .5, st[0][1] * r.height); ctx.stroke();
-    }
-  };
-  useEffect(() => { dibujar(); const f = () => dibujar(); addEventListener('resize', f); return () => removeEventListener('resize', f); });
-  const pt = (e: React.PointerEvent): [number, number] => { const b = ref.current!.getBoundingClientRect(); return [(e.clientX - b.left) / b.width, (e.clientY - b.top) / b.height]; };
-  return <canvas ref={ref} className="firma w-full h-40 bg-surface-container-low rounded-xl block" aria-label="Zona de firma"
-    onPointerDown={e => { ref.current!.setPointerCapture(e.pointerId); actual.current = [pt(e)]; dibujar(); }}
-    onPointerMove={e => { if (!actual.current) return; actual.current.push(pt(e)); dibujar(); }}
-    onPointerUp={() => { if (!actual.current) return; const t = actual.current; actual.current = null; onChange([...lista.current, t]); }}
-    onPointerCancel={() => { actual.current = null; dibujar(); }} />;
-}
-
-function firmaPNG(trazos: Trazo[]) {
-  const c = document.createElement('canvas'); c.width = 360; c.height = 140;
-  const ctx = c.getContext('2d')!; ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#0037b0';
-  for (const st of trazos) { ctx.beginPath(); st.forEach(([x, y], i) => i ? ctx.lineTo(x * 360, y * 140) : ctx.moveTo(x * 360, y * 140)); ctx.stroke(); }
-  return c.toDataURL('image/png');
 }
 
 export const abrirRecibo = (id: string) => openModal(<Recibo id={id} />);

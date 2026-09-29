@@ -3,9 +3,8 @@ import { useMemo, useState } from 'react';
 import qrcode from 'qrcode-generator';
 import type { Movimiento, Producto, TipoMov } from '../../data/tipos';
 import { CATS, OFICINA, REASONS, UNIT } from '../../data/catalogo';
-import { aisle, critical, find, LOC_RE, locTxt, pedidoSugerido, qrContenido, qtyTxt, searchProducts, status, vanStock, warning } from '../../domain/reglas';
-import { eur, hace, hoyISO, num, parseSN, redondea, toNum } from '../../domain/formato';
-import { descargarCsv } from '../../domain/csv';
+import { aisle, critical, find, LOC_RE, locTxt, pedidoSugerido, qrContenido, qtyTxt, searchProducts, status, vanStock } from '../../domain/reglas';
+import { eur, hace, num, parseSN, redondea, toNum } from '../../domain/formato';
 import { ejecutar, guardar, mover, operarioSeleccionable, S, useAlmacen } from '../../store/almacen';
 import { salir, sesion } from '../../store/nube/sync';
 import { ir, VISTAS, type Vista, useVista } from '../../store/ui';
@@ -154,7 +153,8 @@ function Selector({ type }: { type: TipoMov }) {
 }
 
 /* ---------- Alta / edición de referencia ---------- */
-type FormProd = { sku: string; ean: string; name: string; cat: Producto['cat']; unit: Producto['unit']; packLabel: string; pack: string; stock: string; min: string; P: string; E: string; N: string; supplier: string; supplierRef: string; price: string; serialized: boolean };
+type FormProd = { sku: string; ean: string; name: string; cat: Producto['cat']; unit: Producto['unit']; packLabel: string; pack: string; stock: string; min: string; P: string; E: string; N: string; supplier: string; supplierRef: string; price: string; serialized: boolean;
+  objetivo: string; proveedorHabitual: string; modelo: string; talla: string; propiedad: 'propia' | 'custodia'; propietario: string };
 export const abrirFormProducto = (sku?: string, preset: Partial<Producto> = {}, onCreado?: (sku: string) => void) =>
   openModal(<FormProducto sku={sku} preset={preset} onCreado={onCreado} />);
 function FormProducto({ sku, preset, onCreado }: { sku?: string; preset: Partial<Producto>; onCreado?: (sku: string) => void }) {
@@ -165,6 +165,8 @@ function FormProducto({ sku, preset, onCreado }: { sku?: string; preset: Partial
     sku: base.sku || '', ean: base.ean || '', name: base.name || '', cat: base.cat || 'fijaciones', unit: base.unit || 'ud', packLabel: base.packLabel || '',
     pack: String(base.pack ?? 1), stock: '0', min: String(base.min ?? 10), P: a.replace('P', ''), E: b.replace('E', ''), N: c.replace('N', ''),
     supplier: base.supplier || '', supplierRef: base.supplierRef || '', price: String(base.price ?? 0), serialized: !!base.serialized,
+    objetivo: base.objetivo != null ? String(base.objetivo) : '', proveedorHabitual: base.proveedorHabitual || '', modelo: base.modelo || '', talla: base.talla || '',
+    propiedad: base.propiedad || 'propia', propietario: base.propietario || S().propietarios[0]?.id || '',
   });
   const set = (k: keyof FormProd) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setF({ ...f, [k]: e.target.type === 'checkbox' ? (e.target as HTMLInputElement).checked : e.target.value });
@@ -176,7 +178,11 @@ function FormProducto({ sku, preset, onCreado }: { sku?: string; preset: Partial
     if (!LOC_RE.test(loc)) return toast('Ubicación incompleta: indica pasillo, estantería y nivel.', 'err');
     const n = { pack: toNum(f.pack) || 1, min: toNum(f.min), price: toNum(f.price), stock: toNum(f.stock) || 0 };
     if (Object.values(n).some(v => !(v >= 0))) return toast('Revisa los números: no pueden ser negativos.', 'err');
-    const obj = { sku: code, name, cat: f.cat, unit: f.unit, pack: n.pack, packLabel: f.packLabel, min: n.min, loc, supplier: f.supplier.trim(), price: n.price, ean: f.ean.trim() || undefined, supplierRef: f.supplierRef.trim() || undefined, serialized: f.serialized };
+    if (f.cat === 'cargadores' && !f.serialized) return toast('Los cargadores llevan siempre n.º de serie.', 'err');
+    const custodia = f.propiedad === 'custodia';
+    const obj = { sku: code, name, cat: f.cat, unit: f.unit, pack: n.pack, packLabel: f.packLabel, min: n.min, loc, supplier: f.supplier.trim(), price: custodia ? 0 : n.price, ean: f.ean.trim() || undefined, supplierRef: f.supplierRef.trim() || undefined, serialized: f.serialized,
+      objetivo: f.objetivo.trim() === '' ? undefined : toNum(f.objetivo), proveedorHabitual: f.proveedorHabitual.trim() || undefined, modelo: f.modelo.trim() || undefined, talla: f.talla.trim() || undefined,
+      propiedad: f.propiedad, propietario: custodia ? f.propietario : undefined };
     if (!ejecutar({ op: 'producto', args: { producto: { ...obj, stock: p?.stock ?? 0 }, nuevo: !p, stockInicial: p ? 0 : n.stock } })) return;
     if (p) toast('Referencia actualizada.', 'ok');
     else {
@@ -205,7 +211,13 @@ function FormProducto({ sku, preset, onCreado }: { sku?: string; preset: Partial
             <input value={f[k]} onChange={set(k)} inputMode="numeric" className="w-full bg-transparent focus:outline-none font-mono" aria-label={k === 'P' ? 'Pasillo' : k === 'E' ? 'Estantería' : 'Nivel'} /></label>)}</div></div>
       {inp('supplier', 'Proveedor')}
       {inp('supplierRef', 'Código del proveedor')}
-      {inp('price', 'Precio de coste por unidad base (€)', { inputMode: 'decimal' })}
+      <Campo label="Propiedad"><select value={f.propiedad} onChange={set('propiedad')} className={`${INP} h-12`}><option value="propia">Material propio</option><option value="custodia">En custodia (no es nuestro)</option></select></Campo>
+      {f.propiedad === 'custodia'
+        ? <Campo label="Propietario"><select value={f.propietario} onChange={set('propietario')} className={`${INP} h-12`}>{S().propietarios.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</select></Campo>
+        : inp('price', 'Precio de coste por unidad base (€)', { inputMode: 'decimal' })}
+      {inp('objetivo', 'Objetivo de reposición (vacío = 2 × mínimo)', { inputMode: 'decimal' })}
+      {inp('proveedorHabitual', 'Proveedor habitual (a quién se pide)')}
+      {(f.cat === 'ropa' || f.cat === 'epis') && <>{inp('modelo', 'Modelo (agrupa las tallas)')}{inp('talla', 'Talla')}</>}
       <label className="flex items-center gap-3 bg-surface-container-low rounded-lg px-3 h-12"><input type="checkbox" checked={f.serialized} onChange={set('serialized')} className="w-5 h-5 accent-primary" /><span>Control por número de serie</span></label>
     </div>
     <SheetFoot className="flex gap-2"><button onClick={closeModal} className={`${BTN_S} h-12 px-5`}>Cancelar</button><button onClick={guardarProd} className={`${BTN_P} h-12 flex-1`}><Icon n="save" className="ico-20" />{p ? 'Guardar cambios' : 'Crear referencia'}</button></SheetFoot>
@@ -260,28 +272,14 @@ function Conteo({ pas }: { pas: string }) {
   </>);
 }
 
-/* ---------- Avisos de stock y reposición ---------- */
+/* ---------- Reposición (E-006): la bandeja vive en features/reposicion ---------- */
 export function pedir(sku: string) {
-  const E = S(), p = find(E, sku)!; const q = pedidoSugerido(p);
-  if (!ejecutar({ op: 'pedido', args: { sku, qty: q } })) return;
-  toast(`Añadido a la lista de reposición: ${qtyTxt(p, q)} de ${p.name} (${p.supplier}).`, 'ok');
+  const E = S(), p = find(E, sku)!;
+  if (E.rol !== 'admin') return toast('El aviso ya está en la bandeja de reposición: el administrador hace el pedido.', 'ok', 5000);
+  const q = pedidoSugerido(p) || p.pack || 1;
+  if (ejecutar({ op: 'pedido', args: { sku, qty: q } })) toast(`Marcado como pedido: ${qtyTxt(p, q)} de ${p.name}.`, 'ok');
 }
-export const abrirAvisos = () => openModal(<Avisos />);
-function Avisos() {
-  const E = useAlmacen(), lista = [...critical(E), ...warning(E)], nPed = Object.keys(E.pedidos).length;
-  const exportar = () => descargarCsv(`reposicion-${hoyISO()}.csv`, [['Proveedor', 'SKU', 'Código proveedor', 'Material', 'Cantidad sugerida', 'Unidad', 'Stock actual', 'Mínimo'],
-    ...Object.entries(E.pedidos).map(([k, o]) => { const p = find(E, k); return p ? [p.supplier, p.sku, p.supplierRef || '', p.name, o.qty, UNIT[p.unit], p.stock, p.min] : null; })
-      .filter((r): r is (string | number)[] => !!r).sort((x, y) => String(x[0]).localeCompare(String(y[0])))]);
-  return (<>
-    <SheetHead title="Avisos de stock" sub={`${critical(E).length} en crítico · ${warning(E).length} en nivel bajo · ${nPed} pedidos en curso`} />
-    <div className="p-5 flex flex-col gap-1">{lista.length ? lista.map(p =>
-      <div key={p.sku} className="flex items-center gap-3 py-2 border-b border-surface-container"><Tile p={p} size="w-10 h-10" />
-        <button onClick={() => abrirFicha(p.sku)} className="flex-1 min-w-0 text-left"><div className="font-medium truncate">{p.name}</div><div className="font-mono text-label-sm text-secondary">{qtyTxt(p, p.stock)} / mín. {qtyTxt(p, p.min)} · {p.supplier}</div></button>
-        {E.pedidos[p.sku] ? <Tag c="bg-amber-100 text-amber-800">Pedido</Tag> : <button onClick={() => pedir(p.sku)} className={`${BTN_T} px-3 h-9 text-body-sm`}>Pedir</button>}
-      </div>) : <Vacio>Todo el stock está en verde.</Vacio>}</div>
-    {nPed > 0 && <SheetFoot><button onClick={exportar} className={`${BTN_P} w-full h-12`}><Icon n="file_download" className="ico-20" />Exportar lista de reposición (CSV)</button></SheetFoot>}
-  </>);
-}
+export const abrirAvisos = () => { void import('../reposicion/Reposicion').then(m => m.abrirReposicion()); };
 
 /* ---------- Operario activo y menú móvil ---------- */
 export const abrirPerfil = () => openModal(<Perfil />);

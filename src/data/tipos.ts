@@ -1,6 +1,6 @@
 /* Modelo de datos (ver CLAUDE.md → "Modelo de datos") */
 
-export type CatId = 'cargadores' | 'cuadros' | 'cables' | 'tubos' | 'fijaciones' | 'aparamenta' | 'fontaneria';
+export type CatId = 'cargadores' | 'cuadros' | 'epis' | 'ropa' | 'cables' | 'tubos' | 'fijaciones' | 'aparamenta' | 'fontaneria';
 export type Unidad = 'm' | 'ud';
 /** 'ajuste' lleva la cantidad con signo (+ suma, − resta) y exige motivo; solo el administrador */
 export type TipoMov = 'entrada' | 'salida' | 'merma' | 'ajuste';
@@ -30,6 +30,12 @@ export interface Producto {
   /** E-008: material propio o en custodia de un depositante (sin precio) */
   propiedad?: 'propia' | 'custodia';
   propietario?: string;
+  /** E-006: stock al que se repone (por defecto 2 × mínimo) y proveedor al que se pide */
+  objetivo?: number;
+  proveedorHabitual?: string;
+  /** Ropa y EPIs de almacén: modelo común a varias tallas */
+  modelo?: string;
+  talla?: string;
 }
 
 export type Rol = 'admin' | 'almacen';
@@ -41,6 +47,22 @@ export interface Pendiente {
   /** creado en este dispositivo y aún sin respuesta del servidor */
   provisional?: boolean;
 }
+
+/** E-006: aviso de reposición (nace en el servidor al cruzar el mínimo; uno abierto por artículo) */
+export interface AvisoReposicion {
+  id: string; sku?: string; modeloHerramienta?: string; destino: 'proveedor' | 'propietario'; grupo: string;
+  estado: 'abierto' | 'pedido' | 'cerrado'; creado: number; cantidadPedida?: number; proveedorPedido?: string; pedidoTs?: number; pedidoPor?: string;
+}
+export interface MinimoHerramienta { modelo: string; minimo: number; objetivo?: number; proveedor: string }
+export type ModoEnvio = 'inmediato' | 'resumen';
+export interface ConfigAvisos {
+  correoActivo: boolean; correoModo: ModoEnvio; correoHora: string; correoRemitente: string; correoDestinatarios: string[];
+  pushActivo: boolean; pushModo: ModoEnvio; pushHora: string;
+  telegramActivo: boolean; telegramModo: ModoEnvio; telegramHora: string; telegramChatId: string;
+  diasRecordatorio: number; custodiaEnvio: 'manual' | 'automatico'; informeCustodia: 'semanal' | 'mensual' | 'ninguno';
+}
+export interface EnvioAviso { id: string; ts: number; canal: 'correo' | 'push' | 'telegram'; tipo: string; asunto: string; estado: 'pendiente' | 'enviado' | 'error' | 'descartado'; error?: string }
+export interface ActaCustodia { id: string; numero?: string; ts: number; propietario: string; representante: string; firma: string; lineas: { sku: string; sistema: number; contado: number }[]; hash?: string; operator: string }
 
 export interface Propietario { id: string; nombre: string; contacto: string; correosReposicion: string[]; correosInformes: string[] }
 
@@ -129,6 +151,8 @@ export interface IncidenciaHerramienta {
 export interface Herramienta {
   id: string;
   clase: ClaseDotacion;
+  /** E-006: modelo para contar repuestos (herramientas operativas sin asignar) */
+  modelo?: string;
   nombre: string;
   marca: string;
   /** N.º de serie o lote (puede ir vacío en ropa) */
@@ -167,6 +191,11 @@ export interface Estado {
   rol: Rol;
   operator: string;
   pedidos: Record<string, Pedido>;
+  avisos: AvisoReposicion[];
+  minimosHerramienta: MinimoHerramienta[];
+  configAvisos: ConfigAvisos;
+  envios: EnvioAviso[];
+  actas: ActaCustodia[];
   cesta: { equipo: string; receptor: string | null; lineas: LineaEntrega[] };
   seq: { ent: number };
 }

@@ -1,4 +1,4 @@
-import type { AlbaranIA, CatId, Equipo, Producto, Propietario, Tecnico, TipoMov, Unidad } from './tipos';
+import type { AlbaranIA, CatId, ConfigAvisos, Equipo, Producto, Propietario, Tecnico, TipoMov, Unidad } from './tipos';
 
 /* =========================================================
    Almacén Búfala · datos de prueba y catálogos fijos
@@ -12,6 +12,8 @@ export const MARCA = { nombre: 'Almacén Búfala', sub: 'Intelligent Warehouse',
 export const CATS: Record<CatId, { label: string; icon: string; color: string; tile: string }> = {
   cargadores: { label: 'Cargadores VE', icon: 'ev_charger',     color: '#0037b0', tile: 'bg-primary-fixed text-primary' },
   cuadros:    { label: 'Cuadros de protecciones', icon: 'electrical_services', color: '#7c3aed', tile: 'bg-violet-100 text-violet-800' },
+  epis:       { label: 'EPIs (almacén)', icon: 'health_and_safety', color: '#b45309', tile: 'bg-orange-100 text-orange-800' },
+  ropa:       { label: 'Ropa de trabajo', icon: 'apparel', color: '#475569', tile: 'bg-slate-200 text-slate-700' },
   cables:     { label: 'Cables',        icon: 'cable',          color: '#b45309', tile: 'bg-amber-100 text-amber-800' },
   tubos:      { label: 'Tubos',         icon: 'straighten',     color: '#565e74', tile: 'bg-secondary-container text-secondary' },
   fijaciones: { label: 'Fijaciones',    icon: 'hardware',       color: '#213145', tile: 'bg-surface-container-high text-on-surface' },
@@ -62,6 +64,14 @@ export const SEED_PRODUCTS: Producto[] = [
   { sku: 'SCH-IC60N-40', supplierRef: 'A9F74240', name: 'Magnetotérmico Schneider Acti9 iC60N 2P 40 A curva C', cat: 'aparamenta', unit: 'ud', pack: 1, packLabel: 'unidad', stock: 1, min: 12, loc: 'P04-E01-N3', supplier: 'Schneider Electric España', price: 38.90 },
   { sku: '8909080510', name: 'Kit borna doble 16 mm² monofásico V.E. esquema 2', cat: 'aparamenta', unit: 'ud', pack: 1, packLabel: 'unidad', stock: 9, min: 5, loc: 'P04-E01-N2', supplier: 'Saltoki Alcobendas', price: 7.90 },
   { sku: '7353541080', name: 'Caja registro FAM T-3203T tapa tornillo 200×131', cat: 'aparamenta', unit: 'ud', pack: 1, packLabel: 'unidad', stock: 22, min: 10, loc: 'P04-E02-N1', supplier: 'Saltoki Móstoles', price: 2.36 },
+  // Ropa de trabajo y EPIs en almacén, por modelo y talla (E-006): al entregar una prenda sale de aquí
+  { sku: 'ROPA-PANT-42', name: 'Pantalón de trabajo multibolsillos · talla 42', cat: 'ropa', unit: 'ud', pack: 1, packLabel: 'Talla 42', stock: 4, min: 3, loc: 'P07-E01-N1', supplier: 'Vestuario Laboral Granada', price: 32, modelo: 'Pantalón multibolsillos', talla: '42' },
+  { sku: 'ROPA-PANT-44', name: 'Pantalón de trabajo multibolsillos · talla 44', cat: 'ropa', unit: 'ud', pack: 1, packLabel: 'Talla 44', stock: 2, min: 3, loc: 'P07-E01-N1', supplier: 'Vestuario Laboral Granada', price: 32, modelo: 'Pantalón multibolsillos', talla: '44' },
+  { sku: 'ROPA-POLO-M', name: 'Polo alta visibilidad · talla M', cat: 'ropa', unit: 'ud', pack: 1, packLabel: 'Talla M', stock: 6, min: 4, loc: 'P07-E01-N2', supplier: 'Vestuario Laboral Granada', price: 18, modelo: 'Polo alta visibilidad', talla: 'M' },
+  { sku: 'ROPA-POLO-L', name: 'Polo alta visibilidad · talla L', cat: 'ropa', unit: 'ud', pack: 1, packLabel: 'Talla L', stock: 5, min: 4, loc: 'P07-E01-N2', supplier: 'Vestuario Laboral Granada', price: 18, modelo: 'Polo alta visibilidad', talla: 'L' },
+  { sku: 'EPI-GUAN-9', name: 'Guantes dieléctricos clase 0 · talla 9', cat: 'epis', unit: 'ud', pack: 1, packLabel: 'Talla 9', stock: 3, min: 2, loc: 'P07-E02-N1', supplier: 'Suministros EPI Sur', price: 64, modelo: 'Guantes dieléctricos clase 0', talla: '9' },
+  { sku: 'EPI-GUAN-10', name: 'Guantes dieléctricos clase 0 · talla 10', cat: 'epis', unit: 'ud', pack: 1, packLabel: 'Talla 10', stock: 1, min: 2, loc: 'P07-E02-N1', supplier: 'Suministros EPI Sur', price: 64, modelo: 'Guantes dieléctricos clase 0', talla: '10' },
+  { sku: 'EPI-BOTA-42', name: 'Calzado de seguridad S3 · talla 42', cat: 'epis', unit: 'ud', pack: 1, packLabel: 'Talla 42', stock: 2, min: 1, loc: 'P07-E02-N2', supplier: 'Suministros EPI Sur', price: 79, modelo: 'Calzado de seguridad S3', talla: '42' },
   // Cuadros de protecciones VE (en custodia de Esmove, sin precio y SIN n.º de serie: se controlan por modelo y cantidad;
   // supplierRef = código de la pegatina del modelo)
   { sku: 'ESM-CPVE-MONO', supplierRef: 'CP-VE-1F-40', name: 'Cuadro de protecciones VE monofásico 40 A (IGA + diferencial + protector sobretensiones)', cat: 'cuadros', unit: 'ud', pack: 1, packLabel: 'Monofásico · 40 A', stock: 3, min: 2, loc: 'P06-E04-N1', supplier: 'Esmove', price: 0, propiedad: 'custodia', propietario: 'ESMOVE' },
@@ -84,6 +94,11 @@ export const SEED_TECNICOS: Tecnico[] = [
   { id: 'T6', nombre: 'Raúl Ortega',   rol: 'Instalador técnico',        dni: '***2817-B' },
 ];
 export const OFICINA = 'Oficina';
+
+/* E-006: configuración de avisos por defecto (app y push inmediatos; correo en resumen diario a las 8:00) */
+export const CONFIG_AVISOS_DEFECTO: ConfigAvisos = { correoActivo: false, correoModo: 'resumen', correoHora: '08:00', correoRemitente: '', correoDestinatarios: [],
+  pushActivo: true, pushModo: 'inmediato', pushHora: '08:00', telegramActivo: false, telegramModo: 'inmediato', telegramHora: '08:00', telegramChatId: '',
+  diasRecordatorio: 7, custodiaEnvio: 'manual', informeCustodia: 'mensual' };
 
 /* E-008: depositantes de material en custodia */
 export const SEED_PROPIETARIOS: Propietario[] = [{ id: 'ESMOVE', nombre: 'Esmove', contacto: '', correosReposicion: [], correosInformes: [] }];

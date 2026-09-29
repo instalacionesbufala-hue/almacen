@@ -7,8 +7,9 @@ import { hace, num, parseSN, redondea, toNum } from '../../domain/formato';
 import { mover, S, useAlmacen } from '../../store/almacen';
 import { hayModal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
-import { BTN_BASE, BTN_P, BTN_S, BTN_T, Icon, INP, LBL, Pill, Tile } from '../../ui/base';
+import { BTN_BASE, BTN_P, BTN_S, BTN_T, Icon, INP, LBL, Pill, TagCustodia, Tile } from '../../ui/base';
 import { abrirBorrador, abrirFicha, abrirFormProducto, MovRow } from '../inventario/hojas';
+import { candidatos, codigoConocido, leerTexto } from './texto';
 
 type Modo = 'entrada' | 'salida' | 'consulta';
 interface Hit { code: string; sku: string | null; serial: string; via: string }
@@ -87,6 +88,18 @@ export default function ScanView() {
     setHit(h); setQty('1'); setRef(''); setReason(REASONS[modo === 'consulta' ? 'salida' : modo][0]); prepararSerie(h, r?.p);
   };
   const cam = useCamara(true, c => alLeer(c, 'cámara'));
+  const [leyendo, setLeyendo] = useState(false);
+  /* E-008: los cuadros no llevan código de barras: se lee el texto de su pegatina */
+  const leerPegatina = async () => {
+    const v = cam.video.current; if (!v || !cam.estado.on) return toast('Activa la cámara y enfoca la pegatina.', 'warn');
+    setLeyendo(true);
+    try {
+      const texto = await leerTexto(v), c = codigoConocido(S(), texto);
+      if (c) alLeer(c, 'lectura de texto');
+      else toast(candidatos(texto).length ? `No reconozco el código (${candidatos(texto).slice(0, 3).join(', ')}). Escríbelo a mano.` : 'No se ha leído ningún código. Acércate y evita reflejos.', 'warn', 7000);
+    } catch (e) { toast((e as Error).message, 'err', 7000); }
+    setLeyendo(false);
+  };
 
   const cambiarModo = (m: Modo) => { setModo(m); setReason(REASONS[m === 'consulta' ? 'salida' : m][0]); if (hit) prepararSerie(hit, p); };
   const siguiente = () => { setHit(null); if (!cam.estado.on) cam.arrancar(); };
@@ -135,6 +148,7 @@ export default function ScanView() {
           <div className="flex items-center gap-3"><span className="w-12 h-12 rounded-xl bg-primary-fixed text-primary grid place-items-center"><Icon n="center_focus_weak" className="ico-28" /></span>
             <div><div className="font-semibold text-headline-sm">Apunta al código</div><div className="text-body-sm text-secondary">Modo <b>{modo === 'entrada' ? 'entrada de stock' : modo === 'salida' ? 'salida de material' : 'consulta'}</b>. Al leerlo verás la ficha aquí.</div></div></div>
           <Manual valor={manual} setValor={setManual} onEnviar={c => alLeer(c, 'teclado')} />
+          <button onClick={() => void leerPegatina()} disabled={leyendo} className={`${BTN_S} h-12`}><Icon n={leyendo ? 'progress_activity' : 'text_fields'} className={`ico-20 ${leyendo ? 'girar' : ''}`} />{leyendo ? 'Leyendo el texto…' : 'Leer el código impreso (cuadros sin código de barras)'}</button>
           <div><div className={`${LBL} mb-2`}>Códigos de prueba (tócalos para simular la lectura)</div>
             <div className="flex flex-wrap gap-2">{PRUEBAS.map(([c, l]) => <button key={c} onClick={() => alLeer(c, 'simulación')} className="px-3 h-10 rounded-lg bg-surface-container-low text-body-sm hover:bg-surface-container-high">{l}</button>)}</div></div>
           <Registro log={log} />
@@ -148,7 +162,7 @@ export default function ScanView() {
             : <div className="flex flex-col gap-3">
               <div className="bg-surface-container-low rounded-2xl p-4 flex gap-3"><Tile p={p} size="w-14 h-14" />
                 <div className="flex-1 min-w-0"><div className="flex justify-between items-center gap-2"><span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-tertiary-fixed text-on-tertiary-fixed font-mono text-label-sm">● IDENTIFICADO</span><span className="font-mono text-label-sm text-secondary">vía {hit.via}</span></div>
-                  <div className="text-headline-sm font-semibold mt-1 leading-snug">{p.name}</div>
+                  <div className="text-headline-sm font-semibold mt-1 leading-snug">{p.name}</div>{p.propiedad === 'custodia' && <div className="mt-1"><TagCustodia p={p} /></div>}
                   <div className="font-mono text-label-sm text-primary mt-0.5">SKU: {p.sku} <span className="text-secondary">· Stock {qtyTxt(p, p.stock)}</span></div></div></div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-surface-container-low rounded-xl p-3"><div className={`${LBL} flex justify-between`}>{p.serialized ? 'S/N leído' : 'Código leído'}<Icon n="check_circle" className="ico-18 text-tertiary" /></div><div className="font-mono text-label-lg mt-1 break-all">{hit.serial || hit.code}</div></div>

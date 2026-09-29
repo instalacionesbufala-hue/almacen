@@ -64,7 +64,7 @@ export async function recargar(): Promise<void> {
   if (!supabase || sesion.get().estado !== 'lista') return;
   const res = await Promise.all(TABLAS.map(t => {
     const q = supabase!.from(t).select(COLUMNAS[t] || '*');
-    return t === 'movimientos' ? q.order('ts', { ascending: false }).limit(2000) : q;
+    return t === 'movimientos' ? q.order('ts', { ascending: false }).limit(2000) : t === 'envios_aviso' ? q.order('ts', { ascending: false }).limit(200) : t === 'avisos_reposicion' ? q.or(`estado.neq.cerrado,cerrado_ts.gt.${new Date(Date.now() - 30 * 864e5).toISOString()}`) : q;
   }));
   const fallo = res.find(r => r.error);
   if (fallo?.error) { marcarConexion(!esErrorDeRed(fallo.status, fallo.error.message)); return; }

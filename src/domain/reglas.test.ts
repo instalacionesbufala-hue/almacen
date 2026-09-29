@@ -176,3 +176,13 @@ describe('custodia de Esmove (E-008)', () => {
     expect(find(S, 'BF-FIX-SX8')!.stock).toBe(1195);
   });
 });
+
+describe('lectura de la pegatina de los cuadros (E-008)', () => {
+  it('encuentra el código del modelo entre el texto leído', async () => {
+    const { candidatos, codigoConocido } = await import('../features/escaner/texto');
+    const texto = 'ESMOVE S.L.\nCUADRO PROTECCIONES VE\nMOD: CP-VE-3F-32  230/400V\nLote 2026';
+    expect(candidatos(texto)).toContain('CP-VE-3F-32');
+    expect(codigoConocido(S, texto)).toBe('CP-VE-3F-32');
+    expect(codigoConocido(S, 'nada que ver 1234')).toBeNull();
+  });
+});
