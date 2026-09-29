@@ -26,7 +26,10 @@ export const TIPO: Record<TipoMov, { t: string; icon: string; c: string; sign: s
   entrada: { t: 'Entrada', icon: 'south_west', c: 'bg-tertiary-fixed/30 text-tertiary', sign: '+' },
   salida: { t: 'Salida', icon: 'north_east', c: 'bg-primary-fixed text-primary', sign: '−' },
   merma: { t: 'Merma', icon: 'report', c: 'bg-error-container text-error', sign: '−' },
+  ajuste: { t: 'Ajuste', icon: 'tune', c: 'bg-amber-100 text-amber-800', sign: '±' },
 };
+/** Signo e importe de un movimiento para mostrarlo (el ajuste lleva su propio signo) */
+export const signoMov = (type: TipoMov, qty: number) => type === 'ajuste' ? (qty > 0 ? '+' : '−') : TIPO[type].sign;
 export const ESTADO_EQ: Record<EstadoEquipo, { t: string; c: string }> = {
   ruta: { t: 'En ruta', c: 'bg-tertiary-fixed text-on-tertiary-fixed' },
   depot: { t: 'En depot (carga)', c: 'bg-primary-fixed text-primary' },

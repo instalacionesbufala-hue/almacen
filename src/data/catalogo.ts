@@ -1,4 +1,4 @@
-import type { AlbaranIA, CatId, Equipo, Producto, Tecnico, TipoMov, Unidad } from './tipos';
+import type { AlbaranIA, CatId, Equipo, Producto, Propietario, Tecnico, TipoMov, Unidad } from './tipos';
 
 /* =========================================================
    Almacén Búfala · datos de prueba y catálogos fijos
@@ -11,6 +11,7 @@ export const MARCA = { nombre: 'Almacén Búfala', sub: 'Intelligent Warehouse',
 /* Categorías: unidad base, icono (Material Symbols) y color para gráficos */
 export const CATS: Record<CatId, { label: string; icon: string; color: string; tile: string }> = {
   cargadores: { label: 'Cargadores VE', icon: 'ev_charger',     color: '#0037b0', tile: 'bg-primary-fixed text-primary' },
+  cuadros:    { label: 'Cuadros de protecciones', icon: 'electrical_services', color: '#7c3aed', tile: 'bg-violet-100 text-violet-800' },
   cables:     { label: 'Cables',        icon: 'cable',          color: '#b45309', tile: 'bg-amber-100 text-amber-800' },
   tubos:      { label: 'Tubos',         icon: 'straighten',     color: '#565e74', tile: 'bg-secondary-container text-secondary' },
   fijaciones: { label: 'Fijaciones',    icon: 'hardware',       color: '#213145', tile: 'bg-surface-container-high text-on-surface' },
@@ -21,9 +22,10 @@ export const UNIT: Record<Unidad, string> = { m: 'm', ud: 'ud' };
 
 /* Motivos de movimiento */
 export const REASONS: Record<TipoMov, string[]> = {
-  entrada: ['Compra a proveedor', 'Devolución de obra', 'Ajuste de inventario'],
-  salida:  ['Obra / instalación', 'Entrega a equipo', 'Traspaso a furgoneta', 'Venta mostrador'],
-  merma:   ['Rotura o daño', 'Defecto de fábrica', 'Corte sobrante', 'Pérdida o extravío', 'Ajuste de inventario'],
+  entrada: ['Compra a proveedor', 'Recepción en custodia', 'Devolución de obra'],
+  salida:  ['Obra / instalación', 'Instalado en obra', 'Entrega a equipo', 'Traspaso a furgoneta', 'Venta mostrador'],
+  merma:   ['Rotura o daño', 'Defecto de fábrica', 'Corte sobrante', 'Pérdida o extravío'],
+  ajuste:  ['Ajuste de inventario', 'Corrección de un error', 'Alta de referencia'],
 };
 
 /* Catálogo DE DEMOSTRACIÓN (decisión del usuario): las referencias reales se darán de alta con la cámara o a mano.
@@ -60,12 +62,16 @@ export const SEED_PRODUCTS: Producto[] = [
   { sku: 'SCH-IC60N-40', supplierRef: 'A9F74240', name: 'Magnetotérmico Schneider Acti9 iC60N 2P 40 A curva C', cat: 'aparamenta', unit: 'ud', pack: 1, packLabel: 'unidad', stock: 1, min: 12, loc: 'P04-E01-N3', supplier: 'Schneider Electric España', price: 38.90 },
   { sku: '8909080510', name: 'Kit borna doble 16 mm² monofásico V.E. esquema 2', cat: 'aparamenta', unit: 'ud', pack: 1, packLabel: 'unidad', stock: 9, min: 5, loc: 'P04-E01-N2', supplier: 'Saltoki Alcobendas', price: 7.90 },
   { sku: '7353541080', name: 'Caja registro FAM T-3203T tapa tornillo 200×131', cat: 'aparamenta', unit: 'ud', pack: 1, packLabel: 'unidad', stock: 22, min: 10, loc: 'P04-E02-N1', supplier: 'Saltoki Móstoles', price: 2.36 },
-  // Cargadores VE (con número de serie)
-  { sku: 'BF-VE-POL74', supplierRef: 'POL-74-T2', name: 'Cargador Policharger 7,4 kW monofásico T2 cable 5 m', cat: 'cargadores', unit: 'ud', pack: 1, packLabel: '7,4 kW · Monofásico', stock: 2, min: 2, loc: 'P06-E01-N1', supplier: 'Policharger', price: 690, serialized: true, serials: ['PCH74-26-0412', 'PCH74-26-0419'] },
-  { sku: 'BF-VE-WBX74', supplierRef: 'PLP1-0-2-4', name: 'Cargador Wallbox Pulsar Plus 7,4 kW T2', cat: 'cargadores', unit: 'ud', pack: 1, packLabel: '7,4 kW · Monofásico', stock: 1, min: 2, loc: 'P06-E01-N2', supplier: 'Wallbox', price: 649, serialized: true, serials: ['WBX-PP-883120'] },
-  { sku: 'WBX-PULSAR-22', supplierRef: 'PLP2-0-2-3', name: 'Cargador Wallbox Pulsar Plus 22 kW T2 cable 5 m', cat: 'cargadores', unit: 'ud', pack: 1, packLabel: '22 kW · Trifásico', stock: 6, min: 2, loc: 'P06-E02-N1', supplier: 'Wallbox', price: 889, serialized: true, serials: ['WBX-22-899281', 'WBX-22-899282', 'WBX-22-899283', 'WBX-22-899284', 'WBX-22-899285', 'WBX-22-899286'] },
-  { sku: 'CIR-ENEXT-S', supplierRef: 'V20011', name: 'Cargador Circutor eNext S 7,4 kW con cable T2', cat: 'cargadores', unit: 'ud', pack: 1, packLabel: '7,4 kW · Monofásico', stock: 3, min: 2, loc: 'P06-E02-N2', supplier: 'Circutor S.A.', price: 612, serialized: true, serials: ['CC-9914', 'CC-9915', 'CC-9921'] },
-  { sku: 'BF-VE-VIA74', supplierRef: 'VIARIS-UNI-74', name: 'Cargador Orbis Viaris Uni 7,4 kW T2 con cable', cat: 'cargadores', unit: 'ud', pack: 1, packLabel: '7,4 kW · Monofásico', stock: 4, min: 2, loc: 'P06-E03-N1', supplier: 'Orbis', price: 585, serialized: true, serials: ['OB-VU-26A0107', 'OB-VU-26A0108', 'OB-VU-26A0111', 'OB-VU-26A0112'] },
+  // Cuadros de protecciones VE (en custodia de Esmove, sin precio y SIN n.º de serie: se controlan por modelo y cantidad;
+  // supplierRef = código de la pegatina del modelo)
+  { sku: 'ESM-CPVE-MONO', supplierRef: 'CP-VE-1F-40', name: 'Cuadro de protecciones VE monofásico 40 A (IGA + diferencial + protector sobretensiones)', cat: 'cuadros', unit: 'ud', pack: 1, packLabel: 'Monofásico · 40 A', stock: 3, min: 2, loc: 'P06-E04-N1', supplier: 'Esmove', price: 0, propiedad: 'custodia', propietario: 'ESMOVE' },
+  { sku: 'ESM-CPVE-TRI', supplierRef: 'CP-VE-3F-32', name: 'Cuadro de protecciones VE trifásico 32 A (IGA + diferencial + protector sobretensiones)', cat: 'cuadros', unit: 'ud', pack: 1, packLabel: 'Trifásico · 32 A', stock: 1, min: 2, loc: 'P06-E04-N2', supplier: 'Esmove', price: 0, propiedad: 'custodia', propietario: 'ESMOVE' },
+  // Cargadores VE (en custodia de Esmove, con número de serie, sin precio)
+  { sku: 'BF-VE-POL74', supplierRef: 'POL-74-T2', name: 'Cargador Policharger 7,4 kW monofásico T2 cable 5 m', cat: 'cargadores', unit: 'ud', pack: 1, packLabel: '7,4 kW · Monofásico', stock: 2, min: 2, loc: 'P06-E01-N1', supplier: 'Policharger', price: 0, propiedad: 'custodia', propietario: 'ESMOVE', serialized: true, serials: ['PCH74-26-0412', 'PCH74-26-0419'] },
+  { sku: 'BF-VE-WBX74', supplierRef: 'PLP1-0-2-4', name: 'Cargador Wallbox Pulsar Plus 7,4 kW T2', cat: 'cargadores', unit: 'ud', pack: 1, packLabel: '7,4 kW · Monofásico', stock: 1, min: 2, loc: 'P06-E01-N2', supplier: 'Wallbox', price: 0, propiedad: 'custodia', propietario: 'ESMOVE', serialized: true, serials: ['WBX-PP-883120'] },
+  { sku: 'WBX-PULSAR-22', supplierRef: 'PLP2-0-2-3', name: 'Cargador Wallbox Pulsar Plus 22 kW T2 cable 5 m', cat: 'cargadores', unit: 'ud', pack: 1, packLabel: '22 kW · Trifásico', stock: 6, min: 2, loc: 'P06-E02-N1', supplier: 'Wallbox', price: 0, propiedad: 'custodia', propietario: 'ESMOVE', serialized: true, serials: ['WBX-22-899281', 'WBX-22-899282', 'WBX-22-899283', 'WBX-22-899284', 'WBX-22-899285', 'WBX-22-899286'] },
+  { sku: 'CIR-ENEXT-S', supplierRef: 'V20011', name: 'Cargador Circutor eNext S 7,4 kW con cable T2', cat: 'cargadores', unit: 'ud', pack: 1, packLabel: '7,4 kW · Monofásico', stock: 3, min: 2, loc: 'P06-E02-N2', supplier: 'Circutor S.A.', price: 0, propiedad: 'custodia', propietario: 'ESMOVE', serialized: true, serials: ['CC-9914', 'CC-9915', 'CC-9921'] },
+  { sku: 'BF-VE-VIA74', supplierRef: 'VIARIS-UNI-74', name: 'Cargador Orbis Viaris Uni 7,4 kW T2 con cable', cat: 'cargadores', unit: 'ud', pack: 1, packLabel: '7,4 kW · Monofásico', stock: 4, min: 2, loc: 'P06-E03-N1', supplier: 'Orbis', price: 0, propiedad: 'custodia', propietario: 'ESMOVE', serialized: true, serials: ['OB-VU-26A0107', 'OB-VU-26A0108', 'OB-VU-26A0111', 'OB-VU-26A0112'] },
 ];
 
 /* Técnicos (DNI enmascarado: solo se guardan los últimos dígitos) */
@@ -78,6 +84,9 @@ export const SEED_TECNICOS: Tecnico[] = [
   { id: 'T6', nombre: 'Raúl Ortega',   rol: 'Instalador técnico',        dni: '***2817-B' },
 ];
 export const OFICINA = 'Oficina';
+
+/* E-008: depositantes de material en custodia */
+export const SEED_PROPIETARIOS: Propietario[] = [{ id: 'ESMOVE', nombre: 'Esmove', contacto: '', correosReposicion: [], correosInformes: [] }];
 
 /* Equipos / cuadrillas con su furgoneta */
 export const SEED_EQUIPOS: Equipo[] = [

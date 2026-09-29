@@ -22,6 +22,7 @@ Este repositorio es el canal entre Claude (chat, arquitecto) y Claude Code (impl
 - **App actual: React + Vite + TypeScript + Tailwind** (decisión del usuario, E-001 hecho). Vive en `src/` y se publica en GitHub Pages con `.github/workflows/pages.yml`. Comprobar siempre con `npm test`, `npx tsc -b` y `npm run build`.
 - Capas: `src/data` (tipos y demo) → `src/domain` (reglas puras con pruebas) → `src/store` (estado; hoy localStorage, mañana Supabase) → `src/features` (pantallas) → `src/ui` (componentes Stitch). Las reglas nuevas van en `src/domain` con su prueba.
 - **IA de albaranes: Gemini con capa gratuita** (decisión del usuario). La clave va solo en el servidor (función de Supabase). El código debe permitir cambiar de proveedor (p. ej. a Claude) sin rehacer la app.
+- **Backend (E-002 hecho):** esquema, funciones y RLS en `supabase/migrations`; pruebas de base de datos con PGlite en `supabase/tests` (`npm run test:bd`). Toda escritura de la app pasa por `ejecutar(op)` (`src/store/ops.ts`), nunca mutando el estado a mano. Sin variables de Supabase la app funciona en modo demo local.
 - **Backend: Supabase, plan gratuito** (500 MB de base de datos, 50.000 usuarios activos al mes, 500.000 llamadas a funciones al mes; se pausa tras 1 semana sin uso y no incluye copias automáticas).
 
 ## Modelo de datos

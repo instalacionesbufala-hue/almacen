@@ -21,30 +21,38 @@ export function locTxt(loc: string) {
 export const LOC_RE = /^P\d{1,3}-E\d{1,3}-N\d{1,2}$/;
 export const critical = (S: Estado) => S.products.filter(p => status(p) === 'red');
 export const warning = (S: Estado) => S.products.filter(p => status(p) === 'amber');
-export const invValue = (S: Estado) => S.products.reduce((a, p) => a + p.stock * p.price, 0);
+/** E-008: el material en custodia no es nuestro y no tiene precio: nunca suma en euros */
+export const esCustodia = (p: Pick<Producto, 'propiedad'>) => p.propiedad === 'custodia';
+export const valorProducto = (p: Producto) => esCustodia(p) ? 0 : p.stock * (p.price || 0);
+export const invValue = (S: Estado) => S.products.reduce((a, p) => a + valorProducto(p), 0);
 export const aisles = (S: Estado) => [...new Set(S.products.map(p => aisle(p.loc)))].sort();
 
-export interface MovInput { sku: string; type: TipoMov; qty: number; reason: string; ref?: string; serials?: string[]; equipo?: string }
+export interface MovInput { id?: string; sku: string; type: TipoMov; qty: number; reason: string; ref?: string; serials?: string[]; equipo?: string; entrega?: string }
+/** Variación de stock de un movimiento (el ajuste lleva su signo) */
+export const delta = (type: TipoMov, qty: number) => type === 'entrada' || type === 'ajuste' ? qty : -qty;
 export interface MovResult { p: Producto; before: Semaforo; after: Semaforo; m: Movimiento }
 
 /** Aplica un movimiento. Lanza Error si no es válido (no deja el estado a medias). */
-export function applyMovement(S: Estado, { sku, type, qty, reason, ref = '', serials = [], equipo }: MovInput, ahora = Date.now()): MovResult {
+export function applyMovement(S: Estado, { id, sku, type, qty, reason, ref = '', serials = [], equipo, entrega }: MovInput, ahora = Date.now()): MovResult {
   const p = find(S, sku); if (!p) throw new Error('Producto no encontrado');
   qty = Number(qty);
-  if (!(qty > 0)) throw new Error('Indica una cantidad mayor que cero');
-  if (type !== 'entrada' && qty > p.stock) throw new Error(`Solo hay ${qtyTxt(p, p.stock)} de ${p.name}`);
+  if (type === 'ajuste' ? !qty : !(qty > 0)) throw new Error(type === 'ajuste' ? 'Indica una cantidad distinta de cero' : 'Indica una cantidad mayor que cero');
+  if (!String(reason || '').trim()) throw new Error('Indica el motivo del movimiento');
+  const d = delta(type, qty);
+  if (p.stock + d < 0) throw new Error(`Solo hay ${qtyTxt(p, p.stock)} de ${p.name}`);
+  if (esCustodia(p) && type === 'salida' && !String(ref || '').trim()) throw new Error(`Indica la obra o instalación de destino: ${p.name} está en custodia de ${S.propietarios?.find(o => o.id === p.propietario)?.nombre || 'otro propietario'}`);
   if (p.serialized) {
-    if (serials.length !== qty) throw new Error(`${p.name}: indica ${qty} n.º de serie (hay ${serials.length})`);
+    if (serials.length !== Math.abs(qty)) throw new Error(`${p.name}: indica ${Math.abs(qty)} n.º de serie (hay ${serials.length})`);
     if (new Set(serials).size !== serials.length) throw new Error('Hay números de serie repetidos');
-    if (type === 'entrada') { const d = serials.find(s => (p.serials || []).includes(s)); if (d) throw new Error(`El n.º de serie ${d} ya está en stock`); }
+    if (d > 0) { const dup = serials.find(s => (p.serials || []).includes(s)); if (dup) throw new Error(`El n.º de serie ${dup} ya está en stock`); }
     else { const f = serials.find(s => !(p.serials || []).includes(s)); if (f) throw new Error(`El n.º de serie ${f} no está en stock`); }
-  }
+  } else if (serials.length) throw new Error(`${p.name} no lleva control por n.º de serie`);
   const before = status(p);
-  if (type === 'entrada') { p.stock += qty; if (p.serialized) p.serials = [...(p.serials || []), ...serials]; }
-  else { p.stock -= qty; if (p.serialized) p.serials = (p.serials || []).filter(s => !serials.includes(s)); }
-  p.stock = redondea(p.stock);
-  if (type === 'entrada' && S.pedidos[sku] && p.stock >= p.min) delete S.pedidos[sku];
-  const m: Movimiento = { id: uid('M'), ts: ahora, sku, type, qty, reason, ref, operator: S.operator, serials, equipo };
+  if (d > 0) { if (p.serialized) p.serials = [...(p.serials || []), ...serials]; }
+  else if (p.serialized) p.serials = (p.serials || []).filter(s => !serials.includes(s));
+  p.stock = redondea(p.stock + d);
+  if (d > 0 && S.pedidos[sku] && p.stock >= p.min) delete S.pedidos[sku];
+  const m: Movimiento = { id: id || uid('M'), ts: ahora, sku, type, qty, reason, ref, operator: S.operator, serials, equipo, entrega };
   S.movements.unshift(m);
   return { p, before, after: status(p), m };
 }
@@ -120,6 +128,9 @@ export function vanStock(S: Estado, eqId: string): LineaEntrega[] {
   }
   return Object.values(m).filter(x => x.qty > 0 && find(S, x.sku));
 }
+
+/** Número visible de una entrega: el del servidor, el local (modo demo) o "pendiente" mientras está en la cola */
+export const numEntrega = (e: { id: string; numero?: string }) => e.numero || (/^ENT-/.test(e.id) ? e.id : 'Pendiente de envío');
 
 /** Cantidad sugerida para reponer: hasta 2 × mínimo, redondeada al formato de compra */
 export function pedidoSugerido(p: Producto) {

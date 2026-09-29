@@ -1,0 +1,10 @@
+# Configuración mínima para la CLI de Supabase (supabase link / db push / functions deploy).
+# El identificador real del proyecto se indica con: supabase link --project-ref <ref>
+project_id = "almacen-bufala"
+
+[db]
+major_version = 17
+
+[auth]
+# Nadie se registra por su cuenta: el administrador da de alta a los usuarios (E-004)
+enable_signup = false

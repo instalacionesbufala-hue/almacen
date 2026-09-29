@@ -1,8 +1,9 @@
 /* Modelo de datos (ver CLAUDE.md → "Modelo de datos") */
 
-export type CatId = 'cargadores' | 'cables' | 'tubos' | 'fijaciones' | 'aparamenta' | 'fontaneria';
+export type CatId = 'cargadores' | 'cuadros' | 'cables' | 'tubos' | 'fijaciones' | 'aparamenta' | 'fontaneria';
 export type Unidad = 'm' | 'ud';
-export type TipoMov = 'entrada' | 'salida' | 'merma';
+/** 'ajuste' lleva la cantidad con signo (+ suma, − resta) y exige motivo; solo el administrador */
+export type TipoMov = 'entrada' | 'salida' | 'merma' | 'ajuste';
 export type Semaforo = 'red' | 'amber' | 'green';
 export type EstadoEquipo = 'ruta' | 'depot' | 'taller';
 
@@ -24,7 +25,14 @@ export interface Producto {
   price: number;
   serialized?: boolean;
   serials?: string[];
+  /** Alta rápida desde el escáner (rol almacén): el administrador debe completarla */
+  borrador?: boolean;
+  /** E-008: material propio o en custodia de un depositante (sin precio) */
+  propiedad?: 'propia' | 'custodia';
+  propietario?: string;
 }
+
+export interface Propietario { id: string; nombre: string; contacto: string; correosReposicion: string[]; correosInformes: string[] }
 
 export interface Movimiento {
   id: string;
@@ -38,6 +46,8 @@ export interface Movimiento {
   serials: string[];
   /** Furgoneta a la que va (entrega) o de la que vuelve (devolución) */
   equipo?: string;
+  /** Entrega a la que pertenece */
+  entrega?: string;
 }
 
 export interface Albaran {
@@ -76,7 +86,10 @@ export interface LineaEntrega {
 }
 
 export interface Entrega {
+  /** En la nube es un UUID generado en el cliente; en modo local, el propio número */
   id: string;
+  /** ENT-AAAA-NNNN asignado por el servidor (vacío mientras está pendiente de envío) */
+  numero?: string;
   ts: number;
   equipo: string;
   receptor: string;
@@ -137,6 +150,7 @@ export interface Estado {
   tecnicos: Tecnico[];
   entregas: Entrega[];
   herramientas: Herramienta[];
+  propietarios: Propietario[];
   operator: string;
   pedidos: Record<string, Pedido>;
   cesta: { equipo: string; receptor: string | null; lineas: LineaEntrega[] };

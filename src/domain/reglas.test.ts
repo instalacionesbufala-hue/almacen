@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { Estado } from '../data/tipos';
 import { fresh } from '../data/semilla';
-import { applyMovement, find, matchLine, pedidoSugerido, qrContenido, resolveCode, searchProducts, status, vanStock } from './reglas';
+import { applyMovement, esCustodia, find, invValue, resolveCode as resolver, matchLine, pedidoSugerido, qrContenido, resolveCode, searchProducts, status, vanStock } from './reglas';
 import { csvTexto } from './csv';
 import { hashEntrega } from './hash';
 import { parseSN, toNum } from './formato';
@@ -42,8 +42,8 @@ describe('movimientos', () => {
     expect(() => applyMovement(S, { sku: 'BF-VE-POL74', type: 'entrada', qty: 2, reason: 'x', serials: ['A-1'] })).toThrow(/n.º de serie/);
     expect(() => applyMovement(S, { sku: 'BF-VE-POL74', type: 'entrada', qty: 1, reason: 'x', serials: ['PCH74-26-0412'] })).toThrow(/ya está en stock/);
     expect(() => applyMovement(S, { sku: 'BF-VE-POL74', type: 'entrada', qty: 2, reason: 'x', serials: ['N-1', 'N-1'] })).toThrow(/repetidos/);
-    expect(() => applyMovement(S, { sku: 'BF-VE-POL74', type: 'salida', qty: 1, reason: 'x', serials: ['NO-EXISTE'] })).toThrow(/no está en stock/);
-    const r = applyMovement(S, { sku: 'BF-VE-POL74', type: 'salida', qty: 1, reason: 'x', serials: ['PCH74-26-0412'] });
+    expect(() => applyMovement(S, { sku: 'BF-VE-POL74', type: 'salida', qty: 1, reason: 'x', ref: 'Obra', serials: ['NO-EXISTE'] })).toThrow(/no está en stock/);
+    const r = applyMovement(S, { sku: 'BF-VE-POL74', type: 'salida', qty: 1, reason: 'x', ref: 'Garaje C/ Eros 10', serials: ['PCH74-26-0412'] });
     expect(r.p.serials).toEqual(['PCH74-26-0419']);
     expect(r.p.stock).toBe(1);
   });
@@ -76,7 +76,7 @@ describe('buscador', () => {
     expect(r.every(p => p.cat === 'fijaciones')).toBe(true);
     expect(status(r[0])).toBe('red');
     expect(searchProducts(S, '', { est: 'red' }).every(p => status(p) === 'red')).toBe(true);
-    expect(searchProducts(S, '', { pas: 'P06' }).every(p => p.cat === 'cargadores')).toBe(true);
+    expect(searchProducts(S, '', { pas: 'P06' }).every(p => p.cat === 'cargadores' || p.cat === 'cuadros')).toBe(true);
   });
 });
 
@@ -142,5 +142,37 @@ describe('utilidades', () => {
   it('números con coma y listas de series', () => {
     expect(toNum('2,5')).toBe(2.5);
     expect(parseSN('A-1\nB-2, C-3')).toEqual(['A-1', 'B-2', 'C-3']);
+  });
+});
+
+describe('custodia de Esmove (E-008)', () => {
+  it('el valor del inventario no suma el material en custodia', () => {
+    const propio = S.products.filter(p => !esCustodia(p)).reduce((a, p) => a + p.stock * p.price, 0);
+    expect(invValue(S)).toBeCloseTo(propio);
+    const wbx = find(S, 'WBX-PULSAR-22')!; wbx.price = 999; // aunque alguien le pusiera precio, no cuenta
+    expect(invValue(S)).toBeCloseTo(propio);
+  });
+  it('cargadores y cuadros están en custodia de Esmove; solo los cargadores llevan n.º de serie', () => {
+    const c = S.products.filter(p => p.cat === 'cargadores' || p.cat === 'cuadros');
+    expect(c.length).toBeGreaterThan(4);
+    expect(c.every(p => p.propiedad === 'custodia' && p.propietario === 'ESMOVE')).toBe(true);
+    expect(c.filter(p => p.cat === 'cargadores').every(p => p.serialized)).toBe(true);
+    expect(c.filter(p => p.cat === 'cuadros').some(p => p.serialized)).toBe(false);
+  });
+  it('los cuadros se mueven por cantidad, sin pedir n.º de serie, y se encuentran por el código de su pegatina', () => {
+    applyMovement(S, { sku: 'ESM-CPVE-MONO', type: 'entrada', qty: 2, reason: 'Recepción en custodia', ref: 'Alb. Esmove 1' });
+    expect(find(S, 'ESM-CPVE-MONO')!.stock).toBe(5);
+    expect(() => applyMovement(S, { sku: 'ESM-CPVE-MONO', type: 'salida', qty: 1, reason: 'x', ref: 'Obra', serials: ['X'] })).toThrow(/no lleva control por n.º de serie/);
+    expect(resolver(S, 'CP-VE-1F-40')!.p.sku).toBe('ESM-CPVE-MONO');
+  });
+  it('una salida de custodia sin obra de destino se rechaza', () => {
+    expect(() => applyMovement(S, { sku: 'ESM-CPVE-MONO', type: 'salida', qty: 1, reason: 'Instalado en obra', ref: ' ' })).toThrow(/obra o instalación de destino/);
+    applyMovement(S, { sku: 'ESM-CPVE-MONO', type: 'salida', qty: 1, reason: 'Instalado en obra', ref: 'Garaje C/ Recogidas 12' });
+    expect(find(S, 'ESM-CPVE-MONO')!.stock).toBe(2);
+  });
+  it('los ajustes llevan signo y exigen motivo', () => {
+    expect(() => applyMovement(S, { sku: 'BF-FIX-SX8', type: 'ajuste', qty: -5, reason: '' })).toThrow(/motivo/);
+    applyMovement(S, { sku: 'BF-FIX-SX8', type: 'ajuste', qty: -5, reason: 'Recuento' });
+    expect(find(S, 'BF-FIX-SX8')!.stock).toBe(1195);
   });
 });

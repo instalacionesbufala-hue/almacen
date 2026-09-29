@@ -1,0 +1,135 @@
+-- Generado por scripts/generar-seed.ts · datos de DEMOSTRACIÓN (se sustituirán por los reales)
+begin;
+
+insert into public.equipos (id, nombre, flota, matricula, estado) values
+('F01', 'Equipo Alfa', 'Furgoneta 01', '4821-LXB', 'ruta'),
+('F02', 'Equipo Bravo', 'Furgoneta 02', '9014-MKZ', 'depot'),
+('F03', 'Equipo Gamma', 'Furgoneta 03', '3381-NZT', 'ruta');
+
+insert into public.tecnicos (id, nombre, rol, dni_mascara, equipo_id) values
+('T1', 'Luis Martín', 'Oficial 1ª (Líder)', '***4291-L', 'F01'),
+('T2', 'Jorge Ruiz', 'Técnico de apoyo', '***7730-K', 'F01'),
+('T3', 'Andrea Pardo', 'Instaladora especialista VE', '***1188-P', 'F02'),
+('T4', 'Sergio Molina', 'Técnico electricista', '***5062-R', 'F02'),
+('T5', 'Marta Gil', 'Oficial 1ª electricidad', '***9340-S', 'F03'),
+('T6', 'Raúl Ortega', 'Instalador técnico', '***2817-B', 'F03');
+
+insert into public.productos (sku, ean, ref_proveedor, nombre, categoria, unidad, formato, formato_texto, stock, minimo, ubicacion, proveedor, con_serie, propiedad, propietario_id) values
+('6000650605', null, null, 'Cable H07Z1-K (AS) 6 mm² amarillo/verde flexible', 'cables', 'm', 100, 'rollo 100 m', 420, 200, 'P01-E01-N1', 'Saltoki Alcobendas', false, 'propia', null),
+('6000650604', null, null, 'Cable H07Z1-K (AS) 6 mm² azul flexible', 'cables', 'm', 100, 'rollo 100 m', 180, 200, 'P01-E01-N2', 'Saltoki Alcobendas', false, 'propia', null),
+('6000650601', null, null, 'Cable H07Z1-K (AS) 6 mm² negro flexible', 'cables', 'm', 100, 'rollo 100 m', 350, 200, 'P01-E01-N3', 'Saltoki Alcobendas', false, 'propia', null),
+('6040615306', null, null, 'Cable RZ1-K (AS) 3G6 mm² 0,6/1 kV bobina', 'cables', 'm', 100, 'bobina', 265, 150, 'P01-E02-N1', 'Saltoki Móstoles', false, 'propia', null),
+('6040615310', null, null, 'Cable RZ1-K (AS) 3G10 mm² 0,6/1 kV bobina', 'cables', 'm', 100, 'bobina', 125, 100, 'P01-E02-N2', 'Saltoki Móstoles', false, 'propia', null),
+('6040615316', null, null, 'Cable RZ1-K (AS) 3G16 mm² 0,6/1 kV bobina', 'cables', 'm', 100, 'bobina', 305, 100, 'P01-E03-N1', 'Saltoki Móstoles', false, 'propia', null),
+('CAB-RZ1K-5G6', null, null, 'Manguera RZ1-K (AS) 5G6 mm² libre halógenos bobina 100 m', 'cables', 'm', 100, 'bobina 100 m', 800, 200, 'P01-E03-N2', 'Prysmian Cables Spain', false, 'propia', null),
+('7270020010', null, null, 'Cable Kommdata Cat6 U/UTP LSZH violeta caja 305 m', 'cables', 'm', 305, 'caja 305 m', 915, 305, 'P01-E04-N1', 'Saltoki Alcobendas', false, 'propia', null),
+('6201020032', null, null, 'Tubo rígido enchufable M-32 gris', 'tubos', 'm', 3, 'tubo 3 m', 240, 100, 'P02-E01-N1', 'Saltoki Móstoles', false, 'propia', null),
+('BF-TUB-CM20', null, null, 'Tubo corrugado forrado M-20 gris rollo 100 m', 'tubos', 'm', 100, 'rollo 100 m', 600, 300, 'P02-E02-N1', 'Saltoki Alcobendas', false, 'propia', null),
+('UNX-CAN-60100', null, null, 'Canaleta aislante Unex 60×100 mm U23X tramo 2 m', 'tubos', 'm', 2, 'tramo 2 m', 108, 40, 'P02-E03-N1', 'Saltoki Móstoles', false, 'propia', null),
+('BF-FON-MC16', null, null, 'Tubo multicapa PEX-AL-PEX 16×2 rollo 100 m', 'fontaneria', 'm', 100, 'rollo 100 m', 260, 200, 'P05-E01-N1', 'Saltoki Móstoles', false, 'propia', null),
+('BF-FON-PX20', null, null, 'Tubo PEX-A 20×1,9 con barrera O₂ rollo 100 m', 'fontaneria', 'm', 100, 'rollo 100 m', 400, 200, 'P05-E01-N2', 'Saltoki Móstoles', false, 'propia', null),
+('BF-FON-PR16', null, null, 'Racor prensar multicapa codo 90° 16 mm', 'fontaneria', 'ud', 10, 'bolsa 10 ud', 64, 40, 'P05-E02-N1', 'Saltoki Móstoles', false, 'propia', null),
+('BF-FIX-SX8', '4006209701234', null, 'Taco nylon SX 8×40 (caja 100)', 'fijaciones', 'ud', 100, 'caja 100 ud', 1200, 100, 'P03-E01-N1', 'Saltoki Alcobendas', false, 'propia', null),
+('BF-FIX-SX6', '4006209700985', null, 'Taco nylon SX 6×30 (caja 100)', 'fijaciones', 'ud', 100, 'caja 100 ud', 80, 100, 'P03-E01-N2', 'Saltoki Alcobendas', false, 'propia', null),
+('5301012054', null, null, 'Tornillo madera avellanado pozi 5×40 bicromatado', 'fijaciones', 'ud', 200, 'caja 200 ud', 1400, 500, 'P03-E02-N1', 'Saltoki Alcobendas', false, 'propia', null),
+('6201025023', null, null, 'Manguito enchufable M-32 IP40 gris', 'fijaciones', 'ud', 10, 'bolsa 10 ud', 85, 50, 'P02-E01-N2', 'Saltoki Móstoles', false, 'propia', null),
+('5102012032', null, null, 'Clip cierre dientes gris 32-35 BTM', 'fijaciones', 'ud', 50, 'bolsa 50 ud', 160, 100, 'P03-E03-N1', 'Saltoki Móstoles', false, 'propia', null),
+('6611500005', null, null, 'Bridas UNX 4,8×188 incoloras (bolsa 100)', 'fijaciones', 'ud', 1, 'bolsa', 14, 10, 'P03-E03-N2', 'Saltoki Alcobendas', false, 'propia', null),
+('7280040020', null, null, 'Conector macho RJ45 UTP Cat6 Kommdata gold', 'fijaciones', 'ud', 25, 'bolsa 25 ud', 75, 100, 'P03-E04-N1', 'Saltoki Alcobendas', false, 'propia', null),
+('7501013532', null, null, 'Magnetotérmico Hager 1P+N 32 A curva C 6 kA MN932V', 'aparamenta', 'ud', 1, 'unidad', 6, 4, 'P04-E01-N1', 'Saltoki Alcobendas', false, 'propia', null),
+('SCH-IC60N-40', null, 'A9F74240', 'Magnetotérmico Schneider Acti9 iC60N 2P 40 A curva C', 'aparamenta', 'ud', 1, 'unidad', 1, 12, 'P04-E01-N3', 'Schneider Electric España', false, 'propia', null),
+('8909080510', null, null, 'Kit borna doble 16 mm² monofásico V.E. esquema 2', 'aparamenta', 'ud', 1, 'unidad', 9, 5, 'P04-E01-N2', 'Saltoki Alcobendas', false, 'propia', null),
+('7353541080', null, null, 'Caja registro FAM T-3203T tapa tornillo 200×131', 'aparamenta', 'ud', 1, 'unidad', 22, 10, 'P04-E02-N1', 'Saltoki Móstoles', false, 'propia', null),
+('ESM-CPVE-MONO', null, 'CP-VE-1F-40', 'Cuadro de protecciones VE monofásico 40 A (IGA + diferencial + protector sobretensiones)', 'cuadros', 'ud', 1, 'Monofásico · 40 A', 3, 2, 'P06-E04-N1', 'Esmove', false, 'custodia', 'ESMOVE'),
+('ESM-CPVE-TRI', null, 'CP-VE-3F-32', 'Cuadro de protecciones VE trifásico 32 A (IGA + diferencial + protector sobretensiones)', 'cuadros', 'ud', 1, 'Trifásico · 32 A', 1, 2, 'P06-E04-N2', 'Esmove', false, 'custodia', 'ESMOVE'),
+('BF-VE-POL74', null, 'POL-74-T2', 'Cargador Policharger 7,4 kW monofásico T2 cable 5 m', 'cargadores', 'ud', 1, '7,4 kW · Monofásico', 2, 2, 'P06-E01-N1', 'Policharger', true, 'custodia', 'ESMOVE'),
+('BF-VE-WBX74', null, 'PLP1-0-2-4', 'Cargador Wallbox Pulsar Plus 7,4 kW T2', 'cargadores', 'ud', 1, '7,4 kW · Monofásico', 1, 2, 'P06-E01-N2', 'Wallbox', true, 'custodia', 'ESMOVE'),
+('WBX-PULSAR-22', null, 'PLP2-0-2-3', 'Cargador Wallbox Pulsar Plus 22 kW T2 cable 5 m', 'cargadores', 'ud', 1, '22 kW · Trifásico', 6, 2, 'P06-E02-N1', 'Wallbox', true, 'custodia', 'ESMOVE'),
+('CIR-ENEXT-S', null, 'V20011', 'Cargador Circutor eNext S 7,4 kW con cable T2', 'cargadores', 'ud', 1, '7,4 kW · Monofásico', 3, 2, 'P06-E02-N2', 'Circutor S.A.', true, 'custodia', 'ESMOVE'),
+('BF-VE-VIA74', null, 'VIARIS-UNI-74', 'Cargador Orbis Viaris Uni 7,4 kW T2 con cable', 'cargadores', 'ud', 1, '7,4 kW · Monofásico', 4, 2, 'P06-E03-N1', 'Orbis', true, 'custodia', 'ESMOVE');
+
+insert into public.costes_producto (sku, precio) values
+('6000650605', 0.806),
+('6000650604', 0.806),
+('6000650601', 0.806),
+('6040615306', 2.803),
+('6040615310', 4.596),
+('6040615316', 6.969),
+('CAB-RZ1K-5G6', 5.42),
+('7270020010', 0.338),
+('6201020032', 2.21),
+('BF-TUB-CM20', 0.32),
+('UNX-CAN-60100', 6.85),
+('BF-FON-MC16', 1.35),
+('BF-FON-PX20', 0.98),
+('BF-FON-PR16', 3.1),
+('BF-FIX-SX8', 0.052),
+('BF-FIX-SX6', 0.034),
+('5301012054', 0.045),
+('6201025023', 0.76),
+('5102012032', 0.39),
+('6611500005', 3.77),
+('7280040020', 0.62),
+('7501013532', 19.5),
+('SCH-IC60N-40', 38.9),
+('8909080510', 7.9),
+('7353541080', 2.36),
+('ESM-CPVE-MONO', null),
+('ESM-CPVE-TRI', null),
+('BF-VE-POL74', null),
+('BF-VE-WBX74', null),
+('WBX-PULSAR-22', null),
+('CIR-ENEXT-S', null),
+('BF-VE-VIA74', null);
+
+insert into public.series (sku, serie, en_stock) values
+('BF-VE-POL74', 'PCH74-26-0412', true),
+('BF-VE-POL74', 'PCH74-26-0419', true),
+('BF-VE-WBX74', 'WBX-PP-883120', true),
+('WBX-PULSAR-22', 'WBX-22-899281', true),
+('WBX-PULSAR-22', 'WBX-22-899282', true),
+('WBX-PULSAR-22', 'WBX-22-899283', true),
+('WBX-PULSAR-22', 'WBX-22-899284', true),
+('WBX-PULSAR-22', 'WBX-22-899285', true),
+('WBX-PULSAR-22', 'WBX-22-899286', true),
+('CIR-ENEXT-S', 'CC-9914', true),
+('CIR-ENEXT-S', 'CC-9915', true),
+('CIR-ENEXT-S', 'CC-9921', true),
+('BF-VE-VIA74', 'OB-VU-26A0107', true),
+('BF-VE-VIA74', 'OB-VU-26A0108', true),
+('BF-VE-VIA74', 'OB-VU-26A0111', true),
+('BF-VE-VIA74', 'OB-VU-26A0112', true);
+
+insert into public.dotacion (id, clase, nombre, marca, serie, talla, cantidad, caduca, estado, equipo_id, tecnico_id) values
+('H001', 'herramienta', 'Comprobador de instalaciones VE (EVSE)', 'Metrel A1532', 'MT-1532-0091', null, 1, null, 'operativa', 'F01', null),
+('H002', 'herramienta', 'Martillo perforador SDS-Plus', 'Hilti TE 30-A36', 'HI-TE30-5521', null, 1, null, 'operativa', 'F01', 'T1'),
+('H003', 'herramienta', 'Pinza amperimétrica', 'Fluke 376 FC', 'FL-376-22817', null, 1, null, 'operativa', 'F02', 'T3'),
+('H004', 'herramienta', 'Telurómetro', 'Chauvin Arnoux C.A 6417', 'CA-6417-1044', null, 1, null, 'deteriorada', 'F02', null),
+('H005', 'herramienta', 'Crimpadora hidráulica 16–240 mm²', 'Klauke EK 60 VP', 'KL-EK60-7730', null, 1, null, 'operativa', 'F03', 'T5'),
+('H006', 'herramienta', 'Taladro atornillador', 'Makita DDF484', 'MK-484-99102', null, 1, null, 'rota', 'F03', 'T6'),
+('E001', 'epi', 'Guantes dieléctricos clase 0 (1000 V)', 'Catu CG-05', 'LOTE-2025-118', '9', 1, '2026-10-19', 'operativa', 'F01', 'T1'),
+('E002', 'epi', 'Casco con pantalla facial arco eléctrico', 'Petzl Vertex + Catu', 'PZ-VX-44102', null, 1, '2027-11-03', 'operativa', 'F01', 'T2'),
+('E003', 'epi', 'Arnés anticaídas', 'Irudek 5000', 'IR-5000-2291', null, 1, '2026-09-17', 'operativa', 'F02', 'T4'),
+('E004', 'epi', 'Calzado de seguridad S3', 'Bellota 72212', 'LOTE-B-7741', '38', 1, '2027-04-27', 'operativa', 'F03', 'T5'),
+('R001', 'ropa', 'Pantalón de trabajo multibolsillos', 'Búfala (logo bordado)', '', '44', 2, null, 'operativa', 'F01', 'T1'),
+('R002', 'ropa', 'Polo manga corta alta visibilidad', 'Búfala (logo bordado)', '', 'M', 3, null, 'operativa', 'F02', 'T3'),
+('R003', 'ropa', 'Chaqueta softshell ignífuga', 'Búfala (logo bordado)', '', 'L', 1, null, 'deteriorada', 'F03', 'T6');
+
+insert into public.costes_dotacion (id, valor) values
+('H001', 1450),
+('H002', 890),
+('H003', 520),
+('H004', 1190),
+('H005', 1320),
+('H006', 210),
+('E001', 64),
+('E002', 145),
+('E003', 180),
+('E004', 79),
+('R001', 32),
+('R002', 18),
+('R003', 69);
+
+insert into public.dotacion_historial (id, dotacion_id, tipo, nota, operario) select gen_random_uuid(), id, 'alta', 'Alta inicial (datos de demostración)', 'Sistema' from public.dotacion;
+
+commit;

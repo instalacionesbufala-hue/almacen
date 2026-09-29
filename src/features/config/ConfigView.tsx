@@ -11,13 +11,18 @@ import { Avatar, BTN_BASE, BTN_P, BTN_S, CARD, Icon } from '../../ui/base';
 import { abrirPerfil } from '../inventario/hojas';
 import { exportarMovimientosCsv, exportarStockCsv } from '../inventario/StockView';
 import { iaReal, URL_IA } from '../albaranes/lector';
+import { modoNube, urlSupabase } from '../../store/nube/cliente';
+import { verificarEntregasServidor } from '../../store/nube/sync';
+import { numEntrega } from '../../domain/reglas';
 
 const Bloque = ({ icon, t, children }: { icon: string; t: string; children: ReactNode }) =>
   <section className={`${CARD} p-4 lg:p-space-md flex flex-col gap-3`}><h2 className="text-headline-sm font-semibold flex items-center gap-2"><Icon n={icon} className="text-primary" />{t}</h2>{children}</section>;
 
 export default function ConfigView() {
   const E = useAlmacen(), archivo = useRef<HTMLInputElement>(null);
-  const verificar = async () => { let ok = 0; const bad: string[] = []; for (const x of E.entregas) (await hashEntrega(x)) === x.hash ? ok++ : bad.push(x.id); bad.length ? toast(`${bad.length} entrega(s) no coinciden con su huella: ${bad.join(', ')}.`, 'err', 8000) : toast(`Las ${ok} entregas coinciden con su huella SHA-256.`, 'ok'); };
+  const verificar = async () => { let ok = 0; const bad: string[] = [];
+    if (modoNube) { const r = await verificarEntregasServidor(); if (!r) return; r.forEach(x => x.ok ? ok++ : bad.push(x.numero)); }
+    else for (const x of E.entregas) (await hashEntrega(x)) === x.hash ? ok++ : bad.push(numEntrega(x)); bad.length ? toast(`${bad.length} entrega(s) no coinciden con su huella: ${bad.join(', ')}.`, 'err', 8000) : toast(`Las ${ok} entregas coinciden con su huella SHA-256.`, 'ok'); };
   const importar = async (f?: File) => {
     if (!f) return;
     try { const s = JSON.parse(await f.text()); if (!s || !Array.isArray(s.products)) throw new Error(); reemplazar(s); toast('Copia importada.', 'ok'); }
@@ -46,14 +51,14 @@ export default function ConfigView() {
           <p className="text-body-sm text-secondary">Cada entrega firmada guarda una huella SHA-256 de su contenido y de la firma. Si alguien la modifica, la huella deja de coincidir.</p>
           <button onClick={verificar} className={`${BTN_S} h-12`}><Icon n="verified" className="ico-20" />Verificar {E.entregas.length} entregas</button></Bloque>
         <Bloque icon="database" t="Datos y copias de seguridad">
-          <p className="text-body-sm text-secondary">De momento los datos viven en este navegador ({(tamañoGuardado() / 1024).toFixed(0)} KB). Haz copias a menudo: si se borran los datos del navegador, se pierden. Con el backend (E-002) pasarán a la nube.</p>
+          <p className="text-body-sm text-secondary">{modoNube ? <>Los datos están en la nube (Supabase{urlSupabase ? ': ' + new URL(urlSupabase).host : ''}) y se copian cada semana fuera del repositorio. Aquí puedes descargar una copia o los listados.</> : <>Modo demostración: los datos viven en este navegador ({(tamañoGuardado() / 1024).toFixed(0)} KB). Haz copias a menudo: si se borran los datos del navegador, se pierden.</>}</p>
           <div className="grid grid-cols-2 gap-2">
             <button onClick={() => descargar(`almacen-copia-${hoyISO()}.json`, exportarCopia(), 'application/json')} className={`${BTN_P} h-12`}><Icon n="download" className="ico-20" />Exportar copia</button>
-            <button onClick={() => archivo.current?.click()} className={`${BTN_S} h-12`}><Icon n="upload" className="ico-20" />Importar copia</button>
+            {!modoNube && <button onClick={() => archivo.current?.click()} className={`${BTN_S} h-12`}><Icon n="upload" className="ico-20" />Importar copia</button>}
             <button onClick={() => exportarStockCsv(E)} className={`${BTN_S} h-12`}><Icon n="table" className="ico-20" />Stock CSV</button>
             <button onClick={() => exportarMovimientosCsv(E)} className={`${BTN_S} h-12`}><Icon n="swap_vert" className="ico-20" />Movimientos CSV</button></div>
           <input ref={archivo} type="file" accept="application/json,.json" className="hidden" onChange={e => { importar(e.target.files?.[0]); e.target.value = ''; }} />
-          <button onClick={reset} className={`${BTN_BASE} h-12 text-error bg-error-container/50 hover:bg-error-container`}><Icon n="restart_alt" className="ico-20" />Restaurar datos de prueba</button></Bloque>
+          {!modoNube && <button onClick={reset} className={`${BTN_BASE} h-12 text-error bg-error-container/50 hover:bg-error-container`}><Icon n="restart_alt" className="ico-20" />Restaurar datos de prueba</button>}</Bloque>
         <Bloque icon="info" t="Acerca de"><p className="text-body-sm text-secondary">{MARCA.nombre} · control de stock, entregas y dotación para material eléctrico, fontanería y movilidad eléctrica. {E.products.length} referencias · {E.movements.length} movimientos · {E.entregas.length} entregas · {E.herramientas.length} fichas de dotación.</p></Bloque>
       </div>
     </div>

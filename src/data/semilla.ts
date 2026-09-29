@@ -1,6 +1,6 @@
 /* Estado inicial de demostración (movimientos, entregas y albaranes de ejemplo) */
 import type { Albaran, Entrega, Estado, Herramienta, Movimiento, TipoMov } from './tipos';
-import { FIRMAS_DEMO, OFICINA, SEED_EQUIPOS, SEED_PRODUCTS, SEED_TECNICOS } from './catalogo';
+import { FIRMAS_DEMO, OFICINA, SEED_EQUIPOS, SEED_PRODUCTS, SEED_PROPIETARIOS, SEED_TECNICOS } from './catalogo';
 
 const clone = <T,>(o: T): T => JSON.parse(JSON.stringify(o));
 
@@ -77,7 +77,7 @@ export function seedHerramientas(): Herramienta[] {
 export function fresh(): Estado {
   return {
     v: 3, products: clone(SEED_PRODUCTS), movements: seedMovements(), albaranes: seedAlbaranes(),
-    equipos: clone(SEED_EQUIPOS), tecnicos: clone(SEED_TECNICOS), entregas: seedEntregas(), herramientas: seedHerramientas(),
+    equipos: clone(SEED_EQUIPOS), tecnicos: clone(SEED_TECNICOS), entregas: seedEntregas(), herramientas: seedHerramientas(), propietarios: clone(SEED_PROPIETARIOS),
     operator: OFICINA, pedidos: {}, cesta: { equipo: 'F01', receptor: 'T1', lineas: [] }, seq: { ent: 412 },
   };
 }

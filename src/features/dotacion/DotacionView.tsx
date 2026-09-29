@@ -1,10 +1,11 @@
 /* Dotación: herramientas, EPIs y ropa de trabajo asignados a equipos y técnicos, con incidencias y reposiciones */
 import { useState } from 'react';
 import type { ClaseDotacion, Herramienta, TipoIncidencia } from '../../data/tipos';
-import { asignarHerramienta, avisosDotacion, caducidad, CLASE, costeIncidencias, ESTADO_HERR, herramienta, INCIDENCIA, incidenciasPosibles, registrarIncidencia } from '../../domain/herramientas';
+import { avisosDotacion, caducidad, CLASE, costeIncidencias, ESTADO_HERR, herramienta, INCIDENCIA, incidenciasPosibles } from '../../domain/herramientas';
 import { eur, fechaHora, hace, hoyISO, norm, num, toNum, uid } from '../../domain/formato';
 import { descargarCsv } from '../../domain/csv';
-import { guardar, S, useAlmacen } from '../../store/almacen';
+import { ejecutar, S, useAlmacen } from '../../store/almacen';
+import { nuevoId } from '../../store/ops';
 import { closeModal, openModal, SheetFoot, SheetHead } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 import { BTN_P, BTN_S, BTN_T, CARD, Campo, Icon, INP, Kpi, LBL, Tag, Vacio } from '../../ui/base';
@@ -111,10 +112,8 @@ function Incidencia({ id }: { id: string }) {
   const [tipo, setTipo] = useState<TipoIncidencia>(posibles[0]), [nota, setNota] = useState(''), [coste, setCoste] = useState(''), [serie, setSerie] = useState(''), [caduca, setCaduca] = useState('');
   const conCoste = tipo === 'reparacion' || tipo === 'reposicion';
   const guardarInc = () => {
-    try {
-      registrarIncidencia(E, id, tipo, { nota, coste: coste.trim() ? toNum(coste) : undefined, serieNueva: serie, caducaNueva: caduca || undefined });
-      guardar(); closeModal(); toast(`${INCIDENCIA[tipo].t} registrada en ${h.nombre}.`, 'ok');
-    } catch (e) { toast((e as Error).message, 'err'); }
+    if (!ejecutar({ op: 'incidencia', args: { id: nuevoId(), dotacion: id, tipo, nota, coste: coste.trim() ? toNum(coste) : undefined, serieNueva: serie || undefined, caducaNueva: caduca || undefined } })) return;
+    closeModal(); toast(`${INCIDENCIA[tipo].t} registrada en ${h.nombre}.`, 'ok');
   };
   return (<>
     <SheetHead title="Registrar incidencia" sub={`${h.nombre} · ${ESTADO_HERR[h.estado].t}`} />
@@ -138,7 +137,7 @@ function Asignar({ id }: { id: string }) {
   const E = useAlmacen(), h = herramienta(E, id)!;
   const [eq, setEq] = useState(h.equipo || ''), [tec, setTec] = useState(h.tecnico || '');
   const tecs = eq ? E.tecnicos.filter(t => E.equipos.find(e => e.id === eq)?.tecnicos.includes(t.id)) : E.tecnicos;
-  const ok = () => { try { asignarHerramienta(E, id, eq || undefined, tec || undefined); guardar(); closeModal(); toast(`${h.nombre}: ${quienTxt(h)}.`, 'ok'); } catch (e) { toast((e as Error).message, 'err'); } };
+  const ok = () => { if (ejecutar({ op: 'asignarDotacion', args: { id: nuevoId(), dotacion: id, equipo: eq || undefined, tecnico: tec || undefined } })) { closeModal(); toast(`${h.nombre}: ${quienTxt(h)}.`, 'ok'); } };
   return (<>
     <SheetHead title="Asignar" sub={h.nombre} />
     <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -163,9 +162,9 @@ function Alta({ clase0, preset }: { clase0: ClaseDotacion; preset: { equipo?: st
     const pref = f.clase === 'epi' ? 'E' : f.clase === 'ropa' ? 'R' : 'H';
     const h: Herramienta = { id: `${pref}${uid('').slice(-5).toUpperCase()}`, clase: f.clase as ClaseDotacion, nombre: f.nombre.trim(), marca: f.marca.trim(), serie: f.serie.trim(), talla: f.talla.trim() || undefined, cantidad, caduca: f.caduca || undefined, valor, estado: 'operativa',
       historial: [{ id: uid('I'), ts: Date.now(), tipo: 'alta', nota: 'Alta en la dotación', operator: E.operator }] };
-    E.herramientas.push(h);
-    if (f.equipo || f.tecnico) asignarHerramienta(E, h.id, f.equipo || undefined, f.tecnico || undefined);
-    guardar(); closeModal(); toast(`${CLASE[h.clase].t} dada de alta: ${h.nombre}.`, 'ok');
+    if (!ejecutar({ op: 'altaDotacion', args: h })) return;
+    if (f.equipo || f.tecnico) ejecutar({ op: 'asignarDotacion', args: { id: nuevoId(), dotacion: h.id, equipo: f.equipo || undefined, tecnico: f.tecnico || undefined } });
+    closeModal(); toast(`${CLASE[h.clase].t} dada de alta: ${h.nombre}.`, 'ok');
   };
   const tecs = f.equipo ? E.tecnicos.filter(t => E.equipos.find(e => e.id === f.equipo)?.tecnicos.includes(t.id)) : E.tecnicos;
   return (<>

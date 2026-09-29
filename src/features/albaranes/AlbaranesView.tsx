@@ -2,10 +2,11 @@
 import { useRef, useState } from 'react';
 import type { AlbaranIA } from '../../data/tipos';
 import { MARCA, UNIT } from '../../data/catalogo';
-import { applyMovement, find, matchLine, qtyTxt } from '../../domain/reglas';
+import { find, matchLine, qtyTxt } from '../../domain/reglas';
 import { fechaHora, hace, num, parseSN, toNum } from '../../domain/formato';
 import { descargarCsv } from '../../domain/csv';
-import { guardar, reemplazar, S, useAlmacen } from '../../store/almacen';
+import { ejecutar, S, useAlmacen } from '../../store/almacen';
+import { nuevoId } from '../../store/ops';
 import { crearStore } from '../../store/crear';
 import { useEsEscritorio } from '../../store/ui';
 import { toast } from '../../ui/toast';
@@ -79,12 +80,10 @@ function confirmar() {
       if (sn.length !== q) return toast(`${p.name}: hay ${sn.length} n.º de serie para ${q} unidades. Corrígelo antes de confirmar.`, 'err', 7000);
     }
   }
-  const copia = JSON.parse(JSON.stringify(E)); let uds = 0;
-  try { for (const l of lines) { const q = toNum(l.cantidad); uds += q; applyMovement(E, { sku: l.sku!, type: 'entrada', qty: q, reason: 'Compra a proveedor', ref: `Alb. ${a.doc.numero || 's/n'}`, serials: find(E, l.sku!)!.serialized ? parseSN(l.series) : [] }); } }
-  catch (e) { reemplazar(copia); return toast((e as Error).message, 'err'); }
   const conf = a.lines.reduce((s, l) => s + l.confianza, 0) / (a.lines.length || 1);
-  E.albaranes.unshift({ numero: a.doc.numero || 's/n', proveedor: a.doc.proveedor || 'Proveedor', fecha: a.doc.fecha || '', lineas: lines.length, unidades: uds, ts: Date.now(), operator: E.operator, confianza: conf, modo: a.mode || 'sim' });
-  guardar();
+  // todo o nada: se valida entero en local y el servidor lo repite en una sola transacción
+  if (!ejecutar({ op: 'albaran', args: { id: nuevoId(), cabecera: { numero: a.doc.numero || 's/n', proveedor: a.doc.proveedor, cif: a.doc.cif, fecha: a.doc.fecha, confianza: conf, modo: a.mode || 'sim' },
+    lineas: lines.map(l => ({ sku: l.sku!, cantidad: toNum(l.cantidad), series: find(E, l.sku!)!.serialized ? parseSN(l.series) : [] })) } })) return;
   toast(`Albarán ${a.doc.numero} integrado: ${lines.length} línea${lines.length === 1 ? '' : 's'} sumada${lines.length === 1 ? '' : 's'} al stock.`, 'ok', 6000);
   albStore.set(vacio());
 }

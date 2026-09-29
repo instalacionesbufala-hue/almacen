@@ -9,15 +9,19 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc -b"
+    "typecheck": "tsc -b",
+    "seed:sql": "vite-node scripts/generar-seed.ts",
+    "test:bd": "vitest run supabase"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.117.2",
     "jsqr": "^1.4.0",
     "qrcode-generator": "^1.4.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
     "@types/node": "^22.20.4",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",

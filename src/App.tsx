@@ -11,6 +11,9 @@ import DotacionView from './features/dotacion/DotacionView';
 import ScanView from './features/escaner/ScanView';
 import MovimientosView from './features/movimientos/MovimientosView';
 import ConfigView from './features/config/ConfigView';
+import Acceso from './features/shell/Acceso';
+import { modoNube } from './store/nube/cliente';
+import { sesion } from './store/nube/sync';
 
 const PANTALLAS: Record<Vista, ComponentType> = {
   stock: StockView, albaranes: AlbaranesView, equipos: EquiposView, entregas: EntregasView,
@@ -18,7 +21,8 @@ const PANTALLAS: Record<Vista, ComponentType> = {
 };
 
 export default function App() {
-  const vista = useVista(), Pantalla = PANTALLAS[vista];
+  const vista = useVista(), Pantalla = PANTALLAS[vista], s = sesion.use();
+  if (modoNube && s.estado !== 'lista') return <><Acceso /><Toasts /></>;
   return (<>
     <Sidebar vista={vista} />
     <CabeceraEscritorio />

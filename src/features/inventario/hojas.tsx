@@ -6,7 +6,8 @@ import { CATS, OFICINA, REASONS, UNIT } from '../../data/catalogo';
 import { aisle, critical, find, LOC_RE, locTxt, pedidoSugerido, qrContenido, qtyTxt, searchProducts, status, vanStock, warning } from '../../domain/reglas';
 import { eur, hace, hoyISO, num, parseSN, redondea, toNum } from '../../domain/formato';
 import { descargarCsv } from '../../domain/csv';
-import { guardar, mover, S, useAlmacen } from '../../store/almacen';
+import { ejecutar, guardar, mover, operarioSeleccionable, S, useAlmacen } from '../../store/almacen';
+import { salir, sesion } from '../../store/nube/sync';
 import { ir, VISTAS, type Vista, useVista } from '../../store/ui';
 import { closeModal, openModal, SheetFoot, SheetHead } from '../../ui/modal';
 import { toast } from '../../ui/toast';
@@ -169,11 +170,9 @@ function FormProducto({ sku, preset, onCreado }: { sku?: string; preset: Partial
     const n = { pack: toNum(f.pack) || 1, min: toNum(f.min), price: toNum(f.price), stock: toNum(f.stock) || 0 };
     if (Object.values(n).some(v => !(v >= 0))) return toast('Revisa los números: no pueden ser negativos.', 'err');
     const obj = { sku: code, name, cat: f.cat, unit: f.unit, pack: n.pack, packLabel: f.packLabel, min: n.min, loc, supplier: f.supplier.trim(), price: n.price, ean: f.ean.trim() || undefined, supplierRef: f.supplierRef.trim() || undefined, serialized: f.serialized };
-    if (p) { Object.assign(p, obj); if (obj.serialized && !p.serials) p.serials = []; guardar(); toast('Referencia actualizada.', 'ok'); }
+    if (!ejecutar({ op: 'producto', args: { producto: { ...obj, stock: p?.stock ?? 0 }, nuevo: !p, stockInicial: p ? 0 : n.stock } })) return;
+    if (p) toast('Referencia actualizada.', 'ok');
     else {
-      E.products.push({ ...obj, stock: 0, serials: obj.serialized ? [] : undefined });
-      guardar();
-      if (n.stock > 0 && !obj.serialized) mover({ sku: code, type: 'entrada', qty: n.stock, reason: 'Ajuste de inventario', ref: 'Alta de referencia' });
       toast(`Referencia ${code} creada${obj.serialized && n.stock > 0 ? '. Da entrada a las unidades con su n.º de serie.' : '.'}`, 'ok');
       onCreado?.(code);
     }
@@ -216,7 +215,7 @@ function Conteo({ pas }: { pas: string }) {
     for (const [sku, v] of Object.entries(vals)) {
       const p = find(E, sku)!, c = toNum(v); if (v.trim() === '' || !(c >= 0) || c === p.stock) continue;
       const d = redondea(c - p.stock);
-      if (mover({ sku, type: d > 0 ? 'entrada' : 'merma', qty: Math.abs(d), reason: 'Ajuste de inventario', ref: `Recuento pasillo ${pas}` })) n++;
+      if (mover({ sku, type: 'ajuste', qty: d, reason: 'Ajuste de inventario', ref: `Recuento pasillo ${pas}` })) n++;
     }
     closeModal();
     toast(n ? `Recuento guardado: ${n} ajuste${n === 1 ? '' : 's'} registrado${n === 1 ? '' : 's'}.` : 'Recuento sin diferencias: no se ha ajustado nada.', 'ok');
@@ -236,7 +235,7 @@ function Conteo({ pas }: { pas: string }) {
 /* ---------- Avisos de stock y reposición ---------- */
 export function pedir(sku: string) {
   const E = S(), p = find(E, sku)!; const q = pedidoSugerido(p);
-  E.pedidos[sku] = { ts: Date.now(), qty: q }; guardar();
+  if (!ejecutar({ op: 'pedido', args: { sku, qty: q } })) return;
   toast(`Añadido a la lista de reposición: ${qtyTxt(p, q)} de ${p.name} (${p.supplier}).`, 'ok');
 }
 export const abrirAvisos = () => openModal(<Avisos />);
@@ -259,7 +258,12 @@ function Avisos() {
 /* ---------- Operario activo y menú móvil ---------- */
 export const abrirPerfil = () => openModal(<Perfil />);
 function Perfil() {
-  const E = useAlmacen(), ops = [OFICINA, ...E.tecnicos.map(t => t.nombre)];
+  const E = useAlmacen(), ses = sesion.use(), ops = [OFICINA, ...E.tecnicos.map(t => t.nombre)];
+  if (!operarioSeleccionable) return (<>
+    <SheetHead title={ses.perfil?.nombre || 'Mi usuario'} sub={ses.perfil ? `${ses.perfil.email || ''} · ${ses.perfil.rol === 'admin' ? 'Administrador' : 'Almacén'}` : ''} />
+    <div className="p-5 flex flex-col gap-3"><p className="text-body-sm text-secondary">Cada movimiento queda registrado a tu nombre. Para usar la app con otra persona, cierra la sesión.</p>
+      <button onClick={() => { closeModal(); void salir(); }} className={`${BTN_S} h-12`}><Icon n="logout" className="ico-20" />Cerrar sesión</button></div>
+  </>);
   const elegir = (o: string) => { E.operator = o; guardar(); closeModal(); toast(`Operario activo: ${o}.`, 'ok'); };
   return (<>
     <SheetHead title="¿Quién está usando la app?" sub="Cada movimiento queda registrado a nombre del operario activo." />

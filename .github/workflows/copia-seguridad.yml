@@ -1,0 +1,69 @@
+name: Copia de seguridad y mantener activo Supabase
+
+# Lunes y jueves: así nunca pasan 7 días sin actividad (el plan gratuito se pausa) y hay copia semanal de sobra.
+on:
+  schedule:
+    - cron: '17 3 * * 1,4'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  copia:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+      SUPABASE_ANON: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+      DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      CLAVE_COPIA: ${{ secrets.COPIA_CLAVE }}
+      TOKEN_COPIAS: ${{ secrets.COPIAS_TOKEN }}
+      REPO_COPIAS: ${{ vars.COPIAS_REPO }}
+    steps:
+      - name: Mantener activo el proyecto (una consulta a la API)
+        if: env.SUPABASE_URL != ''
+        run: |
+          curl -fsS "$SUPABASE_URL/rest/v1/propietarios?select=id&limit=1" -H "apikey: $SUPABASE_ANON" -H "Authorization: Bearer $SUPABASE_ANON" -o /dev/null
+          echo "Proyecto activo"
+
+      - name: Comprobar que la copia está configurada
+        id: config
+        run: |
+          if [ -z "$DB_URL" ] || [ -z "$CLAVE_COPIA" ] || [ -z "$TOKEN_COPIAS" ] || [ -z "$REPO_COPIAS" ]; then
+            echo "::warning::Copia desactivada: faltan SUPABASE_DB_URL, COPIA_CLAVE, COPIAS_TOKEN o COPIAS_REPO (ver docs/COPIAS.md)"
+            echo "lista=no" >> "$GITHUB_OUTPUT"
+          else
+            echo "lista=si" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Volcar la base de datos (pg_dump 17)
+        if: steps.config.outputs.lista == 'si'
+        run: |
+          set -euo pipefail
+          FECHA=$(date -u +%Y-%m-%d_%H%M)
+          mkdir copia
+          # datos y estructura de la app + usuarios (auth.users) para poder restaurar los perfiles
+          docker run --rm --network host postgres:17 pg_dump "$DB_URL" --schema=public --no-owner --no-privileges -Fc > "copia/almacen_$FECHA.dump"
+          docker run --rm --network host postgres:17 pg_dump "$DB_URL" --data-only --table=auth.users --no-owner -Fc > "copia/usuarios_$FECHA.dump"
+          tar -czf "almacen_$FECHA.tar.gz" -C copia .
+          # cifrada con AES-256: sin la clave COPIA_CLAVE no se puede abrir
+          gpg --batch --yes --pinentry-mode loopback --passphrase "$CLAVE_COPIA" --symmetric --cipher-algo AES256 -o "almacen_$FECHA.tar.gz.gpg" "almacen_$FECHA.tar.gz"
+          rm -rf copia "almacen_$FECHA.tar.gz"
+          echo "FICHERO=almacen_$FECHA.tar.gz.gpg" >> "$GITHUB_ENV"
+
+      - name: Guardar la copia en el repositorio PRIVADO de copias (fuera de este repositorio público)
+        if: steps.config.outputs.lista == 'si'
+        run: |
+          set -euo pipefail
+          git clone --depth 1 "https://x-access-token:${TOKEN_COPIAS}@github.com/${REPO_COPIAS}.git" destino
+          mkdir -p destino/copias
+          mv "$FICHERO" destino/copias/
+          cd destino
+          # se conservan las 26 copias más recientes (unos 3 meses)
+          ls -1t copias/*.gpg | tail -n +27 | xargs -r git rm -q
+          git config user.name "copia-automatica"
+          git config user.email "copia@almacen.invalid"
+          git add copias
+          git commit -qm "Copia $FICHERO"
+          git push -q
+          echo "Copia guardada en ${REPO_COPIAS}/copias/$FICHERO"

@@ -1,11 +1,12 @@
 /* Entrega de material a una furgoneta con firma del receptor */
 import { useEffect, useRef, useState } from 'react';
-import type { Entrega } from '../../data/tipos';
 import { CATS, MARCA, UNIT } from '../../data/catalogo';
-import { applyMovement, find, qtyTxt, searchProducts, type MovResult } from '../../domain/reglas';
+import { find, numEntrega, qtyTxt, searchProducts, status } from '../../domain/reglas';
 import { fechaHora, num } from '../../domain/formato';
 import { hashEntrega } from '../../domain/hash';
-import { avisoEstado, guardar, reemplazar, S, useAlmacen } from '../../store/almacen';
+import { avisoEstado, ejecutar, guardar, useAlmacen } from '../../store/almacen';
+import { nuevoId, type OpEntrega } from '../../store/ops';
+import { modoNube } from '../../store/nube/cliente';
 import { ir } from '../../store/ui';
 import { openModal, SheetFoot, SheetHead, closeModal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
@@ -25,22 +26,22 @@ export default function EntregasView() {
   const rec = E.tecnicos.find(t => t.id === E.cesta.receptor);
   const prods = searchProducts(E, q, { cat: q ? 'all' : cat }).slice(0, 12);
   const lineas = E.cesta.lineas.filter(l => find(E, l.sku));
-  const nextId = `ENT-${new Date().getFullYear()}-${String(E.seq.ent + 1).padStart(4, '0')}`;
+  const nextId = modoNube ? 'se asigna al enviar' : `ENT-${new Date().getFullYear()}-${String(E.seq.ent + 1).padStart(4, '0')}`;
   const firmado = firma.length > 0, puede = !!(lineas.length && rec && firmado && certifica);
 
   const confirmar = async () => {
     if (!eq || !rec) return;
-    const copia = JSON.parse(JSON.stringify(S()));
-    const e: Entrega = { id: nextId, ts: Date.now(), equipo: eq.id, receptor: rec.id, dni: rec.dni, lineas: JSON.parse(JSON.stringify(lineas)), firma: firmaPNG(firma), operator: E.operator };
-    const avisos: MovResult[] = [];
-    try { for (const l of lineas) avisos.push(applyMovement(E, { sku: l.sku, type: 'salida', qty: l.qty, reason: 'Entrega a equipo', ref: e.id, serials: l.serials, equipo: eq.id })); }
-    catch (err) { reemplazar(copia); return toast((err as Error).message, 'err'); } // deshace lo aplicado
-    e.hash = await hashEntrega(e);
-    E.seq.ent++; E.entregas.unshift(e); E.cesta.lineas = [];
-    guardar(); setFirma([]); setCertifica(false); setVerSN(null);
-    toast(`Entrega ${e.id} firmada por ${rec.nombre}. Stock descontado.`, 'ok', 6000);
-    avisos.forEach(avisoEstado);
-    abrirRecibo(e.id);
+    const antes = lineas.map(l => { const p = find(E, l.sku)!; return { p, before: status(p) }; });
+    // en la nube el número y la huella los pone el servidor; en modo local se calculan aquí
+    const args: OpEntrega = { id: modoNube ? nuevoId() : nextId, numero: modoNube ? undefined : nextId, ts: Date.now(), equipo: eq.id, receptor: rec.id, dni: rec.dni,
+      lineas: JSON.parse(JSON.stringify(lineas)), firma: firmaPNG(firma) };
+    if (!modoNube) args.hash = await hashEntrega({ ...args, operator: E.operator });
+    if (!ejecutar({ op: 'entrega', args })) return;
+    if (!modoNube) E.seq.ent++;
+    E.cesta.lineas = []; guardar(); setFirma([]); setCertifica(false); setVerSN(null);
+    toast(modoNube ? `Entrega firmada por ${rec.nombre}. Stock descontado; el número y la huella llegan al sincronizar.` : `Entrega ${nextId} firmada por ${rec.nombre}. Stock descontado.`, 'ok', 6000);
+    antes.forEach(a => avisoEstado({ ...a, after: status(a.p) }));
+    abrirRecibo(args.id);
   };
 
   return (
@@ -163,16 +164,16 @@ function Recibo({ id }: { id: string }) {
   if (!e) return <SheetHead title="Entrega no encontrada" />;
   const eq = E.equipos.find(x => x.id === e.equipo), rec = E.tecnicos.find(t => t.id === e.receptor);
   return (<>
-    <SheetHead title={`Albarán de entrega ${e.id}`} sub={fechaHora(e.ts)} />
+    <SheetHead title={`Albarán de entrega ${numEntrega(e)}`} sub={fechaHora(e.ts)} />
     <div id="impresion" className="p-5 flex flex-col gap-3 bg-white">
-      <div className="flex justify-between"><div><div className="font-bold">{MARCA.nombre}</div><div className="text-body-sm text-secondary">{MARCA.nave}</div></div><div className="text-right font-mono text-label-md">{e.id}<br />{fechaHora(e.ts)}</div></div>
+      <div className="flex justify-between"><div><div className="font-bold">{MARCA.nombre}</div><div className="text-body-sm text-secondary">{MARCA.nave}</div></div><div className="text-right font-mono text-label-md">{numEntrega(e)}<br />{fechaHora(e.ts)}</div></div>
       <div className="grid grid-cols-2 gap-2 text-body-sm">
         <div className="bg-surface-container-low rounded-lg p-2.5"><div className={LBL}>Equipo / vehículo</div>{eq ? `${eq.nombre} · ${eq.flota} (${eq.matricula})` : e.equipo}</div>
         <div className="bg-surface-container-low rounded-lg p-2.5"><div className={LBL}>Recibe</div>{rec?.nombre} · DNI {e.dni || rec?.dni}</div></div>
       <table className="w-full text-body-sm"><thead><tr className={`text-left ${LBL}`}><th className="py-1">Material</th><th>S/N</th><th className="text-right">Cant.</th></tr></thead>
         <tbody>{e.lineas.map(l => { const p = find(E, l.sku); return <tr key={l.sku} className="border-t border-surface-container"><td className="py-1.5">{p ? p.name : l.sku}<div className="font-mono text-label-sm text-secondary">{l.sku}</div></td><td className="font-mono text-label-sm">{(l.serials || []).map(s => <div key={s}>{s}</div>)}</td><td className="text-right font-semibold">{p ? qtyTxt(p, l.qty) : num(l.qty)}</td></tr>; })}</tbody></table>
       <div className="flex items-end justify-between gap-3 border-t border-surface-container pt-3"><div><FirmaImg f={e.firma} className="h-16 w-44" /><div className="text-body-sm text-secondary">Firma del receptor</div></div>
-        <div className="font-mono text-[9px] text-secondary break-all max-w-[55%] text-right">Huella SHA-256<br />{e.hash}</div></div>
+        <div className="font-mono text-[9px] text-secondary break-all max-w-[55%] text-right">Huella SHA-256<br />{e.hash || 'Se calcula en el servidor al sincronizar'}</div></div>
       <p className="text-body-sm text-secondary">Aceptación de la entrega por el receptor. Registrado por {e.operator}.</p>
     </div>
     <SheetFoot className="flex gap-2"><button onClick={closeModal} className={`${BTN_S} h-12 px-5`}>Cerrar</button><button onClick={() => print()} className={`${BTN_P} h-12 flex-1`}><Icon n="print" className="ico-20" />Imprimir o guardar PDF</button></SheetFoot>
