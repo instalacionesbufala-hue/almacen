@@ -1,0 +1,10 @@
+{
+  "_nota": "Albarán de Esmove (material en custodia) ANONIMIZADO: sin precios, con n.º de serie de cargadores y cuadros por modelo.",
+  "proveedor": "Esmove",
+  "numero": "ESM-2026-118",
+  "fecha": "29/09/2026",
+  "lineas": [
+    { "codigo": "PLP2-0-2-3", "descripcion": "Wallbox Pulsar Plus 22 kW 5 m", "cantidad": 2, "series": ["WBX-22-900101", "WBX-22-900102"], "confianza": 0.96 },
+    { "codigo": "CP-VE-1F-40", "descripcion": "Cuadro protecciones VE monofásico 40A", "cantidad": 3, "series": [], "confianza": 0.92 }
+  ]
+}

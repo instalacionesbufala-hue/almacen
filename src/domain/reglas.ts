@@ -2,6 +2,7 @@
 import type { Estado, LineaEntrega, Movimiento, Producto, Semaforo, TipoMov } from '../data/tipos';
 import { CATS, UNIT } from '../data/catalogo';
 import { norm, num, redondea, uid } from './formato';
+import { emparejar, type ItemCatalogo } from '../../supabase/functions/_compartido/albaran';
 
 export const find = (S: Estado, sku: string) => S.products.find(p => p.sku === sku);
 
@@ -89,25 +90,11 @@ export function searchProducts(S: Estado, q: string, f: { cat?: string; pas?: st
   }).sort((a, b) => ORD[status(a)] - ORD[status(b)] || a.loc.localeCompare(b.loc));
 }
 
-/** Emparejado de una línea de albarán (cualquier proveedor): código exacto (SKU, EAN, ref. proveedor), prefijo (sufijos del proveedor) o descripción */
+/** Emparejado de una línea de albarán (cualquier proveedor). La lógica vive en el módulo compartido con el servidor (E-003). */
+export const catalogoParaEmparejar = (S: Estado): ItemCatalogo[] =>
+  S.products.map(p => ({ sku: p.sku, ref: p.supplierRef, ean: p.ean, nombre: p.name, unidad: UNIT[p.unit], proveedor: p.supplier, custodia: p.propiedad === 'custodia' }));
 export function matchLine(S: Estado, code: string | undefined, desc: string | undefined): { sku: string | null; how: string | null } {
-  const c = String(code || '').replace(/\s/g, '').toUpperCase();
-  if (c) {
-    const eq = (v?: string) => !!v && v.toUpperCase() === c;
-    const exact = S.products.find(p => eq(p.sku) || eq(p.ean) || eq(p.supplierRef));
-    if (exact) return { sku: exact.sku, how: 'código' };
-    const pref = S.products.find(p => [p.sku, p.supplierRef].some(v => v && v.length >= 6 && c.startsWith(v.toUpperCase())));
-    if (pref) return { sku: pref.sku, how: 'código (prefijo)' };
-  }
-  const tk = (s: unknown) => norm(s).replace(/[(),.×x²]/g, ' ').split(/\s+/).filter(t => t.length >= 2);
-  const dt = new Set(tk(desc));
-  let best: Producto | null = null, bs = 0;
-  for (const p of S.products) {
-    const pt = tk(p.name); const hit = pt.filter(t => dt.has(t)).length;
-    const sc = hit / Math.max(4, Math.min(pt.length, dt.size));
-    if (sc > bs) { bs = sc; best = p; }
-  }
-  return best && bs >= 0.5 ? { sku: best.sku, how: 'descripción' } : { sku: null, how: null };
+  return emparejar(catalogoParaEmparejar(S), code, desc);
 }
 
 /** Contenido del QR de una referencia: BUF:<SKU> o BUF:<SKU>|SN:<serie> */

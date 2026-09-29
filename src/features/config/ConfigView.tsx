@@ -16,7 +16,7 @@ import { abrirMinimos } from '../reposicion/Minimos';
 import { abrirReposicion } from '../reposicion/Reposicion';
 import { abrirPerfil } from '../inventario/hojas';
 import { exportarMovimientosCsv, exportarStockCsv } from '../inventario/StockView';
-import { iaReal, URL_IA } from '../albaranes/lector';
+import { AVISO_GEMINI, iaReal, URL_IA } from '../albaranes/lector';
 import { modoNube, urlSupabase } from '../../store/nube/cliente';
 import { verificarEntregasServidor } from '../../store/nube/sync';
 import { numEntrega } from '../../domain/reglas';
@@ -56,7 +56,8 @@ export default function ConfigView() {
           <p className="text-body-sm text-secondary">El mínimo se edita en la ficha de cada referencia.</p></Bloque>
         <Bloque icon="auto_awesome" t="Lectura de albaranes con IA">
           <p className="text-body-sm">Estado: <b>{iaReal() ? 'IA conectada' : 'modo simulado'}</b>{iaReal() && <span className="font-mono text-label-sm text-secondary break-all"> · {URL_IA}</span>}</p>
-          <p className="text-body-sm text-secondary">La lectura real usa Gemini (capa gratuita) desde una función del servidor, para que la clave nunca esté en el navegador. Mientras no esté configurada, se usan albaranes de ejemplo.</p></Bloque>
+          <p className="text-body-sm text-secondary">La lectura real usa Gemini (capa gratuita) desde una función del servidor, para que la clave nunca esté en el navegador. Mientras no esté configurada, se usan albaranes de ejemplo.</p>
+          <p className="text-body-sm text-amber-800">{AVISO_GEMINI}</p></Bloque>
         <Bloque icon="fact_check" t="Integridad de entregas">
           <p className="text-body-sm text-secondary">Cada entrega firmada guarda una huella SHA-256 de su contenido y de la firma. Si alguien la modifica, la huella deja de coincidir.</p>
           <button onClick={verificar} className={`${BTN_S} h-12`}><Icon n="verified" className="ico-20" />Verificar {E.entregas.length} entregas</button></Bloque>

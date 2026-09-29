@@ -1,0 +1,15 @@
+{
+  "_nota": "Respuesta de un modelo de visión a un albarán real de Saltoki, ANONIMIZADA: sin NIF, n.º de cliente, direcciones ni teléfonos. Formatos tal como llegan (comas decimales, sufijos de código, embalajes).",
+  "proveedor": "Saltoki Alcobendas",
+  "cif": "",
+  "numero": "2.824.560",
+  "fecha": "24/09/2026",
+  "bultos": 3,
+  "lineas": [
+    { "codigo": "8909080510", "descripcion": "PNX KIT BORNA DOBLE 16 MM2 MONOFASICO V.E. ESQUEMA 2", "cantidad": "7,00", "sku": null, "series": [], "nota": "", "confianza": 0.97 },
+    { "codigo": "7280040020", "descripcion": "KOMMDATA CONECTOR MACHO RJ45 UTP CAT 6 GOLD", "cantidad": 25, "sku": "7280040020", "series": [], "nota": "", "confianza": 0.98 },
+    { "codigo": "6040615306724", "descripcion": "ML CABLE LHA RZ1-K(AS) 3G6MM 0,6/1KV (BOBINA)", "cantidad": "40", "sku": null, "series": [], "nota": "", "confianza": 0.94 },
+    { "codigo": "9908000200", "descripcion": "BOLSA SALTOKI", "cantidad": 1, "sku": "NO-EXISTE", "series": [], "nota": "embalaje", "confianza": 0.99 },
+    { "codigo": "", "descripcion": "Taco nylon SX 8x40 caja 100 (10 cajas)", "cantidad": "1.000", "sku": null, "series": [], "nota": "10 cajas × 100 ud", "confianza": 0.78 }
+  ]
+}

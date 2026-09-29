@@ -10,3 +10,4 @@ export const supabase: SupabaseClient | null = modoNube
   ? createClient(URL_SB, CLAVE, { auth: { persistSession: true, autoRefreshToken: true, storageKey: 'almacen-bufala-sesion' } })
   : null;
 export const urlSupabase = URL_SB;
+export const claveAnon = CLAVE;

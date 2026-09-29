@@ -12,7 +12,7 @@ import { useEsEscritorio } from '../../store/ui';
 import { toast } from '../../ui/toast';
 import { BTN_P, BTN_S, BTN_T, CARD, Icon, INP, LBL, Tag, Vacio } from '../../ui/base';
 import { abrirBorrador, abrirFormProducto } from '../inventario/hojas';
-import { DEMOS, demoPara, iaReal, leerConIA } from './lector';
+import { AVISO_GEMINI, DEMOS, demoPara, iaReal, leerConIA } from './lector';
 
 interface Linea { codigo: string; descripcion: string; cantidad: string; confianza: number; sku: string | null; how: string | null; include: boolean; series: string; nota: string }
 interface Doc { proveedor: string; numero: string; fecha: string; cif: string; bultos?: number }
@@ -100,7 +100,8 @@ export default function AlbaranesView() {
         <div className="flex gap-space-md relative"><span className="w-12 h-12 shrink-0 rounded-xl bg-primary-container text-white grid place-items-center"><Icon n="document_scanner" className="ico-28" /></span>
           <div><h1 className="text-headline-lg-mobile lg:text-headline-lg font-bold">Recepción inteligente de albaranes</h1>
             <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full ${iaReal() ? 'bg-tertiary-fixed/40 text-tertiary' : 'bg-surface-container-high text-secondary'} font-mono text-label-sm mt-1`}><span className={`w-1.5 h-1.5 rounded-full bg-current ${iaReal() ? 'pulso' : ''}`} />{iaReal() ? 'IA CONECTADA (GEMINI)' : 'MODO SIMULADO'}</span>
-            <p className="text-body-md text-secondary mt-2 max-w-2xl">Foto o PDF del albarán en papel, de cualquier proveedor. La IA extrae proveedor, líneas, cantidades y números de serie, y los coteja con el catálogo. <b className="text-on-surface">Nada entra en stock hasta que tú lo confirmas.</b></p></div></div>
+            <p className="text-body-md text-secondary mt-2 max-w-2xl">Foto o PDF del albarán en papel, de cualquier proveedor. La IA extrae proveedor, líneas, cantidades y números de serie, y los coteja con el catálogo. <b className="text-on-surface">Nada entra en stock hasta que tú lo confirmas.</b></p>
+            {iaReal() && <p className="text-body-sm text-amber-800 bg-amber-50 rounded-lg p-2 mt-2 max-w-2xl">{AVISO_GEMINI}</p>}</div></div>
         <div className="grid grid-cols-2 gap-space-sm relative shrink-0">
           <div className="bg-surface-container-low rounded-xl p-3 flex items-center gap-2"><Icon n="bolt" className="text-primary" /><div><div className={LBL}>Último proceso</div><div className="font-mono text-label-lg">{a.ms ? (a.ms / 1000).toFixed(2) + ' s' : '—'}</div></div></div>
           <div className="bg-surface-container-low rounded-xl p-3 flex items-center gap-2"><Icon n="verified" className="text-tertiary" /><div><div className={LBL}>Confianza media</div><div className="font-mono text-label-lg">{(avg * 100).toFixed(1)}%</div></div></div></div>

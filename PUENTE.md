@@ -21,7 +21,7 @@ Propón e implementa un backend. Sugerencia: Supabase, con Postgres, autenticaci
 - **Movimientos:** atómicos. El stock se actualiza en una transacción o función SQL y nunca desde el cliente.
 - **Hecho cuando:** hay migraciones SQL, seed con los datos actuales y el `.env.example` está documentado.
 
-### E-003 · Lectura real de albaranes · PENDIENTE
+### E-003 · Lectura real de albaranes · HECHO
 Crea un endpoint de servidor que reciba una foto o un PDF de albarán y llame a la API de Anthropic con visión, usando el prompt y el JSON de salida que están en `processFile()` del prototipo.
 - **Clave API:** solo en el servidor.
 - **Salida:** devuelve líneas con SKU emparejado y confianza.
@@ -358,3 +358,36 @@ Decisiones posteriores del usuario (29/09/2026, misma sesión):
 **Sin verificar aquí:** la subida a Storage y el enlace firmado necesitan el proyecto real.
 
 **Decisión:** el PDF se genera en el navegador, no dentro de `confirmar_entrega`, porque una función SQL no puede generar un PDF. La confirmación sigue siendo atómica; el PDF es un justificante posterior que se puede regenerar siempre desde los datos inalterables.
+
+### 29/09/2026 · E-003 · HECHO
+**Proveedor:** Gemini con capa gratuita en lugar de Anthropic (decisión del usuario, punto 7). El prompt y el formato de salida parten de `processFile()` del prototipo, con estos cambios:
+- **Sin precios**: el almacén no los usa y el material en custodia de Esmove no los lleva (E-008).
+- Pide la cantidad en la unidad base del catálogo (metros o unidades) y los números de serie.
+
+**Servidor** (`supabase/functions/leer-albaran/index.ts`, Edge Function de Supabase):
+- Recibe la foto (JPG, PNG, WebP, HEIC) o el PDF, de 10 MB como máximo.
+- Solo atiende a usuarios con sesión y activos (`es_usuario_activo`). El catálogo se lee con la sesión del usuario (RLS), así que nunca ve costes.
+- Llama a Gemini (`gemini-2.5-flash`, cambiable con el secreto `GEMINI_MODELO`) con salida JSON estructurada.
+- La clave `GEMINI_API_KEY` solo existe en los secretos de Supabase; el navegador nunca la ve.
+- Si se pasa del límite gratuito, devuelve un mensaje claro (429).
+
+**Lógica compartida** (`supabase/functions/_compartido/albaran.ts`, código puro que usan el servidor y la app):
+- Prompt, esquema de respuesta y normalización (cantidades con formato español, "1.500,5" y "1.000").
+- Emparejado con el catálogo: por SKU, EAN o código del proveedor, por prefijo (sufijos de Saltoki) o por descripción. Vale para cualquier proveedor.
+- El SKU que propone la IA solo se acepta si existe en el catálogo. Si ni la IA ni el emparejado lo encuentran, la confianza baja a 0,6 como máximo.
+- `matchLine` de la app usa ahora este mismo emparejado, así que el simulado y el real se comportan igual.
+
+**App:**
+- `lector.ts` envía el archivo con la sesión del usuario a `VITE_ALBARANES_URL`. Sin esa variable sigue el modo simulado.
+- El aviso de datos de Gemini (revisión del chat, punto 5) sale en Albaranes y en Configuración.
+- Nada entra en stock sin aprobar el albarán, como antes.
+
+**Pruebas:** 7 nuevas con dos albaranes anonimizados (`supabase/tests/fixtures/`):
+- uno de Saltoki, con sufijos de código, cajas y un SKU inventado por la IA;
+- uno de Esmove en custodia, sin precios y con cuadros sin número de serie.
+
+Cubren también el formato de cantidades, las respuestas envueltas en ```json y el prompt sin precios. En total, 125 de la app y 72 de base de datos en verde. Las tres funciones de servidor pasan `deno check`.
+
+**Sin verificar aquí:** la llamada real a Gemini necesita la clave del usuario (se da de alta en la guía E-005).
+
+**Decisión:** para cambiar a Claude u otro proveedor basta con tocar `leer-albaran/index.ts`; la app y la lógica compartida no cambian.
