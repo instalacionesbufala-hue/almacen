@@ -269,6 +269,7 @@ Pendiente de que el usuario decida (texto original, ya resuelto arriba salvo las
 Decisiones posteriores del usuario (29/09/2026, misma sesión):
 11. **Ficha de herramientas**: registrar cuándo se rompen, se pierden, se deterioran y se reponen, y asignarlas a cada equipo y/o técnico.
 12. **Ropa de trabajo y EPIs**: mismo tratamiento que las herramientas. Code lo ha unificado en una "dotación" con tres clases (herramienta, EPI, ropa); los EPIs llevan caducidad o revisión con aviso y la ropa, talla y cantidad.
+13. **Gemini se queda en la versión gratuita** (29/09/2026, tras leer el aviso de privacidad de la revisión del chat). El usuario acepta que, en el nivel gratuito, Google pueda usar los albaranes que se envían para mejorar sus productos. No se activa la facturación. El aviso sigue visible en Albaranes y en Configuración.
 
 ### 29/09/2026 · E-001 · HECHO
 **Qué se ha hecho.** App migrada a React 19 + Vite 7 + TypeScript 5.9 + Tailwind 3 con el diseño de Stitch, sin perder funciones del prototipo y con las nuevas de Stitch y del usuario: stock general, escáner con cámara, albaranes con IA (simulado), entregas con firma y huella SHA-256, equipos y técnicos, **dotación (herramientas, EPIs y ropa)**, movimientos y configuración.
