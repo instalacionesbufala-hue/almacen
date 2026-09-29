@@ -63,7 +63,7 @@ Roles iniciales (el usuario puede ajustarlos):
 - **Primer administrador:** se crea desde el panel de Supabase siguiendo la guía; los demás usuarios, desde la app.
 - **Tests:** incluye pruebas de las políticas, con un usuario de almacén que intenta editar precios o borrar un movimiento y el servidor lo rechaza.
 
-### E-005 · Guía de puesta en marcha · PENDIENTE
+### E-005 · Guía de puesta en marcha · HECHO
 Escribe `docs/PUESTA-EN-MARCHA.md` para el usuario, paso a paso y sin dar nada por sabido:
 - crear el proyecto en Supabase y aplicar las migraciones;
 - crear el primer administrador;
@@ -391,3 +391,30 @@ Cubren también el formato de cantidades, las respuestas envueltas en ```json y 
 **Sin verificar aquí:** la llamada real a Gemini necesita la clave del usuario (se da de alta en la guía E-005).
 
 **Decisión:** para cambiar a Claude u otro proveedor basta con tocar `leer-albaran/index.ts`; la app y la lógica compartida no cambian.
+
+### 29/09/2026 · E-005 · HECHO
+**Guía:** `docs/PUESTA-EN-MARCHA.md`, para el usuario, con casillas y sin dar nada por sabido.
+
+**Pasos obligatorios:**
+1. Crear el proyecto de Supabase, en región UE.
+2. Aplicar las migraciones con la CLI de Supabase vía `npx` (`login`, `link`, `db push`). La demo con `--include-seed` es opcional.
+3. Crear el primer administrador: usuario en Authentication más una fila en `perfiles`, con el SQL exacto.
+4. Poner las variables en GitHub.
+5. Publicar en GitHub Pages.
+6. Desplegar las tres funciones.
+7. Configurar Gemini, con el aviso de privacidad del nivel gratuito (revisión del chat, punto 5).
+
+**Pasos opcionales:**
+8. Canales de aviso: la tarea programada con `CLAVE_CRON` y los secretos de Vault `url_notificar` y `clave_cron`; correo con Resend (con y sin dominio propio); push con las claves VAPID, más la nota de iPhone (instalar en la pantalla de inicio); Telegram con BotFather y `chat_id`.
+9. Alta del usuario de almacén.
+10. Copias cifradas en un repositorio privado y "keep-alive" de Supabase.
+
+**Prueba final:** sincronización entre móvil y escritorio, incluida la prueba sin cobertura. Al final hay una tabla de síntomas y qué revisar.
+
+**Correcciones encontradas al escribirla:**
+- `pages.yml` no pasaba `VITE_VAPID_PUBLICA` a la compilación: las push no se habrían podido activar en la app publicada. Ahora sí, y está también en `.env.example`.
+- `config.toml`: `[functions.notificar] verify_jwt = false`. pg_cron llama a `notificar` sin sesión de usuario y la pasarela de Supabase lo habría rechazado con 401. La función ya comprueba por sí misma la cabecera `x-clave-cron` o que quien llama sea administrador.
+
+**Decisión:** migraciones y funciones con la CLI (`npx supabase`) en lugar de pegar SQL en el panel. Las funciones comparten código (`_compartido/`) y el editor web no lo admite. Además, así se usan los mismos archivos probados. La guía indica qué pasos exigen las contraseñas del usuario, para que Claude Code pueda ejecutar el resto sin verlas.
+
+**Sin verificar aquí:** la guía no se ha podido recorrer contra un proyecto real porque no tengo acceso a las cuentas del usuario. Los nombres de variables, secretos, funciones y botones están comprobados contra el código.

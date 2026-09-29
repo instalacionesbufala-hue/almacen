@@ -8,3 +8,8 @@ major_version = 17
 [auth]
 # Nadie se registra por su cuenta: el administrador da de alta a los usuarios (E-004)
 enable_signup = false
+
+# "notificar" la llama también pg_cron cada minuto sin sesión de usuario: la propia función comprueba
+# la cabecera x-clave-cron o que quien llama es administrador, así que la pasarela no debe exigir JWT.
+[functions.notificar]
+verify_jwt = false

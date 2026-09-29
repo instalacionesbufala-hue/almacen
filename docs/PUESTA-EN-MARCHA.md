@@ -1,0 +1,272 @@
+# Puesta en marcha paso a paso
+
+Esta guía convierte la demo en la app real: con usuarios y contraseñas, con los datos guardados en la nube y con el móvil y el ordenador sincronizados. No hace falta saber programar. Sigue los pasos en orden y marca cada casilla al terminarla.
+
+> **Atajo:** si prefieres no teclear comandos, haz tú solo lo que exige tu cuenta y tus contraseñas (pasos 1, 2.1, 3, 4.1, 5 y las cuentas del paso 8) y pide a Claude Code el resto: "ejecuta los comandos de la guía de puesta en marcha". Claude nunca debe ver tus contraseñas: cuando un comando te pida una, escríbela tú en la terminal.
+
+**Tiempo aproximado:** 45 minutos la parte obligatoria (pasos 1 a 7) y 15 minutos cada extra (pasos 8 a 10).
+
+**Qué vas a necesitar:**
+- Tu cuenta de GitHub (`instalacionesbufala-hue`).
+- Un correo para la cuenta de Supabase.
+- Este ordenador, con la carpeta `almacen` descargada. Node.js ya está instalado.
+- Un móvil para la prueba final.
+
+**Cuánto cuesta:** nada. Todo es de plan gratuito.
+- **Supabase:** 500 MB de base de datos, 50.000 usuarios al mes y 500.000 llamadas a funciones al mes. Se pausa si pasa una semana sin uso; la copia del paso 10 lo evita.
+- **Gemini:** capa gratuita, con límite diario de lecturas.
+- **Resend:** 3.000 correos al mes.
+- **Telegram y GitHub Pages:** gratis.
+
+---
+
+## 1. Crear el proyecto en Supabase
+
+- [ ] 1.1. Entra en **https://supabase.com** y pulsa **Start your project**. Regístrate con GitHub (lo más cómodo) o con tu correo.
+- [ ] 1.2. Pulsa **New project** y rellena:
+  - **Organization:** la que te propone (o créala con tu nombre, en plan **Free**).
+  - **Project name:** `almacen-bufala`.
+  - **Database Password:** pulsa **Generate a password** y **guárdala en un sitio seguro** (gestor de contraseñas o papel). La pedirán los pasos 2 y 10.
+  - **Region:** *West EU (Ireland)* o *Central EU (Frankfurt)*, las más cercanas a España.
+- [ ] 1.3. Pulsa **Create new project** y espera 1 o 2 minutos a que termine.
+- [ ] 1.4. Apunta estos tres datos (los usarás varias veces):
+  - **Referencia del proyecto:** son las letras que aparecen en la dirección del navegador tras `/project/`. Ejemplo: en `https://supabase.com/dashboard/project/abcdefghijkl`, la referencia es `abcdefghijkl`.
+  - **Project URL:** en **Project Settings** (rueda dentada abajo a la izquierda) → **Data API**. Es `https://abcdefghijkl.supabase.co`.
+  - **Clave anon public:** en **Project Settings** → **API Keys**, la que se llama `anon` `public`. Es un texto largo que empieza por `eyJ`. Es pública por diseño: la seguridad está en los permisos de la base de datos.
+
+> **No copies nunca la clave `service_role`** en ningún sitio. Da acceso total y Supabase ya se la pasa sola a las funciones de servidor.
+
+## 2. Crear las tablas (aplicar las migraciones)
+
+Las "migraciones" son los archivos de `supabase/migrations/`: crean las tablas, las reglas y los permisos. Se aplican con la herramienta oficial de Supabase, que se descarga sola con `npx`.
+
+- [ ] 2.1. Abre una terminal en la carpeta `almacen`: en el Explorador de Windows entra en la carpeta, clic derecho en un hueco → **Abrir en Terminal**. Escribe y pulsa Enter:
+  ```bash
+  npx supabase login
+  ```
+  Se abre el navegador: pulsa **Authorize**. La terminal dirá *You are now logged in*.
+- [ ] 2.2. Enlaza la carpeta con tu proyecto. Cambia `abcdefghijkl` por tu referencia del paso 1.4:
+  ```bash
+  npx supabase link --project-ref abcdefghijkl
+  ```
+  Cuando pida la **database password**, escribe la del paso 1.2. Mientras la escribes no se ve nada en pantalla; es normal.
+- [ ] 2.3. Crea las tablas:
+  ```bash
+  npx supabase db push
+  ```
+  Te enseña la lista de migraciones (6 archivos) y pregunta si continúa: escribe `Y` y pulsa Enter. Termina con *Finished supabase db push*.
+- [ ] 2.4. **(Opcional) Cargar los datos de demostración** (referencias, furgonetas y técnicos de ejemplo). Sirve para probar la app antes de meter lo real:
+  ```bash
+  npx supabase db push --include-seed
+  ```
+  Si prefieres empezar vacío, sáltate este paso: las referencias reales se dan de alta con la cámara o con "Añadir referencia". Los datos de ejemplo también se pueden borrar después, desde la ficha de cada referencia.
+- [ ] 2.5. Comprueba que ha ido bien: en Supabase, **Table Editor** debe listar `productos`, `movimientos`, `entregas`, `perfiles` y otras.
+
+## 3. Crear el primer administrador (tú)
+
+Nadie puede registrarse solo en la app: los usuarios los da de alta el administrador. El primero se crea a mano.
+
+- [ ] 3.1. En Supabase, entra en **Authentication** → **Users** → **Add user** → **Create new user**.
+  - **Email:** tu correo.
+  - **Password:** tu contraseña para entrar en la app (mínimo 8 caracteres).
+  - Marca **Auto Confirm User**.
+  - Pulsa **Create user**.
+- [ ] 3.2. Dale el rol de administrador. Entra en **SQL Editor** → **New query**, pega esto cambiando el correo y el nombre, y pulsa **Run**:
+  ```sql
+  insert into public.perfiles (id, nombre, email, rol)
+  select id, 'César', email, 'admin' from auth.users where email = 'tu-correo@ejemplo.com';
+  ```
+  Debe responder *Success. 1 row*. Si pone *0 rows*, el correo no coincide exactamente con el del paso 3.1.
+
+## 4. Poner las variables en GitHub
+
+Así, la app publicada sabe a qué proyecto de Supabase conectarse.
+
+- [ ] 4.1. Entra en **https://github.com/instalacionesbufala-hue/almacen** → **Settings** → **Secrets and variables** → **Actions** → pestaña **Variables** → **New repository variable**. Crea estas dos (nombre exacto, en mayúsculas):
+
+  | Name | Value |
+  |---|---|
+  | `VITE_SUPABASE_URL` | la Project URL del paso 1.4 (`https://abcdefghijkl.supabase.co`) |
+  | `VITE_SUPABASE_ANON_KEY` | la clave `anon public` del paso 1.4 |
+
+  Van en **Variables**, no en *Secrets*: no son secretas y la app las necesita en el navegador.
+
+Las variables `VITE_ALBARANES_URL` (paso 7) y `VITE_VAPID_PUBLICA` (paso 8) se añaden más adelante, en el mismo sitio.
+
+## 5. Publicar la app (GitHub Pages)
+
+- [ ] 5.1. **Settings** → **Pages** → **Source:** debe poner **GitHub Actions**. Ya lo cambiaste; solo compruébalo.
+- [ ] 5.2. Vuelve a publicar para que la app use las variables nuevas: pestaña **Actions** → **Publicar en GitHub Pages** (a la izquierda) → **Run workflow** → **Run workflow**. En 2 o 3 minutos se pone en verde.
+- [ ] 5.3. Abre **https://instalacionesbufala-hue.github.io/almacen/**. Ahora debe pedirte correo y contraseña; si sigue entrando directamente, es que aún ves la demo (espera a que termine el paso 5.2 y recarga). Entra con los datos del paso 3.1.
+
+> **Cada vez que cambies una variable de GitHub**, repite el paso 5.2 para que la app publicada la recoja.
+
+## 6. Desplegar las funciones de servidor
+
+Son tres pequeños programas que se ejecutan en Supabase, donde las claves no están a la vista:
+
+| Función | Para qué sirve |
+|---|---|
+| `usuarios` | Dar de alta usuarios y cambiar contraseñas desde la app |
+| `notificar` | Enviar los avisos por correo, push y Telegram |
+| `leer-albaran` | Leer los albaranes con IA (Gemini) |
+
+- [ ] 6.1. En la terminal de la carpeta `almacen` (con la sesión del paso 2.1):
+  ```bash
+  npx supabase functions deploy usuarios
+  ```
+  ```bash
+  npx supabase functions deploy notificar
+  ```
+  ```bash
+  npx supabase functions deploy leer-albaran
+  ```
+  Cada comando termina con *Deployed Functions*. Compruébalo en Supabase → **Edge Functions**: deben aparecer las tres.
+
+## 7. Activar la lectura de albaranes con IA (Gemini)
+
+> **Antes de activarla, decide sobre la privacidad.** Según las condiciones de Google, en el **nivel gratuito** de Gemini el contenido que envías puede usarse para mejorar sus productos, y los albaranes llevan precios y direcciones de obra. Si no te parece bien, tienes dos salidas:
+> - **Activar la facturación** en Google AI Studio: entonces Google deja de usar tus datos. Se paga por lectura (céntimos al mes con el uso normal de un almacén).
+> - **No hacer este paso**: la app sigue con la lectura simulada y los albaranes se meten a mano.
+>
+> La app muestra este mismo aviso en Albaranes y en Configuración.
+
+- [ ] 7.1. Entra en **https://aistudio.google.com** con una cuenta de Google → **Get API key** → **Create API key**. Copia la clave, que empieza por `AIza`.
+- [ ] 7.2. Guárdala en Supabase (no en GitHub). Cambia `AIza...` por tu clave:
+  ```bash
+  npx supabase secrets set GEMINI_API_KEY=AIza...
+  ```
+  (También se puede hacer desde Supabase → **Edge Functions** → **Secrets** → **Add new secret**.)
+- [ ] 7.3. En GitHub → **Variables** (como en el paso 4.1), crea:
+
+  | Name | Value |
+  |---|---|
+  | `VITE_ALBARANES_URL` | `https://abcdefghijkl.supabase.co/functions/v1/leer-albaran` (con tu referencia) |
+
+- [ ] 7.4. Repite el paso 5.2 (Run workflow).
+- [ ] 7.5. **Prueba:** en la app, abre **Albaranes y recepción IA**. La etiqueta debe decir **IA CONECTADA (GEMINI)**. Sube una foto de un albarán, revisa las líneas propuestas y pulsa aprobar. Nada entra en stock hasta que lo apruebas.
+
+Si aparece *Se ha alcanzado el límite gratuito*, has pasado el cupo diario de Gemini: vuelve a intentarlo al día siguiente.
+
+## 8. Avisos de reposición: correo, push y Telegram (opcional)
+
+Los avisos **en la app** funcionan desde ya. Para recibirlos fuera, activa los canales que quieras. Primero, lo común a todos:
+
+- [ ] 8.0. **Tarea programada de avisos.** Cada minuto, Supabase mira si hay avisos pendientes y se los pasa a la función `notificar`. Para eso necesita una clave compartida:
+  1. Inventa una contraseña larga (por ejemplo, 30 letras y números al azar). Es la **clave de la tarea**.
+  2. En la terminal (cambia `LA_CLAVE` por ella):
+     ```bash
+     npx supabase secrets set CLAVE_CRON=LA_CLAVE
+     ```
+  3. En Supabase → **SQL Editor**, pega esto (con tu referencia y la misma clave) y pulsa **Run**:
+     ```sql
+     select vault.create_secret('https://abcdefghijkl.supabase.co/functions/v1/notificar', 'url_notificar');
+     select vault.create_secret('LA_CLAVE', 'clave_cron');
+     ```
+
+Después, cada canal se configura en la app, en **Configuración → Avisos**, donde también eliges el modo de envío (**Inmediato para críticos** o **Resumen diario a las…**). Tras configurar un canal, pulsa **Enviar prueba** y mira el **Registro de envíos**.
+
+### Correo (Resend)
+- [ ] 8.1. Crea una cuenta gratis en **https://resend.com** → **API Keys** → **Create API Key** → copia la clave, que empieza por `re_`.
+- [ ] 8.2. Guárdala en Supabase:
+  ```bash
+  npx supabase secrets set RESEND_API_KEY=re_...
+  ```
+- [ ] 8.3. **Remitente.** Tienes dos opciones:
+  - **Sin dominio propio:** usa `Almacén <onboarding@resend.dev>`. Solo llega **a tu propio correo**, el de la cuenta de Resend.
+  - **Con dominio propio:** para enviar a otros (por ejemplo, a Esmove), en Resend → **Domains** → **Add domain**. Añade en tu proveedor de dominio los registros DNS que te indica y usa `Almacén <avisos@tudominio.es>`.
+- [ ] 8.4. En la app, en **Configuración → Avisos → Correo**: activa el canal y rellena el remitente y los destinatarios. Pulsa **Guardar configuración de avisos** y luego **Enviar prueba**.
+
+### Notificaciones push en el móvil
+- [ ] 8.5. Genera el par de claves de push en la terminal:
+  ```bash
+  npx web-push generate-vapid-keys
+  ```
+  Te da una **Public Key** y una **Private Key**.
+- [ ] 8.6. Guárdalas en Supabase (con tus valores y tu correo):
+  ```bash
+  npx supabase secrets set VAPID_PUBLICA=LA_PUBLICA VAPID_PRIVADA=LA_PRIVADA VAPID_CONTACTO=mailto:tu-correo@ejemplo.com
+  ```
+- [ ] 8.7. En GitHub → **Variables**, crea `VITE_VAPID_PUBLICA` con la **Public Key**; nunca la privada. Repite el paso 5.2.
+- [ ] 8.8. En cada móvil que deba recibir avisos, abre la app → **Configuración → Avisos → Push** → **Activar en este dispositivo** → acepta el permiso.
+  - **Android (Chrome):** funciona directamente.
+  - **iPhone (iOS 16.4 o posterior):** primero añade la app a la pantalla de inicio (en Safari: botón **Compartir** → **Añadir a pantalla de inicio**), ábrela desde ese icono y activa ahí las notificaciones. Desde Safari normal, iPhone no las permite.
+
+### Telegram
+- [ ] 8.9. En Telegram, busca **@BotFather** → escribe `/newbot` → pon un nombre (por ejemplo, *Almacén Búfala*) y un usuario terminado en `bot`. Te da un **token** del tipo `123456:ABC...`.
+- [ ] 8.10. Guárdalo en Supabase:
+  ```bash
+  npx supabase secrets set TELEGRAM_BOT_TOKEN=123456:ABC...
+  ```
+- [ ] 8.11. Busca tu bot en Telegram y escríbele cualquier cosa (por ejemplo, "hola"). Para un grupo, añade el bot al grupo y escribe algo en él.
+- [ ] 8.12. Averigua el `chat_id`: abre en el navegador `https://api.telegram.org/botTU_TOKEN/getUpdates`, con tu token. Busca `"chat":{"id":` y copia el número que sigue; en los grupos empieza por `-`.
+- [ ] 8.13. En la app, en **Configuración → Avisos → Telegram**: activa el canal, pega el `chat_id`, pulsa **Guardar configuración de avisos** y luego **Enviar prueba**.
+
+## 9. Dar de alta al usuario del almacén
+
+- [ ] 9.1. Entra en la app con tu usuario de administrador → **Configuración** → **Usuarios** → **Dar de alta un usuario**.
+- [ ] 9.2. Rellena nombre, correo, una contraseña inicial (mínimo 8 caracteres) y el rol **Almacén**. Pulsa guardar.
+- [ ] 9.3. Pásale su correo y su contraseña en persona o por teléfono, no por escrito en un grupo.
+
+Qué puede hacer cada rol:
+- **Almacén:** operativa diaria **sin ver precios**. Sus mermas de más de 50 € y sus recuentos quedan pendientes de que tú los valides.
+- **Administrador:** todo.
+
+Si alguien deja la empresa, pulsa **Editar** junto a su nombre y desmarca que está activo: ya no puede entrar y su historial se conserva.
+
+## 10. Copia de seguridad y mantener Supabase despierto (muy recomendable)
+
+El plan gratuito de Supabase **no hace copias** y **se pausa tras 7 días sin uso**. La tarea `.github/workflows/copia-seguridad.yml` resuelve las dos cosas los lunes y los jueves. El detalle y cómo restaurar están en [`COPIAS.md`](COPIAS.md).
+
+- [ ] 10.1. **Repositorio privado para las copias.** En GitHub: **+** (arriba a la derecha) → **New repository**.
+  - Nombre: `almacen-copias`.
+  - Marca **Private** (¡importante!) y **Add a README file**.
+  - Pulsa **Create repository**.
+- [ ] 10.2. **Token con permiso solo sobre ese repositorio.** GitHub → tu foto → **Settings** → **Developer settings** → **Personal access tokens** → **Fine-grained tokens** → **Generate new token**.
+  - **Token name:** `copias-almacen`.
+  - **Expiration:** 1 año; pon un recordatorio para renovarlo.
+  - **Repository access:** **Only select repositories** → `almacen-copias`.
+  - **Permissions** → **Repository permissions** → **Contents:** **Read and write**.
+  - Pulsa **Generate token** y copia el token, que empieza por `github_pat_`.
+- [ ] 10.3. **Cadena de conexión de la base de datos.** En Supabase, pulsa **Connect** (arriba) → **Session pooler** → copia la cadena `postgresql://postgres.abcdefghijkl:[YOUR-PASSWORD]@...` y sustituye `[YOUR-PASSWORD]` por la contraseña del paso 1.2.
+- [ ] 10.4. **Contraseña de las copias.** Inventa otra contraseña larga y **guárdala también fuera de GitHub**: sin ella las copias no se pueden abrir.
+- [ ] 10.5. En `almacen` → **Settings** → **Secrets and variables** → **Actions**:
+  - Pestaña **Secrets** → **New repository secret**, tres veces:
+
+    | Name | Value |
+    |---|---|
+    | `SUPABASE_DB_URL` | la cadena del paso 10.3 |
+    | `COPIA_CLAVE` | la contraseña del paso 10.4 |
+    | `COPIAS_TOKEN` | el token del paso 10.2 |
+
+  - Pestaña **Variables** → `COPIAS_REPO` = `instalacionesbufala-hue/almacen-copias`.
+- [ ] 10.6. **Prueba:** **Actions** → **Copia de seguridad y mantener activo Supabase** → **Run workflow**. Al terminar en verde, en `almacen-copias` debe aparecer la carpeta `copias/` con un archivo `.gpg`.
+
+## 11. Prueba final: móvil y ordenador sincronizados
+
+- [ ] 11.1. Abre la app en el ordenador y entra como administrador en **Stock general**.
+- [ ] 11.2. En el móvil, abre `https://instalacionesbufala-hue.github.io/almacen/` y entra con el usuario de almacén del paso 9. Consejo: añádela a la pantalla de inicio para usarla como una aplicación.
+- [ ] 11.3. En el móvil: **Escanear** (o busca una referencia) → registra una **salida** de 1 unidad.
+- [ ] 11.4. En el ordenador, **sin recargar**, el stock de esa referencia debe bajar en pocos segundos y el movimiento aparece en el historial.
+- [ ] 11.5. **Prueba sin cobertura:** en el móvil, activa el modo avión y registra otra salida. La app la guarda en la cola y lo indica ("en cola"). Quita el modo avión: se envía sola y aparece en el ordenador.
+- [ ] 11.6. En el ordenador, cambia el mínimo de una referencia. El cambio debe verse en el móvil.
+
+Si los seis pasos salen bien, la app está en marcha.
+
+---
+
+## Si algo falla
+
+| Síntoma | Qué mirar |
+|---|---|
+| La app publicada no pide contraseña | Faltan las variables del paso 4, o no has repetido el paso 5.2 tras crearlas. |
+| "Correo o contraseña incorrectos" siendo correctos | En Supabase → Authentication → Users, el usuario debe estar confirmado (paso 3.1, *Auto Confirm User*). |
+| "Tu usuario no tiene acceso" | Falta el paso 3.2 (la fila en `perfiles`). |
+| "Dar de alta un usuario" da error | La función `usuarios` no está desplegada (paso 6). |
+| Los albaranes siguen en modo simulado | Falta `VITE_ALBARANES_URL` o no has repetido el paso 5.2. |
+| "La lectura con IA no está configurada" | Falta el secreto `GEMINI_API_KEY` (paso 7.2). |
+| Los avisos se quedan en "pendiente" en el Registro de envíos | Faltan los pasos 8.0 (clave de la tarea y Vault) o la clave del canal. El error concreto sale en el registro. |
+| Supabase dice *Project paused* | Pulsa **Restore project**. Para que no vuelva a pasar, haz el paso 10. |
+| No llegan las push en iPhone | Hay que abrir la app desde el icono de la pantalla de inicio (paso 8.8). |
+
+Si te atascas, copia el mensaje de error exacto y pásaselo a Claude Code.
