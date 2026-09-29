@@ -57,12 +57,15 @@ export function informeCsv(inf: Informe): string {
 }
 
 const esc = (s: unknown) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!));
-export function informeHtml(inf: Informe, empresa = 'Almacén Búfala'): string {
+/** `fotos` (E-009): SKU → URL de la miniatura. Se añade una columna Foto en el stock por referencia (en el CSV no) */
+export function informeHtml(inf: Informe, empresa = 'Almacén Búfala', fotos: Record<string, string> = {}): string {
   const r = inf.resumen;
+  const conFoto = (i: number) => i === 0 && Object.keys(fotos).length > 0;
+  const foto = (sku: unknown) => { const u = fotos[String(sku)]; return `<td style="border-bottom:1px solid #e5eeff;padding:2px 6px;width:52px">${u ? `<img src="${esc(u)}" alt="" width="48" height="48" style="object-fit:contain;display:block;border-radius:4px">` : ''}</td>`; };
   return `<div style="font-family:system-ui,sans-serif;color:#0b1c30;font-size:13px">
 <h2 style="margin:0 0 4px">${esc(inf.titulo)}</h2><p style="margin:0 0 12px;color:#565e74">${esc(empresa)} · Periodo ${esc(inf.periodo)}</p>
 <p>${r.referencias} referencias · ${numero(r.unidades)} unidades en custodia · ${r.entradas} entradas · ${r.salidas} salidas · ${r.incidencias} incidencias · ${r.bajoMinimo} bajo mínimo.</p>
-${inf.secciones.map(s => `<h3 style="margin:16px 0 6px">${esc(s.titulo)}</h3>${s.filas.length ? `<table style="border-collapse:collapse;width:100%"><thead><tr>${s.columnas.map(c => `<th style="text-align:left;border-bottom:1px solid #c4c5d7;padding:4px 6px;font-size:11px">${esc(c)}</th>`).join('')}</tr></thead><tbody>${s.filas.map(f => `<tr>${f.map(v => `<td style="border-bottom:1px solid #e5eeff;padding:4px 6px">${esc(v)}</td>`).join('')}</tr>`).join('')}</tbody></table>` : '<p style="color:#565e74">Sin registros en el periodo.</p>'}`).join('')}
+${inf.secciones.map((s, i) => `<h3 style="margin:16px 0 6px">${esc(s.titulo)}</h3>${s.filas.length ? `<table style="border-collapse:collapse;width:100%"><thead><tr>${conFoto(i) ? '<th style="border-bottom:1px solid #c4c5d7;padding:4px 6px;font-size:11px">Foto</th>' : ''}${s.columnas.map(c => `<th style="text-align:left;border-bottom:1px solid #c4c5d7;padding:4px 6px;font-size:11px">${esc(c)}</th>`).join('')}</tr></thead><tbody>${s.filas.map(f => `<tr>${conFoto(i) ? foto(f[0]) : ''}${f.map(v => `<td style="border-bottom:1px solid #e5eeff;padding:4px 6px">${esc(v)}</td>`).join('')}</tr>`).join('')}</tbody></table>` : '<p style="color:#565e74">Sin registros en el periodo.</p>'}`).join('')}
 </div>`;
 }
 

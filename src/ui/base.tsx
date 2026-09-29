@@ -1,9 +1,9 @@
 /* Componentes y clases visuales del diseño Stitch */
 import type { ReactNode } from 'react';
 import type { EstadoEquipo, Producto, Semaforo, TipoMov } from '../data/tipos';
-import { CATS } from '../data/catalogo';
 import { status } from '../domain/reglas';
 import { initials } from '../domain/formato';
+import { FotoProducto } from './foto';
 
 export const CARD = 'bg-surface-container-lowest rounded-xl shadow-sm';
 const BTN = 'inline-flex items-center justify-center gap-2 rounded-lg font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed';
@@ -45,8 +45,8 @@ export function Pill({ p, short }: { p: Pick<Producto, 'stock' | 'min'>; short?:
   );
 }
 
-export const Tile = ({ p, size = 'w-12 h-12' }: { p: Producto; size?: string }) =>
-  <div className={`${size} shrink-0 rounded-xl grid place-items-center ${status(p) === 'red' ? 'bg-error-container text-error' : CATS[p.cat].tile}`}><Icon n={CATS[p.cat].icon} className="ico-28" /></div>;
+/** Miniatura del artículo: su foto (E-009) o, si no tiene, el icono de la categoría */
+export const Tile = ({ p, size = 'w-12 h-12' }: { p: Producto; size?: string }) => <FotoProducto p={p} size={size} alerta={status(p) === 'red'} />;
 
 /** E-008: etiqueta visible del material que no es nuestro */
 export const TagCustodia = ({ p, nombre = 'Esmove' }: { p: Pick<Producto, 'propiedad'>; nombre?: string }) =>

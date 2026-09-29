@@ -54,13 +54,13 @@ Las "migraciones" son los archivos de `supabase/migrations/`: crean las tablas, 
   ```bash
   npx supabase db push
   ```
-  Te enseña la lista de migraciones (6 archivos) y pregunta si continúa: escribe `Y` y pulsa Enter. Termina con *Finished supabase db push*.
+  Te enseña la lista de migraciones (7 archivos) y pregunta si continúa: escribe `Y` y pulsa Enter. Termina con *Finished supabase db push*.
 - [ ] 2.4. **(Opcional) Cargar los datos de demostración** (referencias, furgonetas y técnicos de ejemplo). Sirve para probar la app antes de meter lo real:
   ```bash
   npx supabase db push --include-seed
   ```
   Si prefieres empezar vacío, sáltate este paso: las referencias reales se dan de alta con la cámara o con "Añadir referencia". Los datos de ejemplo también se pueden borrar después, desde la ficha de cada referencia.
-- [ ] 2.5. Comprueba que ha ido bien: en Supabase, **Table Editor** debe listar `productos`, `movimientos`, `entregas`, `perfiles` y otras.
+- [ ] 2.5. Comprueba que ha ido bien: en Supabase, **Table Editor** debe listar `productos`, `movimientos`, `entregas`, `perfiles` y otras. En **Storage** deben aparecer dos espacios **privados** (con candado): `justificantes` y `fotos-articulos`. Si `fotos-articulos` saliera como *Public*, ábrelo → **Edit bucket** → desmarca *Public bucket*: las fotos de Saltoki y de fabricantes no deben quedar públicas.
 
 ## 3. Crear el primer administrador (tú)
 
@@ -273,6 +273,7 @@ Si los seis pasos salen bien, la app está en marcha.
 | "La lectura con IA no está configurada" | Falta el secreto `GEMINI_API_KEY` (paso 7.2). |
 | Los avisos se quedan en "pendiente" en el Registro de envíos | Faltan los pasos 8.0 (clave de la tarea y Vault) o la clave del canal. El error concreto sale en el registro. |
 | Supabase dice *Project paused* | Pulsa **Restore project**. Para que no vuelva a pasar, haz el paso 10. |
+| Las fotos no se ven en otro móvil | La foto se sube en cuanto el móvil que la hizo tiene cobertura y la app abierta; mientras tanto, en su ficha pone *Pendiente de subir*. |
 | No llegan las push en iPhone | Hay que abrir la app desde el icono de la pantalla de inicio (paso 8.8). |
 
 Si te atascas, copia el mensaje de error exacto y pásaselo a Claude Code.

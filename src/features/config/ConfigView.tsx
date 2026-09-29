@@ -20,6 +20,7 @@ import { AVISO_GEMINI, iaReal, URL_IA } from '../albaranes/lector';
 import { modoNube, urlSupabase } from '../../store/nube/cliente';
 import { verificarEntregasServidor } from '../../store/nube/sync';
 import { numEntrega } from '../../domain/reglas';
+import { abrirImportarFotos } from '../fotos/ImportarFotos';
 
 const Bloque = ({ icon, t, children }: { icon: string; t: string; children: ReactNode }) =>
   <section className={`${CARD} p-4 lg:p-space-md flex flex-col gap-3`}><h2 className="text-headline-sm font-semibold flex items-center gap-2"><Icon n={icon} className="text-primary" />{t}</h2>{children}</section>;
@@ -58,6 +59,10 @@ export default function ConfigView() {
           <p className="text-body-sm">Estado: <b>{iaReal() ? 'IA conectada' : 'modo simulado'}</b>{iaReal() && <span className="font-mono text-label-sm text-secondary break-all"> · {URL_IA}</span>}</p>
           <p className="text-body-sm text-secondary">La lectura real usa Gemini (capa gratuita) desde una función del servidor, para que la clave nunca esté en el navegador. Mientras no esté configurada, se usan albaranes de ejemplo.</p>
           <p className="text-body-sm text-amber-800">{AVISO_GEMINI}</p></Bloque>
+        {perm.configurar && <Bloque icon="photo_library" t="Fotos de los artículos">
+          <p className="text-body-sm text-secondary">{modoNube ? 'Se guardan en un espacio privado de Supabase: solo se ven con sesión iniciada, nunca en la web pública.' : 'Demostración: las fotos se quedan en este navegador y no se suben a ningún sitio.'} El almacén puede poner foto a un artículo que no tiene; sustituirla o quitarla es solo tuyo.</p>
+          <p className="text-body-sm text-secondary">{E.products.filter(p => p.foto).length} de {E.products.length} artículos con foto.</p>
+          <button onClick={abrirImportarFotos} className={`${BTN_S} h-12`}><Icon n="add_photo_alternate" className="ico-20" />Importar fotos por lote</button></Bloque>}
         <Bloque icon="fact_check" t="Integridad de entregas">
           <p className="text-body-sm text-secondary">Cada entrega firmada guarda una huella SHA-256 de su contenido y de la firma. Si alguien la modifica, la huella deja de coincidir.</p>
           <button onClick={verificar} className={`${BTN_S} h-12`}><Icon n="verified" className="ico-20" />Verificar {E.entregas.length} entregas</button></Bloque>

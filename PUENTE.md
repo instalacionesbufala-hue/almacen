@@ -177,7 +177,7 @@ Los **cargadores VE** y los **cuadros de protecciones** los entrega Esmove y que
 2. **Bloqueo en Auth:** en `supabase/functions/usuarios`, la acción `bloqueo` debe rechazar que el administrador se bloquee a sí mismo o bloquee al último administrador activo. Es la misma regla que `actualizar_perfil`, repetida antes de llamar a `ban_duration`. Añadir una prueba en `_compartido`.
 3. **CORS:** en `_compartido/validar.ts`, cambiar `Access-Control-Allow-Origin: *` por el origen de la app, con la variable `ORIGEN_APP` (el dominio de GitHub Pages) más `localhost` en desarrollo. Documentarlo en la guía, en el paso 6.
 
-### E-009 · Fotos de los artículos · PENDIENTE
+### E-009 · Fotos de los artículos · HECHO
 Cada artículo muestra su foto (material, cargadores, cuadros, ropa, EPIs y herramientas), para que el operario confirme de un vistazo que coge lo correcto.
 
 **1. Dónde se ve**
@@ -489,4 +489,67 @@ Cubren también el formato de cantidades, las respuestas envueltas en ```json y 
 - Pruebas en `funciones.test.ts`, incluidos orígenes trampa como `github.io.malicioso.es` y `localhost.malicioso.es`.
 - Documentado en la guía: paso 6.2 (`npx supabase secrets set ORIGEN_APP=https://instalacionesbufala-hue.github.io`) y una fila nueva en "Si algo falla".
 
-**Comprobado:** 132 pruebas de la app y 77 de base de datos en verde, `tsc -b` sin errores, `npm run build` correcto y `deno check` de las tres funciones sin errores.
+**Comprobado:** 132 pruebas en verde (`npm test`, de ellas 77 de base de datos), `tsc -b` sin errores, `npm run build` correcto y `deno check` de las tres funciones sin errores.
+
+### 29/09/2026 · E-009 · HECHO
+**Almacenamiento** (migración `20261001000100_e009_fotos.sql`)
+- Bucket **privado** `fotos-articulos`: máximo 2 MB por archivo y solo WebP o JPEG.
+- Campos nuevos en `productos`: `foto`, `foto_mini` y `foto_origen` (Saltoki | Esmove | fabricante | propia).
+- Rutas: `productos/<SKU>/<marca>.webp` y `…-mini.webp`. La marca cambia en cada foto, así que una ruta nunca se reutiliza y se puede cachear un año.
+- Permisos:
+  - `poner_foto()`: el almacén solo pone foto si el artículo no tiene. Reenviar la misma foto (un reintento de la cola) no cuenta como sustituir.
+  - `quitar_foto()`: solo el administrador. Devuelve las rutas para borrar los archivos.
+  - Políticas de Storage: se lee con sesión activa. Subir se permite solo mediante `puede_subir_foto(ruta)`: el SKU debe existir y el artículo no debe tener otra foto, salvo que suba el administrador. Sustituir y borrar son solo del administrador.
+- **Una foto por modelo:** `_grupo_foto()` aplica la foto a todas las tallas del mismo `modelo`.
+- Pruebas: `supabase/tests/e009.test.ts` (5).
+- **Nada en el repositorio:** los datos de demostración siguen con el icono de categoría. En modo demostración las fotos se guardan en IndexedDB del navegador y no se suben a ningún sitio.
+
+**App**
+- Lógica pura en `src/domain/fotos.ts`, con 8 pruebas en `fotos.test.ts`:
+  - emparejado por nombre de archivo: SKU, `supplierRef` o EAN, sin distinguir mayúsculas y con cualquier extensión, carpeta o espacios;
+  - vista previa del lote: nueva, sustituye, sin pareja, repetida o no es imagen;
+  - permisos: el almacén no puede sustituir, y la operación local también lo rechaza;
+  - foto compartida por modelo y foto de las herramientas, EPIs y prendas por su modelo;
+  - medidas de la reducción.
+- Operaciones `foto` y `quitarFoto` en `ops.ts`: pasan por la cola sin cobertura, como las demás.
+- `src/features/fotos/imagen.ts`: la foto se reduce en el móvil a WebP de 1.000 px como máximo y se genera una miniatura de 200 px (JPEG si el navegador no sabe codificar WebP). Si la foto sale pesada, baja la calidad.
+- `src/features/fotos/servicio.ts`:
+  - La foto se guarda primero en IndexedDB y una cola de subidas la envía al bucket cuando hay conexión. Mientras tanto la ficha marca *Pendiente de subir*.
+  - URL firmadas de 12 h, cacheadas en `localStorage`.
+  - **Todas las miniaturas de una pantalla se firman en una sola petición** (`createSignedUrls`), así que una lista de 200 artículos hace una llamada, no 200.
+- `src/ui/foto.tsx`:
+  - `Tile` (la miniatura que ya usaban las pantallas) muestra ahora la foto o, si no hay, el icono de su categoría. Un punto rojo marca el stock crítico.
+  - Foto grande que se amplía al tocarla (visor a pantalla completa; se cierra con Escape).
+  - Editor de la ficha, con botones de 56 px: hacer foto, elegir archivo, pegar (botón o Ctrl+V) y origen. El administrador tiene además "Quitar la foto".
+
+**Dónde se ve**
+- **Inventario:** tarjetas móviles, tabla de escritorio y tarjetas por categoría.
+- **Ficha:** foto grande con el editor.
+- **Escáner:** foto grande en el resultado; si el artículo no tiene foto, solo la miniatura, para no restar sitio a los botones.
+- **Otras pantallas:** catálogo y cesta de entrega, pantalla de firma, preparar entrega con plantilla, editor de plantillas, revisión de albaranes y bandeja de reposición.
+- **Justificante PDF de E-007:** miniatura por línea.
+- **Informe de custodia para Esmove:** columna Foto en el stock por referencia. En el PDF de la app va como imagen incrustada. En el correo del servidor (`notificar`) va con URL firmadas de 30 días, porque el correo no lleva sesión. El CSV sigue sin fotos y sin importes, con su prueba en `informe.test.ts`.
+
+**Importación por lote** (Configuración → Fotos de los artículos, solo el administrador)
+- Se sueltan o eligen muchos archivos. Antes de confirmar, la vista previa enseña archivo → artículo y por qué campo se ha emparejado, y marca los que no casan, los repetidos y los que sustituirían una foto.
+- Sustituir fotos existentes exige marcar una casilla (desmarcada por defecto). Las fotos se comprimen y suben de una en una, para no agotar la memoria del móvil.
+- El origen por defecto es Saltoki, pensando en los `<código>.webp` que preparará el chat (punto 4 del encargo).
+
+**Guía:** el paso 2.5 comprueba que `fotos-articulos` está en Storage y es privado. Hay una fila nueva en "Si algo falla" para las fotos pendientes de subir.
+
+**Comprobado en el navegador (modo demostración):**
+- Una foto de prueba de 1,9 MB (PNG) queda en 10 KB (WebP) y la miniatura en 2 KB. Hay que tomarlo con cautela: era una imagen sintética muy simple, y una foto real pesará más (el objetivo son unos 100 KB y 12 KB).
+- Se ven la ficha, el visor, las miniaturas del inventario y la cesta, y el escáner con foto.
+- El lote se probó con cinco archivos: uno por SKU, uno por la ref. del proveedor de un cuadro de Esmove, uno sin pareja y dos tallas del mismo modelo (la segunda sale "repetida" y las dos tallas comparten la foto).
+- El justificante PDF lleva la miniatura y el informe de custodia la columna Foto.
+- Con rol almacén no aparecen los botones en un artículo con foto, y sí en uno sin foto.
+
+**Pruebas:** 146 en verde (`npm test`, de ellas 82 de base de datos). `tsc -b` sin errores, `npm run build` correcto y `deno check` de las tres funciones sin errores.
+
+**Sin verificar aquí:**
+- El bucket real, las políticas de Storage (PGlite no tiene Storage: se ha probado `puede_subir_foto()`, que es lo que usan) y las URL firmadas necesitan el proyecto de Supabase del usuario.
+- "Las miniaturas cargan rápido en una lista de 200 artículos por datos móviles" no se ha medido en un móvil real. Por diseño son una sola petición de URL, miniaturas de unos 2 a 12 KB con carga diferida y caché de un año, así que 200 artículos son unos 0,5 a 2,5 MB la primera vez.
+
+**Decisiones:**
+- Si el administrador sustituye o quita una foto sin cobertura, el archivo viejo puede quedar huérfano en el bucket. No se ve ni ocupa casi nada.
+- Pendiente para el chat: preparar las fotos de Saltoki como `<código>.webp` (punto 4). Code no se conecta a Saltoki.

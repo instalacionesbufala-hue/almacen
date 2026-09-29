@@ -17,6 +17,7 @@ import { Firma, firmaPNG, type Trazo } from '../../ui/firma';
 import { BTN_P, BTN_S, BTN_T, CARD, Campo, FirmaImg, Icon, INP, LBL, Pill, Tag, Vacio } from '../../ui/base';
 import { abrirFicha } from '../inventario/hojas';
 import { abrirReposicion } from '../reposicion/Reposicion';
+import { fotosInforme } from '../fotos/servicio';
 
 export default function CustodiaView() {
   const E = useAlmacen(), perm = usePermisos();
@@ -76,7 +77,12 @@ function Informe({ prop }: { prop: string }) {
   const rango = periodo === 'actual' ? mesActual : periodoAnterior('mensual', ahora);
   const inf = useMemo(() => construirInforme(datosInformeCustodia(E, prop, rango.desde, rango.hasta)), [E, prop, rango.desde, rango.hasta]);
   const nombre = `informe-custodia-${prop.toLowerCase()}-${hoyISO()}`;
-  const pdf = () => { const w = window.open('', '_blank', 'width=900,height=1000'); if (!w) return toast('El navegador ha bloqueado la ventana.', 'warn'); w.document.write(`<!doctype html><meta charset="utf-8"><title>${inf.titulo}</title><body style="padding:24px">${informeHtml(inf)}<script>setTimeout(()=>print(),300)<\/script>`); w.document.close(); };
+  const pdf = async () => {
+    // abrir la ventana antes de esperar a las fotos (si no, el navegador la bloquea)
+    const w = window.open('', '_blank', 'width=900,height=1000'); if (!w) return toast('El navegador ha bloqueado la ventana.', 'warn');
+    w.document.write('<p style="font-family:system-ui;padding:24px">Preparando el informe…</p>');
+    const fotos = await fotosInforme(E, prop);
+    w.document.open(); w.document.write(`<!doctype html><meta charset="utf-8"><title>${inf.titulo}</title><body style="padding:24px">${informeHtml(inf, undefined, fotos)}<script>setTimeout(()=>print(),300)<\/script>`); w.document.close(); };
   const enviar = async () => {
     if (!modoNube) return toast('En la demostración no se envía: descarga el PDF o el CSV.', 'warn');
     if (!o?.correosInformes.length) return toast(`Añade el correo de informes de ${o?.nombre} en Datos del propietario.`, 'warn', 6000);
@@ -94,7 +100,7 @@ function Informe({ prop }: { prop: string }) {
     </div>
     <SheetFoot className="flex flex-wrap gap-2">
       <button onClick={() => descargar(nombre + '.csv', informeCsv(inf), 'text/csv;charset=utf-8')} className={`${BTN_S} h-12 px-4`}><Icon n="table" className="ico-20" />CSV</button>
-      <button onClick={pdf} className={`${BTN_S} h-12 px-4`}><Icon n="picture_as_pdf" className="ico-20" />PDF</button>
+      <button onClick={() => void pdf()} className={`${BTN_S} h-12 px-4`}><Icon n="picture_as_pdf" className="ico-20" />PDF</button>
       {perm.admin && <button onClick={() => void enviar()} className={`${BTN_P} h-12 flex-1`}><Icon n="send" className="ico-20" />Enviar a {o?.nombre}</button>}
     </SheetFoot>
   </>);

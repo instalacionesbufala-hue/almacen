@@ -115,7 +115,7 @@ async function encolarInformes(db: SupabaseClient, cuerpo: Record<string, unknow
     if (cuerpo.propietario && cuerpo.propietario !== o.id) continue;
     const destinatarios = (cuerpo.destinatarios as string[] | undefined)?.length ? cuerpo.destinatarios as string[] : o.correos_informes;
     if (!destinatarios?.length) continue;
-    const { data: productos } = await db.from('productos').select('sku, nombre, unidad, stock, minimo, ref_proveedor, con_serie').eq('propiedad', 'custodia').eq('propietario_id', o.id);
+    const { data: productos } = await db.from('productos').select('sku, nombre, unidad, stock, minimo, ref_proveedor, con_serie, foto_mini').eq('propiedad', 'custodia').eq('propietario_id', o.id);
     const skus = (productos || []).map(p => p.sku);
     const { data: movs } = await db.from('movimientos').select('ts, sku, tipo, cantidad, motivo, referencia, series, operario, equipo_id')
       .in('sku', skus.length ? skus : ['-']).gte('ts', new Date(periodo.desde).toISOString()).lt('ts', new Date(periodo.hasta).toISOString());
@@ -127,6 +127,11 @@ async function encolarInformes(db: SupabaseClient, cuerpo: Record<string, unknow
       actas: (actas || []).map(a => ({ numero: a.numero, ts: new Date(a.ts).getTime(), representante: a.representante, lineas: a.lineas })),
     };
     const inf = construirInforme(datos);
-    await db.from('envios_aviso').insert({ canal: 'correo', tipo: 'informe', asunto: inf.titulo + ' · ' + inf.periodo, cuerpo: informeHtml(inf), destinatarios, adjunto_csv: informeCsv(inf) });
+    // E-009: miniaturas con URL firmadas de 30 días (el bucket es privado; el correo no lleva sesión)
+    const conFoto = (productos || []).filter(p => p.foto_mini);
+    const { data: firmadas } = conFoto.length ? await db.storage.from('fotos-articulos').createSignedUrls(conFoto.map(p => p.foto_mini as string), 30 * 24 * 3600) : { data: [] };
+    const fotos: Record<string, string> = {};
+    (firmadas || []).forEach((f, i) => { if (!f.error && f.signedUrl) fotos[conFoto[i].sku] = f.signedUrl; });
+    await db.from('envios_aviso').insert({ canal: 'correo', tipo: 'informe', asunto: inf.titulo + ' · ' + inf.periodo, cuerpo: informeHtml(inf, undefined, fotos), destinatarios, adjunto_csv: informeCsv(inf) });
   }
 }

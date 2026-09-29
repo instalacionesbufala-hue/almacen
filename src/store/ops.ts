@@ -2,11 +2,12 @@
    - aplicarse en local (validación previa con src/domain y respuesta inmediata en pantalla), y
    - traducirse a su función SQL del servidor (la fuente de verdad en modo nube).
    En modo nube la operación se guarda en la cola y se reaplica en local hasta que el servidor la confirma. */
-import type { Plantilla, Tallas, ConfigAvisos, Propietario, Rol, CatId, EstadoEquipo, Estado, Herramienta, LineaEntrega, Producto, TipoIncidencia, TipoMov } from '../data/tipos';
+import type { OrigenFoto, Plantilla, Tallas, ConfigAvisos, Propietario, Rol, CatId, EstadoEquipo, Estado, Herramienta, LineaEntrega, Producto, TipoIncidencia, TipoMov } from '../data/tipos';
 import { applyMovement, find, delta, disponibleReal, seriesReservadas } from '../domain/reglas';
 import { herramientasLibres } from '../domain/plantillas';
 import { redondea } from '../domain/formato';
 import { asignarHerramienta, registrarIncidencia } from '../domain/herramientas';
+import { fotoDe, grupoFoto } from '../domain/fotos';
 
 export interface OpMovimiento { id: string; sku: string; tipo: TipoMov; qty: number; motivo: string; ref: string; series: string[]; equipo?: string }
 export interface OpEntrega { id: string; numero?: string; ts: number; equipo: string; receptor: string; dni: string; lineas: LineaEntrega[]; firma: string; hash?: string }
@@ -45,6 +46,8 @@ export type Op =
   | { op: 'anularEntrega'; args: { id: string } }
   | { op: 'plantilla'; args: Plantilla }
   | { op: 'tallas'; args: { tecnico: string; tallas: Tallas } }
+  | { op: 'foto'; args: { sku: string; foto: string; mini: string; origen: OrigenFoto } }
+  | { op: 'quitarFoto'; args: { sku: string } }
   | { op: 'acta'; args: { id: string; propietario: string; representante: string; firma: string; lineas: { sku: string; contado: number }[] } };
 
 type Def<A> = { local: (S: Estado, a: A) => void; rpc: (a: A) => [string, Record<string, unknown>]; desc: (S: Estado, a: A) => string };
@@ -275,6 +278,25 @@ export const OPS: Defs = {
     },
     rpc: a => ['cambiar_propiedad', { p_sku: a.sku, p_propiedad: a.propiedad, p_propietario: a.propietario ?? null }],
     desc: (_S, a) => `Propiedad de ${a.sku}`,
+  },
+  foto: {
+    local: (S, a) => {
+      const p = find(S, a.sku); if (!p) throw new Error('Producto no encontrado');
+      const actual = fotoDe(S, p);
+      if (S.rol !== 'admin' && actual && actual.foto !== a.foto) throw new Error('Este artículo ya tiene foto: solo el administrador puede sustituirla');
+      for (const x of grupoFoto(S, a.sku)) { x.foto = a.foto; x.fotoMini = a.mini; x.fotoOrigen = a.origen; }
+    },
+    rpc: a => ['poner_foto', { p_sku: a.sku, p_foto: a.foto, p_mini: a.mini, p_origen: a.origen }],
+    desc: (S, a) => `Foto de ${nombreProd(S, a.sku)}`,
+  },
+  quitarFoto: {
+    local: (S, a) => {
+      if (S.rol !== 'admin') throw new Error('Solo el administrador puede quitar una foto');
+      if (!find(S, a.sku)) throw new Error('Producto no encontrado');
+      for (const x of grupoFoto(S, a.sku)) { x.foto = undefined; x.fotoMini = undefined; x.fotoOrigen = undefined; }
+    },
+    rpc: a => ['quitar_foto', { p_sku: a.sku }],
+    desc: (S, a) => `Quitar la foto de ${nombreProd(S, a.sku)}`,
   },
   envio: {
     local: (S, a) => {

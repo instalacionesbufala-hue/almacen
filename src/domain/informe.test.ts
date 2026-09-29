@@ -31,6 +31,15 @@ describe('informe de custodia', () => {
       expect(texto).not.toMatch(/889/);
     }
   });
+  it('E-009: con fotos, el stock por referencia lleva una miniatura por artículo (el CSV no)', () => {
+    const conFotos = informeHtml(inf, undefined, { 'ESM-CPVE-MONO': 'https://x.supabase.co/storage/v1/object/sign/fotos-articulos/productos/ESM-CPVE-MONO/a-mini.webp?token=t' });
+    expect(conFotos).toMatch(/<th[^>]*>Foto<\/th>/);
+    expect(conFotos).toMatch(/<img src="https:\/\/x\.supabase\.co[^"]*ESM-CPVE-MONO[^"]*"/);
+    expect(conFotos.match(/<img /g)).toHaveLength(1);
+    expect(conFotos).not.toMatch(/€|precio|coste|valor/i);
+    expect(html).not.toMatch(/<img /);
+    expect(informeCsv(inf)).not.toMatch(/Foto|supabase/);
+  });
   it('el periodo por defecto es el mes natural anterior', () => {
     const p = periodoAnterior('mensual', new Date(2026, 9, 5));
     expect(new Date(p.desde).getMonth()).toBe(8);

@@ -10,6 +10,8 @@ import { toast } from '../../ui/toast';
 import { BTN_BASE, BTN_P, BTN_S, BTN_T, Icon, INP, LBL, Pill, TagCustodia, Tile } from '../../ui/base';
 import { abrirBorrador, abrirFicha, abrirFormProducto, MovRow } from '../inventario/hojas';
 import { candidatos, codigoConocido, leerTexto } from './texto';
+import { FotoGrande } from '../../ui/foto';
+import { fotoDe } from '../../domain/fotos';
 
 type Modo = 'entrada' | 'salida' | 'consulta';
 interface Hit { code: string; sku: string | null; serial: string; via: string }
@@ -160,7 +162,9 @@ export default function ScanView() {
             <Manual valor={manual} setValor={setManual} onEnviar={c => alLeer(c, 'teclado')} />
           </div>
             : <div className="flex flex-col gap-3">
-              <div className="bg-surface-container-low rounded-2xl p-4 flex gap-3"><Tile p={p} size="w-14 h-14" />
+              {/* E-009: foto grande para confirmar que el código leído es el del artículo que tiene en la mano */}
+              {fotoDe(E, p) && <FotoGrande p={p} className="h-48 lg:h-56" />}
+              <div className="bg-surface-container-low rounded-2xl p-4 flex gap-3">{!fotoDe(E, p) && <Tile p={p} size="w-14 h-14" />}
                 <div className="flex-1 min-w-0"><div className="flex justify-between items-center gap-2"><span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-tertiary-fixed text-on-tertiary-fixed font-mono text-label-sm">● IDENTIFICADO</span><span className="font-mono text-label-sm text-secondary">vía {hit.via}</span></div>
                   <div className="text-headline-sm font-semibold mt-1 leading-snug">{p.name}</div>{p.propiedad === 'custodia' && <div className="mt-1"><TagCustodia p={p} /></div>}
                   <div className="font-mono text-label-sm text-primary mt-0.5">SKU: {p.sku} <span className="text-secondary">· Stock {qtyTxt(p, p.stock)}</span></div></div></div>

@@ -12,6 +12,7 @@ import { closeModal, openModal, SheetFoot, SheetHead } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 import { Avatar, BTN_P, BTN_S, BTN_T, Campo, Icon, INP, LBL, Pill, Tag, TagCustodia, Tile, TIPO, Vacio } from '../../ui/base';
 import { usePermisos } from '../../store/permisos';
+import { EditorFoto } from '../../ui/foto';
 import { nuevoId } from '../../store/ops';
 import type { CatId } from '../../data/tipos';
 
@@ -57,7 +58,8 @@ function Ficha({ sku }: { sku: string }) {
   return (<>
     <SheetHead title={p.name} sub={`${CATS[p.cat].label} · ${p.supplier}`} />
     <div className="p-5 flex flex-col gap-4">
-      <div className="flex items-center gap-3"><Tile p={p} size="w-16 h-16" />
+      <EditorFoto p={p} />
+      <div className="flex items-center gap-3">
         <div className="flex-1"><div className={`text-headline-lg font-bold ${status(p) === 'red' ? 'text-error' : ''}`}>{qtyTxt(p, p.stock)}</div><div className="text-body-sm text-secondary">Mínimo {qtyTxt(p, p.min)}{p.propiedad === 'custodia' ? ' · sin precio (no es material propio)' : perm.verCostes ? ` · ${eur(p.price)}/${UNIT[p.unit]} · valor ${eur(p.stock * (p.price ?? 0))}` : ''}</div>
           <div className="flex gap-1 mt-1"><TagCustodia p={p} nombre={E.propietarios.find(o => o.id === p.propietario)?.nombre} />{p.borrador && <Tag c="bg-amber-100 text-amber-800">Borrador: falta completarla</Tag>}</div></div>
         <Pill p={p} /></div>

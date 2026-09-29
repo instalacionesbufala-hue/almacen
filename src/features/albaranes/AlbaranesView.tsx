@@ -10,9 +10,10 @@ import { nuevoId } from '../../store/ops';
 import { crearStore } from '../../store/crear';
 import { useEsEscritorio } from '../../store/ui';
 import { toast } from '../../ui/toast';
-import { BTN_P, BTN_S, BTN_T, CARD, Icon, INP, LBL, Tag, Vacio } from '../../ui/base';
+import { BTN_P, BTN_S, BTN_T, CARD, Icon, INP, LBL, Tag, Vacio, Tile } from '../../ui/base';
 import { abrirBorrador, abrirFormProducto } from '../inventario/hojas';
 import { AVISO_GEMINI, DEMOS, demoPara, iaReal, leerConIA } from './lector';
+import { FotoLinea } from '../../ui/foto';
 
 interface Linea { codigo: string; descripcion: string; cantidad: string; confianza: number; sku: string | null; how: string | null; include: boolean; series: string; nota: string }
 interface Doc { proveedor: string; numero: string; fecha: string; cif: string; bultos?: number }
@@ -201,6 +202,7 @@ function LineaAlb({ l, i, proveedor }: { l: Linea; i: number; proveedor: string 
     <div className={`p-space-md border-t border-surface-container ${!p ? 'bg-amber-50' : ''} ${l.include ? '' : 'opacity-60'}`}>
       <div className="flex gap-3">
         <input type="checkbox" checked={l.include} disabled={!p} onChange={e => { l.include = e.target.checked; emit(); }} className="w-5 h-5 mt-1 accent-primary shrink-0" aria-label={`Incluir línea ${i + 1}`} />
+        {p ? <Tile p={p} size="w-12 h-12" /> : <FotoLinea size="w-12 h-12" />}
         <div className="flex-1 min-w-0 flex flex-col gap-2">
           <div className="flex flex-wrap justify-between gap-2"><div className="min-w-0"><div className="font-semibold">{l.descripcion}</div><div className="font-mono text-label-sm text-secondary">{l.codigo || 'sin código'}{l.how && ` · emparejado por ${l.how}`}{l.nota && ` · ${l.nota}`}</div></div>
             <span className={`self-start font-mono text-label-sm px-2 py-1 rounded-full whitespace-nowrap ${est.c}`}>● {est.t}</span></div>

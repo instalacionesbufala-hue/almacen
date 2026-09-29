@@ -10,7 +10,7 @@ import { modoNube } from '../../store/nube/cliente';
 import { ir } from '../../store/ui';
 import { openModal, SheetFoot, SheetHead, closeModal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
-import { BTN_P, BTN_S, CARD, ESTADO_EQ, FirmaImg, Icon, INP, LBL, Tag, TagCustodia } from '../../ui/base';
+import { BTN_P, BTN_S, CARD, ESTADO_EQ, FirmaImg, Icon, INP, LBL, Tag, TagCustodia, Tile } from '../../ui/base';
 import { alternarSerie, anadirACesta, disponible, fijarCantidad, quitarDeCesta } from './cesta';
 import { Firma, firmaPNG, type Trazo } from '../../ui/firma';
 import { abrirInformeEntregas, abrirPlantillas, abrirPreparar, enviarJustificante, Preparadas } from './Plantillas';
@@ -78,6 +78,7 @@ export default function EntregasView() {
             <div className="grid grid-cols-2 xl:grid-cols-3 gap-2">{prods.length ? prods.map(p => { const d = disponible(p.sku); return (
               <button key={p.sku} onClick={() => anadirACesta(p.sku)} disabled={d <= 0} className="text-left bg-surface-container-low hover:bg-surface-container rounded-xl p-3 flex flex-col gap-1 disabled:opacity-40 relative">
                 <span className="absolute top-2.5 right-2.5 text-primary"><Icon n="add_circle" /></span>
+                <Tile p={p} size="w-11 h-11" />
                 <span className="self-start flex flex-wrap gap-1"><Tag c="bg-white text-secondary">{p.packLabel || CATS[p.cat].label}</Tag><TagCustodia p={p} /></span>
                 <span className="font-semibold leading-snug line-clamp-2 pr-5">{p.name}</span>
                 <span className="font-mono text-label-sm text-secondary truncate">{p.serialized ? `SN: ${(p.serials || [])[0] || '—'}` : p.loc}</span>
@@ -92,7 +93,7 @@ export default function EntregasView() {
               {lineas.length > 0 && <button onClick={() => { E.cesta.lineas = []; guardar(); }} className="text-error text-body-sm flex items-center gap-1"><Icon n="delete" className="ico-18" />Limpiar</button>}</div>
             {lineas.length ? lineas.map(l => { const p = find(E, l.sku)!; return (
               <div key={l.sku} className="bg-surface-container-low rounded-xl p-3 flex flex-col gap-2">
-                <div className="flex items-center gap-3"><div className="flex-1 min-w-0"><div className="font-semibold leading-snug">{p.name} <TagCustodia p={p} /></div>
+                <div className="flex items-center gap-3"><Tile p={p} size="w-12 h-12" /><div className="flex-1 min-w-0"><div className="font-semibold leading-snug">{p.name} <TagCustodia p={p} /></div>
                   <div className="font-mono text-label-sm text-secondary">{p.serialized ? <>S/N: {l.serials.map(s => <span key={s} className="bg-primary-fixed text-primary px-1 rounded mr-1">{s}</span>)}</> : `${p.loc} · ${p.packLabel || ''}`}</div></div>
                   <div className="flex items-center bg-white rounded-lg shrink-0">
                     <button onClick={() => quitarDeCesta(p.sku)} className="w-11 h-11 grid place-items-center" aria-label="Menos"><Icon n="remove" /></button>

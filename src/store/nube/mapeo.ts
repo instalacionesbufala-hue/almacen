@@ -32,6 +32,7 @@ export function aEstado(t: Tablas, base: Pick<Estado, 'cesta' | 'seq'>, operador
     price: p.propiedad === 'custodia' ? null : precio.get(p.sku) ?? 0, serialized: !!p.con_serie, serials: p.con_serie ? (series.get(p.sku) || []) : undefined, borrador: !!p.borrador,
     propiedad: p.propiedad === 'custodia' ? 'custodia' : 'propia', propietario: p.propietario_id ?? undefined,
     objetivo: p.objetivo == null ? undefined : n(p.objetivo), proveedorHabitual: p.proveedor_habitual ?? undefined, modelo: p.modelo ?? undefined, talla: p.talla ?? undefined,
+    foto: p.foto ?? undefined, fotoMini: p.foto_mini ?? undefined, fotoOrigen: p.foto_origen ?? undefined,
   }));
   const activos = t.equipos.filter(e => e.activo);
   const equipos: Equipo[] = activos.map(e => ({ id: e.id, nombre: e.nombre, flota: e.flota, matricula: e.matricula, estado: e.estado as EstadoEquipo,

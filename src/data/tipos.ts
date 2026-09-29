@@ -36,7 +36,12 @@ export interface Producto {
   /** Ropa y EPIs de almacén: modelo común a varias tallas */
   modelo?: string;
   talla?: string;
+  /** E-009: foto en el bucket privado (ruta), su miniatura de 200 px y de dónde sale. Las tallas de un modelo la comparten */
+  foto?: string;
+  fotoMini?: string;
+  fotoOrigen?: OrigenFoto;
 }
+export type OrigenFoto = 'Saltoki' | 'Esmove' | 'fabricante' | 'propia';
 
 export type Rol = 'admin' | 'almacen';
 export interface PerfilUsuario { id: string; nombre: string; email: string | null; rol: Rol; activo: boolean }

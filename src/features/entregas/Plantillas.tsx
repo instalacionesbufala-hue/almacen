@@ -17,6 +17,10 @@ import { toast } from '../../ui/toast';
 import { Firma, firmaPNG, type Trazo } from '../../ui/firma';
 import { BTN_P, BTN_S, Campo, Icon, INP, LBL, Tag, Vacio } from '../../ui/base';
 import { abrirRecibo } from './EntregasView';
+import { FotoLinea } from '../../ui/foto';
+import { fotoDe, fotoDeHerramienta } from '../../domain/fotos';
+import { urlFoto } from '../fotos/servicio';
+import { aJpegDataUrl } from '../fotos/imagen';
 
 /* ---------- Entregas preparadas (reservadas, pendientes de firma) ---------- */
 export function Preparadas() {
@@ -77,7 +81,7 @@ function Preparar({ equipo0 }: { equipo0?: string }) {
       {E.plantillas.find(p => p.id === plantilla)?.modoKit && <p className="text-body-sm text-primary bg-primary-fixed/40 rounded-lg p-2">Modo kit: se entrega solo lo que le falta a la furgoneta para llegar al contenido de la plantilla.</p>}
       <div className="flex flex-col">{lineas.length ? lineas.map(l => { const p = l.sku ? find(E, l.sku) : undefined; return (
         <div key={l.clave} className={`flex flex-wrap items-center gap-3 py-2.5 border-b border-surface-container ${l.cantidad === 0 ? 'opacity-60' : ''}`}>
-          <div className="flex-1 min-w-[200px]"><div className="font-medium">{l.nombre}</div>
+          <FotoLinea sku={l.sku} modelo={l.modelo} herramienta={l.herramientas[0]} size="w-11 h-11" /><div className="flex-1 min-w-[200px]"><div className="font-medium">{l.nombre}</div>
             <div className="font-mono text-label-sm text-secondary">{l.sku || l.modelo} · disponible {num(l.disponible)}{l.pedida !== l.cantidad ? ` · plantilla ${num(l.pedida)}` : ''}</div>
             {l.aviso && <div className="text-body-sm text-amber-800">{l.aviso}</div>}
             {p?.serialized && l.cantidad > 0 && <div className="flex flex-wrap gap-1 mt-1">{(p.serials || []).map(s => <button key={s} onClick={() => setL(l.clave, { serials: l.serials.includes(s) ? l.serials.filter(x => x !== s) : [...l.serials, s].slice(-l.cantidad) })} className={`px-2 h-8 rounded font-mono text-label-sm ${l.serials.includes(s) ? 'bg-primary text-white' : 'bg-surface-container-low'}`}>{s}</button>)}</div>}
@@ -113,7 +117,7 @@ function FirmaGrande({ id }: { id: string }) {
     <SheetHead title={`Entrega para ${t?.nombre}`} sub={`${numEntrega(e)} · ${E.equipos.find(q => q.id === e.equipo)?.flota}${e.obra ? ' · ' + e.obra : ''}`} />
     <div className="p-5 flex flex-col gap-3">
       <ul className="flex flex-col gap-1 text-headline-sm">{e.lineas.map((l, i) => { const p = find(E, l.sku), h = E.herramientas.find(x => x.id === l.dotacion); return (
-        <li key={i} className="flex justify-between gap-3 py-2 border-b border-surface-container"><span>{h ? `${h.nombre} · ${h.serie}` : p?.name}{l.serials.length ? <span className="block font-mono text-label-md text-secondary">S/N {l.serials.join(', ')}</span> : null}</span>
+        <li key={i} className="flex items-center gap-3 py-2 border-b border-surface-container"><FotoLinea sku={l.sku} herramienta={l.dotacion} size="w-12 h-12" /><span className="flex-1">{h ? `${h.nombre} · ${h.serie}` : p?.name}{l.serials.length ? <span className="block font-mono text-label-md text-secondary">S/N {l.serials.join(', ')}</span> : null}</span>
           <b className="whitespace-nowrap">{h ? '1 ud' : p ? qtyTxt(p, l.qty) : num(l.qty)}</b></li>); })}</ul>
       <div><div className={`${LBL} mb-1`}>Firma de {t?.nombre}</div><Firma trazos={firma} onChange={setFirma} /><button onClick={() => setFirma([])} className="text-body-sm text-secondary mt-1">Borrar firma</button></div>
       <p className="text-body-sm text-secondary">Al firmar confirmas que recibes este material revisado y completo.</p>
@@ -139,7 +143,13 @@ export async function justificantePdf(e: Entrega): Promise<Blob> {
   for (const l of e.lineas) {
     const p = find(E, l.sku), h = E.herramientas.find(x => x.id === l.dotacion);
     const txt = `${h ? `${h.nombre} · ${h.serie}` : p?.name || l.sku}  —  ${h ? '1 ud' : p ? qtyTxt(p, l.qty) : num(l.qty)}${l.serials.length ? `  (S/N ${l.serials.join(', ')})` : ''}`;
-    for (const linea of d.splitTextToSize(txt, 180)) { d.text(linea, 15, y); y += 6; }
+    // E-009: miniatura de la foto en cada línea (si el artículo la tiene)
+    const f = h ? fotoDeHerramienta(E, h) : fotoDe(E, p);
+    const img = f ? await urlFoto(f.mini).then(u => u ? aJpegDataUrl(u) : null) : null;
+    const y0 = y;
+    if (img) d.addImage(img, 'JPEG', 15, y - 4, 11, 11);
+    for (const linea of d.splitTextToSize(txt, 165)) { d.text(linea, 29, y); y += 6; }
+    y = Math.max(y, y0 + 10);
   }
   if (e.firma?.startsWith('data:')) d.addImage(e.firma, 'PNG', 15, y + 6, 70, 27);
   d.text(`Firma de ${t?.nombre || 'el receptor'}`, 15, y + 38);
@@ -197,7 +207,7 @@ function EditarPlantilla({ p }: { p: Plantilla }) {
       <label className="flex items-center gap-2"><input type="checkbox" checked={f.modoKit} onChange={e => setF({ ...f, modoKit: e.target.checked })} className="w-5 h-5 accent-primary" />Kit de furgoneta: la plantilla es el contenido objetivo y se entrega solo la diferencia</label>
       {f.lineas.map((l, i) => (
         <div key={i} className="flex flex-wrap items-center gap-2 py-2 border-b border-surface-container">
-          <span className="flex-1 min-w-[200px] font-medium">{l.tipo === 'stock' ? find(E, l.sku!)?.name || l.sku : l.tipo === 'modelo' ? `${l.modelo} · talla de ${NOMBRE_TALLA[l.tipoTalla!]}` : `${l.modelo} (herramienta)`}</span>
+          <FotoLinea sku={l.sku} modelo={l.modelo} /><span className="flex-1 min-w-[200px] font-medium">{l.tipo === 'stock' ? find(E, l.sku!)?.name || l.sku : l.tipo === 'modelo' ? `${l.modelo} · talla de ${NOMBRE_TALLA[l.tipoTalla!]}` : `${l.modelo} (herramienta)`}</span>
           {l.tipo === 'modelo' && <select value={l.tipoTalla} onChange={e => setLinea(i, { tipoTalla: e.target.value as TipoTalla })} className={`${INP} !w-auto h-10`} aria-label="Talla">{(Object.keys(NOMBRE_TALLA) as TipoTalla[]).map(k => <option key={k} value={k}>{NOMBRE_TALLA[k]}</option>)}</select>}
           <input value={String(l.cantidad)} onChange={e => setLinea(i, { cantidad: toNum(e.target.value) || 0 })} inputMode="decimal" className={`${INP} !w-20 h-10 text-center`} aria-label="Cantidad" />
           <label className="flex items-center gap-1 text-body-sm"><input type="checkbox" checked={l.editable} onChange={e => setLinea(i, { editable: e.target.checked })} className="accent-primary" />Se puede cambiar</label>

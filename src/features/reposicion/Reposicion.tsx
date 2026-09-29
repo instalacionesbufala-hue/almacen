@@ -14,6 +14,7 @@ import { openModal, SheetHead } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 import { BTN_P, BTN_S, BTN_T, Icon, INP, Tag, Vacio } from '../../ui/base';
 import { abrirMinimos } from './Minimos';
+import { FotoLinea } from '../../ui/foto';
 
 /** Contador de la campana: avisos abiertos (en tiempo real con Supabase) + EPIs por renovar */
 export function useContadorAvisos() {
@@ -89,7 +90,7 @@ function Grupo({ g, admin, verCostes }: { g: GrupoReposicion; admin: boolean; ve
       </div>
       <div className="flex flex-col">{g.lineas.map(l => (
         <div key={clave(l)} className="flex flex-wrap items-center gap-3 py-2 border-b border-white/70">
-          <div className="flex-1 min-w-[180px]"><div className="font-medium">{l.nombre}</div><div className="font-mono text-label-sm text-secondary">{l.codigo || l.sku || ''} · stock {num(l.stock)} {l.unidad} · mín. {num(l.minimo)}</div></div>
+          <FotoLinea sku={l.sku} modelo={l.modelo} /><div className="flex-1 min-w-[180px]"><div className="font-medium">{l.nombre}</div><div className="font-mono text-label-sm text-secondary">{l.codigo || l.sku || ''} · stock {num(l.stock)} {l.unidad} · mín. {num(l.minimo)}</div></div>
           {l.estado === 'pedido' ? <Tag c="bg-amber-100 text-amber-800">Pedido: {num(l.pedida || 0)} {l.unidad}</Tag>
             : admin ? <label className="flex items-center gap-2 text-body-sm">Pedir<input value={cant[clave(l)] ?? String(l.sugerida)} onChange={e => setCant({ ...cant, [clave(l)]: e.target.value })} inputMode="decimal" className={`${INP} !w-24 h-10 text-center font-mono`} aria-label={`Cantidad a pedir de ${l.nombre}`} />{l.unidad}</label>
               : <span className="font-mono text-label-sm text-secondary">Sugerido {num(l.sugerida)} {l.unidad}</span>}

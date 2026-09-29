@@ -2,6 +2,7 @@ import type { ComponentType } from 'react';
 import { useVista, type Vista } from './store/ui';
 import { ModalHost } from './ui/modal';
 import { Toasts } from './ui/toast';
+import { VisorHost } from './ui/foto';
 import { BarraInferior, CabeceraEscritorio, CabeceraMovil, Sidebar } from './features/shell/Shell';
 import StockView from './features/inventario/StockView';
 import AlbaranesView from './features/albaranes/AlbaranesView';
@@ -31,6 +32,7 @@ export default function App() {
     <main className="lg:pl-72 lg:pt-16 pb-28 lg:pb-10 min-h-screen"><Pantalla key={vista} /></main>
     <BarraInferior vista={vista} />
     <ModalHost />
+    <VisorHost />
     <Toasts />
   </>);
 }
