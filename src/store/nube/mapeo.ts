@@ -1,5 +1,5 @@
 /* Filas de Supabase → estado de la app (src/data/tipos.ts) */
-import type { Albaran, CatId, ClaseDotacion, Entrega, Equipo, EstadoEquipo, EstadoHerramienta, Estado, Herramienta, Movimiento, Producto, Tecnico, TipoIncidencia, TipoMov, Unidad } from '../../data/tipos';
+import type { Pendiente, PerfilUsuario, Rol, Albaran, CatId, ClaseDotacion, Entrega, Equipo, EstadoEquipo, EstadoHerramienta, Estado, Herramienta, Movimiento, Producto, Tecnico, TipoIncidencia, TipoMov, Unidad } from '../../data/tipos';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Fila = Record<string, any>;
@@ -7,14 +7,19 @@ export interface Tablas {
   productos: Fila[]; costes_producto: Fila[]; series: Fila[]; equipos: Fila[]; tecnicos: Fila[]; movimientos: Fila[];
   albaranes: Fila[]; entregas: Fila[]; entrega_lineas: Fila[]; dotacion: Fila[]; costes_dotacion: Fila[];
   dotacion_historial: Fila[]; costes_incidencia: Fila[]; pedidos_reposicion: Fila[]; propietarios: Fila[];
+  perfiles: Fila[]; pendientes: Fila[]; valores_pendientes?: Fila[];
 }
 export const TABLAS: (keyof Tablas)[] = ['productos', 'costes_producto', 'series', 'equipos', 'tecnicos', 'movimientos', 'albaranes', 'entregas',
-  'entrega_lineas', 'dotacion', 'costes_dotacion', 'dotacion_historial', 'costes_incidencia', 'pedidos_reposicion', 'propietarios'];
+  'entrega_lineas', 'dotacion', 'costes_dotacion', 'dotacion_historial', 'costes_incidencia', 'pedidos_reposicion', 'propietarios', 'perfiles', 'pendientes'];
+/** Columnas legibles por cada rol (en pendientes el importe se lee aparte, solo el administrador) */
+export const COLUMNAS: Partial<Record<keyof Tablas, string>> = {
+  pendientes: 'id, ts, tipo, sku, cantidad, motivo, referencia, series, operario, estado, resuelto_por, nota_resolucion',
+};
 
 const ms = (t: string) => new Date(t).getTime();
 const n = (v: unknown) => Number(v ?? 0);
 
-export function aEstado(t: Tablas, base: Pick<Estado, 'cesta' | 'seq'>, operador: string): Estado {
+export function aEstado(t: Tablas, base: Pick<Estado, 'cesta' | 'seq'>, operador: string, rol: Rol = 'almacen'): Estado {
   const precio = new Map(t.costes_producto.map(c => [c.sku, n(c.precio)]));
   const series = new Map<string, string[]>();
   for (const s of t.series) if (s.en_stock) series.set(s.sku, [...(series.get(s.sku) || []), s.serie]);
@@ -48,5 +53,9 @@ export function aEstado(t: Tablas, base: Pick<Estado, 'cesta' | 'seq'>, operador
   }));
   const pedidos = Object.fromEntries(t.pedidos_reposicion.map(p => [p.sku, { ts: ms(p.ts), qty: n(p.cantidad) }]));
   const propietarios = t.propietarios.filter(o => o.activo).map(o => ({ id: o.id, nombre: o.nombre, contacto: o.contacto || '', correosReposicion: o.correos_reposicion || [], correosInformes: o.correos_informes || [] }));
-  return { v: 3, products, movements, albaranes, equipos, tecnicos, entregas, herramientas, propietarios, operator: operador, pedidos, cesta: base.cesta, seq: base.seq };
+  const valorPend = new Map((t.valores_pendientes || []).map(v => [v.id, v.valor == null ? undefined : n(v.valor)]));
+  const pendientes: Pendiente[] = t.pendientes.map(p => ({ id: p.id, ts: ms(p.ts), tipo: p.tipo, sku: p.sku, qty: n(p.cantidad), reason: p.motivo, ref: p.referencia || '',
+    serials: p.series || [], operator: p.operario, estado: p.estado, resueltoPor: p.resuelto_por ?? undefined, nota: p.nota_resolucion ?? undefined, valor: valorPend.get(p.id) })).sort((a, b) => b.ts - a.ts);
+  const perfiles: PerfilUsuario[] = t.perfiles.map(p => ({ id: p.id, nombre: p.nombre, email: p.email ?? null, rol: p.rol, activo: !!p.activo }));
+  return { v: 3, products, movements, albaranes, equipos, tecnicos, entregas, herramientas, propietarios, pendientes, perfiles, rol, operator: operador, pedidos, cesta: base.cesta, seq: base.seq };
 }

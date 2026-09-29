@@ -11,7 +11,10 @@ import { salir, sesion } from '../../store/nube/sync';
 import { ir, VISTAS, type Vista, useVista } from '../../store/ui';
 import { closeModal, openModal, SheetFoot, SheetHead } from '../../ui/modal';
 import { toast } from '../../ui/toast';
-import { Avatar, BTN_P, BTN_S, BTN_T, Campo, Icon, INP, LBL, Pill, Tag, Tile, TIPO, Vacio } from '../../ui/base';
+import { Avatar, BTN_P, BTN_S, BTN_T, Campo, Icon, INP, LBL, Pill, Tag, TagCustodia, Tile, TIPO, Vacio } from '../../ui/base';
+import { usePermisos } from '../../store/permisos';
+import { nuevoId } from '../../store/ops';
+import type { CatId } from '../../data/tipos';
 
 /* ---------- Fila de movimiento ---------- */
 export function MovRow({ m }: { m: Movimiento }) {
@@ -48,7 +51,7 @@ function imprimirEtiqueta(p: Producto) {
 /* ---------- Ficha ---------- */
 export const abrirFicha = (sku: string) => openModal(<Ficha sku={sku} />);
 function Ficha({ sku }: { sku: string }) {
-  const E = useAlmacen(), p = find(E, sku);
+  const E = useAlmacen(), p = find(E, sku), perm = usePermisos();
   if (!p) return <SheetHead title="Referencia no encontrada" />;
   const movs = E.movements.filter(m => m.sku === sku).slice(0, 8);
   const datos: [string, string][] = [['SKU', p.sku], ['Ubicación', `${p.loc} (${locTxt(p.loc)})`], ['EAN', p.ean || '—'], ['Ref. proveedor', p.supplierRef || '—'], ['Formato', p.packLabel || '—'], ['Unidad base', p.unit === 'm' ? 'metros' : 'unidades']];
@@ -56,7 +59,8 @@ function Ficha({ sku }: { sku: string }) {
     <SheetHead title={p.name} sub={`${CATS[p.cat].label} · ${p.supplier}`} />
     <div className="p-5 flex flex-col gap-4">
       <div className="flex items-center gap-3"><Tile p={p} size="w-16 h-16" />
-        <div className="flex-1"><div className={`text-headline-lg font-bold ${status(p) === 'red' ? 'text-error' : ''}`}>{qtyTxt(p, p.stock)}</div><div className="text-body-sm text-secondary">Mínimo {qtyTxt(p, p.min)} · {eur(p.price)}/{UNIT[p.unit]} · valor {eur(p.stock * p.price)}</div></div>
+        <div className="flex-1"><div className={`text-headline-lg font-bold ${status(p) === 'red' ? 'text-error' : ''}`}>{qtyTxt(p, p.stock)}</div><div className="text-body-sm text-secondary">Mínimo {qtyTxt(p, p.min)}{p.propiedad === 'custodia' ? ' · sin precio (no es material propio)' : perm.verCostes ? ` · ${eur(p.price)}/${UNIT[p.unit]} · valor ${eur(p.stock * p.price)}` : ''}</div>
+          <div className="flex gap-1 mt-1"><TagCustodia p={p} nombre={E.propietarios.find(o => o.id === p.propietario)?.nombre} />{p.borrador && <Tag c="bg-amber-100 text-amber-800">Borrador: falta completarla</Tag>}</div></div>
         <Pill p={p} /></div>
       <div className="grid grid-cols-2 gap-2 text-body-sm">{datos.map(([k, v]) => <div key={k} className="bg-surface-container-low rounded-lg p-2.5"><div className={LBL}>{k}</div><div className="font-medium break-words">{v}</div></div>)}</div>
       {p.serialized && <div><div className={`${LBL} mb-1`}>Números de serie en stock ({(p.serials || []).length})</div>
@@ -68,11 +72,12 @@ function Ficha({ sku }: { sku: string }) {
       </div>
       <div><div className={`${LBL} mb-1`}>Últimos movimientos</div>{movs.length ? movs.map(m => <MovRow key={m.id} m={m} />) : <p className="text-secondary text-body-sm">Sin movimientos todavía.</p>}</div>
     </div>
-    <SheetFoot className="grid grid-cols-3 gap-2">
+    <SheetFoot className={`grid gap-2 ${perm.editarCatalogo ? 'grid-cols-3' : 'grid-cols-2'}`}>
       <button onClick={() => abrirMovimiento(sku, 'entrada')} className={`${BTN_T} h-12 !text-tertiary`}><Icon n="add" className="ico-20" />Entrada</button>
       <button onClick={() => abrirMovimiento(sku, 'salida')} className={`${BTN_P} h-12`}><Icon n="remove" className="ico-20" />Salida</button>
-      <button onClick={() => abrirFormProducto(sku)} className={`${BTN_S} h-12`}><Icon n="edit" className="ico-20" />Editar</button>
+      {perm.editarCatalogo && <button onClick={() => abrirFormProducto(sku)} className={`${BTN_S} h-12`}><Icon n="edit" className="ico-20" />{p.borrador ? 'Completar' : 'Editar'}</button>}
     </SheetFoot>
+    {perm.editarCatalogo && p.stock === 0 && !E.movements.some(m => m.sku === sku) && <div className="px-4 pb-4"><button onClick={() => { if (confirm(`¿Borrar la referencia ${sku}? No tiene stock ni historial.`) && ejecutar({ op: 'borrarProducto', args: { sku } })) { closeModal(); toast('Referencia borrada.', 'ok'); } }} className="text-error text-body-sm font-semibold">Borrar esta referencia</button></div>}
   </>);
 }
 
@@ -124,6 +129,8 @@ function HojaMovimiento({ sku, type0, opts }: { sku: string; type0: TipoMov; opt
         <span className="text-body-sm">{bad ? (superaVan ? `La furgoneta solo lleva ${qtyTxt(p, opts.max!)}` : `No hay tanto stock: quedan ${qtyTxt(p, p.stock)}`) : <>Stock pasará de <b>{qtyTxt(p, p.stock)}</b> a <b>{qtyTxt(p, Math.max(0, after))}</b></>}</span>
         {!bad && <Pill p={{ stock: after, min: p.min }} short />}
       </div>
+      {type === 'merma' && E.rol !== 'admin' && <p className="text-body-sm text-amber-800 bg-amber-50 rounded-lg p-3">Si la merma supera 50 € o es material en custodia, queda pendiente de validar por el administrador y el stock no cambia hasta entonces.</p>}
+      {p.propiedad === 'custodia' && type === 'salida' && <p className="text-body-sm text-violet-800 bg-violet-50 rounded-lg p-3">Material en custodia: indica la obra o instalación de destino (Esmove quiere saber dónde está cada equipo).</p>}
       <p className="text-body-sm text-secondary">Se registra a nombre de <b>{E.operator}</b> con fecha y hora.</p>
     </div>
     <SheetFoot><button onClick={confirmar} disabled={!(q > 0) || bad} className={`${BTN_P} w-full h-14 text-body-lg`}><Icon n="check_circle" className="ico-fill" />Confirmar {TIPO[type].t.toLowerCase()} de {q > 0 ? qtyTxt(p, q) : '…'}</button></SheetFoot>
@@ -205,23 +212,44 @@ function FormProducto({ sku, preset, onCreado }: { sku?: string; preset: Partial
   </>);
 }
 
+/* ---------- Borrador de referencia (almacén): solo el código escaneado; el administrador completa precio, mínimo y ubicación ---------- */
+export const abrirBorrador = (codigo = '', onCreado?: (sku: string) => void) => openModal(<Borrador codigo={codigo} onCreado={onCreado} />);
+function Borrador({ codigo, onCreado }: { codigo: string; onCreado?: (sku: string) => void }) {
+  const esEan = /^\d{8,14}$/.test(codigo);
+  const [f, setF] = useState({ sku: esEan ? '' : codigo.toUpperCase(), ean: esEan ? codigo : '', nombre: '', cat: 'aparamenta' as CatId });
+  const crear = () => {
+    if (!ejecutar({ op: 'borrador', args: f })) return;
+    const sku = (f.sku || 'BORR-' + f.ean).toUpperCase();
+    closeModal(); toast(`Borrador ${sku} creado. El administrador completará precio, mínimo y ubicación antes de poder moverlo.`, 'ok', 7000); onCreado?.(sku);
+  };
+  return (<>
+    <SheetHead title="Nueva referencia (borrador)" sub="Solo el código y un nombre. El administrador la completa." />
+    <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <Campo label="Código / SKU"><input value={f.sku} onChange={e => setF({ ...f, sku: e.target.value })} className={`${INP} h-12 font-mono`} /></Campo>
+      <Campo label="EAN (código de barras)"><input value={f.ean} onChange={e => setF({ ...f, ean: e.target.value })} inputMode="numeric" className={`${INP} h-12 font-mono`} /></Campo>
+      <Campo label="Nombre" className="sm:col-span-2"><input autoFocus value={f.nombre} onChange={e => setF({ ...f, nombre: e.target.value })} className={`${INP} h-12`} placeholder="Lo que pone en la caja" /></Campo>
+      <Campo label="Categoría" className="sm:col-span-2"><select value={f.cat} onChange={e => setF({ ...f, cat: e.target.value as CatId })} className={`${INP} h-12`}>{Object.entries(CATS).map(([k, c]) => <option key={k} value={k}>{c.label}</option>)}</select></Campo>
+    </div>
+    <SheetFoot className="flex gap-2"><button onClick={closeModal} className={`${BTN_S} h-12 px-5`}>Cancelar</button><button onClick={crear} className={`${BTN_P} h-12 flex-1`}><Icon n="save" className="ico-20" />Crear borrador</button></SheetFoot>
+  </>);
+}
+
 /* ---------- Recuento de pasillo ---------- */
 export const abrirConteo = (pas: string) => openModal(<Conteo pas={pas} />);
 function Conteo({ pas }: { pas: string }) {
   const E = useAlmacen(); const [vals, setVals] = useState<Record<string, string>>({});
   const ps = E.products.filter(p => aisle(p.loc) === pas).sort((a, b) => a.loc.localeCompare(b.loc));
+  const { validar } = usePermisos();
   const confirmar = () => {
-    let n = 0;
-    for (const [sku, v] of Object.entries(vals)) {
-      const p = find(E, sku)!, c = toNum(v); if (v.trim() === '' || !(c >= 0) || c === p.stock) continue;
-      const d = redondea(c - p.stock);
-      if (mover({ sku, type: 'ajuste', qty: d, reason: 'Ajuste de inventario', ref: `Recuento pasillo ${pas}` })) n++;
-    }
+    const lineas = Object.entries(vals).filter(([, v]) => v.trim() !== '').map(([sku, v]) => ({ sku, contado: toNum(v) }));
+    if (lineas.some(l => !(l.contado >= 0))) return toast('Revisa las cantidades: no pueden ser negativas.', 'err');
+    const n = lineas.filter(l => redondea(l.contado - find(E, l.sku)!.stock) !== 0).length;
+    if (!ejecutar({ op: 'recuento', args: { id: nuevoId(), pasillo: pas, lineas } })) return;
     closeModal();
-    toast(n ? `Recuento guardado: ${n} ajuste${n === 1 ? '' : 's'} registrado${n === 1 ? '' : 's'}.` : 'Recuento sin diferencias: no se ha ajustado nada.', 'ok');
+    toast(!n ? 'Recuento sin diferencias: no se ha ajustado nada.' : validar ? `Recuento guardado: ${n} ajuste${n === 1 ? '' : 's'}.` : `Recuento enviado: ${n} diferencia${n === 1 ? '' : 's'} pendiente${n === 1 ? '' : 's'} de validar por el administrador.`, 'ok', 6000);
   };
   return (<>
-    <SheetHead title={`Recuento del pasillo ${pas.replace('P', '')}`} sub="Escribe lo que cuentas. Solo se ajustan las líneas con diferencia, y solo al confirmar." />
+    <SheetHead title={`Recuento del pasillo ${pas.replace('P', '')}`} sub={validar ? 'Escribe lo que cuentas. Solo se ajustan las líneas con diferencia, y solo al confirmar.' : 'Escribe lo que cuentas. Las diferencias quedan pendientes de validar por el administrador.'} />
     <div className="p-5 flex flex-col">{ps.map(p =>
       <div key={p.sku} className="flex items-center gap-3 py-2.5 border-b border-surface-container">
         <div className="flex-1 min-w-0"><div className="font-medium truncate">{p.name}</div><div className="font-mono text-label-sm text-secondary">{p.loc} · sistema: {qtyTxt(p, p.stock)}</div></div>

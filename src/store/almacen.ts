@@ -16,7 +16,7 @@ import { toast } from '../ui/toast';
 const LS = modoNube ? 'almacen-bufala-nube-cache-v1' : 'almacen-bufala-v3';
 const LS_OLD = 'almacen-bufala-v2';
 
-export const vacio = (): Estado => ({ v: 3, products: [], movements: [], albaranes: [], equipos: [], tecnicos: [], entregas: [], herramientas: [], propietarios: [],
+export const vacio = (): Estado => ({ v: 3, products: [], movements: [], albaranes: [], equipos: [], tecnicos: [], entregas: [], herramientas: [], propietarios: [], pendientes: [], perfiles: [], rol: 'almacen',
   operator: '', pedidos: {}, cesta: { equipo: '', receptor: null, lineas: [] }, seq: { ent: 0 } });
 
 function migrate(s: Partial<Estado>): Estado {

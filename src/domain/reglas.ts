@@ -58,13 +58,14 @@ export function applyMovement(S: Estado, { id, sku, type, qty, reason, ref = '',
 }
 
 /** Buscador inteligente: todos los términos deben aparecer en nombre, SKU, EAN, ref. proveedor, ubicación, categoría, proveedor o n.º de serie */
-export function searchProducts(S: Estado, q: string, f: { cat?: string; pas?: string; est?: string } = {}) {
-  const { cat = 'all', pas = 'all', est = 'all' } = f;
+export function searchProducts(S: Estado, q: string, f: { cat?: string; pas?: string; est?: string; prop?: string } = {}) {
+  const { cat = 'all', pas = 'all', est = 'all', prop = 'all' } = f;
   const toks = norm(q).split(/\s+/).filter(Boolean);
   return S.products.filter(p => {
     if (cat !== 'all' && p.cat !== cat) return false;
     if (pas !== 'all' && aisle(p.loc) !== pas) return false;
     if (est !== 'all' && status(p) !== est) return false;
+    if (prop !== 'all' && (p.propiedad || 'propia') !== prop) return false;
     if (!toks.length) return true;
     const hay = norm([p.name, p.sku, p.ean, p.supplierRef, p.loc, p.loc.replace(/-/g, ' '), locTxt(p.loc), CATS[p.cat]?.label, p.supplier, (p.serials || []).join(' ')].join(' '));
     return toks.every(t => hay.includes(t) || (t.endsWith('s') && hay.includes(t.slice(0, -1))));

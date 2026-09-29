@@ -32,7 +32,7 @@ export default function MovimientosView() {
       <div className="flex flex-col lg:flex-row gap-2">
         <div className="relative flex-1"><Icon n="search" className="absolute left-3 top-1/2 -translate-y-1/2 text-outline ico-20" /><input value={q} onChange={e => setQ(e.target.value)} type="search" className={`${INP} pl-10 h-12`} placeholder="Material, obra, operario, n.º de serie…" /></div>
         <select value={rango} onChange={e => setRango(e.target.value)} className={`${INP} lg:!w-44 h-12`}>{[['hoy', 'Hoy'], ['7', 'Últimos 7 días'], ['30', 'Últimos 30 días'], ['all', 'Todo']].map(([v, t]) => <option key={v} value={v}>{t}</option>)}</select>
-        <button onClick={() => exportarMovimientosCsv(E)} className={`${BTN_S} h-12 px-4`}><Icon n="file_download" className="ico-20" />CSV</button>
+        {E.rol === 'admin' && <button onClick={() => exportarMovimientosCsv(E)} className={`${BTN_S} h-12 px-4`}><Icon n="file_download" className="ico-20" />CSV</button>}
       </div>
       <div className="flex gap-2 overflow-x-auto no-scrollbar">{chip('all', 'Todos')}{chip('entrada', 'Entradas')}{chip('salida', 'Salidas')}{chip('merma', 'Mermas')}</div>
       {desk ? <section className={`${CARD} overflow-x-auto`}><table className="tabla w-full min-w-[900px]"><thead className="bg-surface-container-low"><tr><th>Fecha</th><th>Tipo</th><th>Material</th><th className="text-right">Cantidad</th><th>Motivo</th><th>Referencia</th><th>Operario</th></tr></thead>

@@ -32,6 +32,16 @@ export interface Producto {
   propietario?: string;
 }
 
+export type Rol = 'admin' | 'almacen';
+export interface PerfilUsuario { id: string; nombre: string; email: string | null; rol: Rol; activo: boolean }
+/** Merma o diferencia de recuento del almacén que espera la validación del administrador (E-004) */
+export interface Pendiente {
+  id: string; ts: number; tipo: 'merma' | 'recuento'; sku: string; qty: number; reason: string; ref: string; serials: string[];
+  operator: string; estado: 'pendiente' | 'aprobado' | 'rechazado'; resueltoPor?: string; nota?: string; valor?: number;
+  /** creado en este dispositivo y aún sin respuesta del servidor */
+  provisional?: boolean;
+}
+
 export interface Propietario { id: string; nombre: string; contacto: string; correosReposicion: string[]; correosInformes: string[] }
 
 export interface Movimiento {
@@ -151,6 +161,10 @@ export interface Estado {
   entregas: Entrega[];
   herramientas: Herramienta[];
   propietarios: Propietario[];
+  pendientes: Pendiente[];
+  perfiles: PerfilUsuario[];
+  /** Rol del usuario con sesión (en modo demo, administrador) */
+  rol: Rol;
   operator: string;
   pedidos: Record<string, Pedido>;
   cesta: { equipo: string; receptor: string | null; lineas: LineaEntrega[] };

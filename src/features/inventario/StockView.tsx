@@ -1,20 +1,22 @@
 /* Stock general: panel de escritorio, inventario móvil y stock a bordo de furgoneta */
 import type { Estado, Producto } from '../../data/tipos';
 import { CATS, MARCA, UNIT } from '../../data/catalogo';
-import { aisle, aisles, critical, find, invValue, locTxt, ORD, qtyTxt, searchProducts, status, vanStock } from '../../domain/reglas';
+import { aisle, aisles, critical, esCustodia, find, invValue, locTxt, ORD, qtyTxt, searchProducts, status, valorProducto, vanStock } from '../../domain/reglas';
 import { esHoy, eur, fechaHora, hace, hoyISO, initials, num } from '../../domain/formato';
 import { descargarCsv } from '../../domain/csv';
 import { S, ultimoGuardado, useAlmacen } from '../../store/almacen';
 import { ir, setUI, useEsEscritorio, useUI } from '../../store/ui';
 import { toast } from '../../ui/toast';
-import { BTN_P, BTN_S, BTN_T, CARD, INP, Icon, Kpi, LBL, Pill, ST, Tag, Tile } from '../../ui/base';
-import { abrirConteo, abrirFicha, abrirFormProducto, abrirMovimiento, pedir } from './hojas';
+import { BTN_P, BTN_S, BTN_T, CARD, INP, Icon, Kpi, LBL, Pill, ST, Tag, TagCustodia, Tile } from '../../ui/base';
+import { usePermisos } from '../../store/permisos';
+import { abrirBorrador, abrirConteo, abrirFicha, abrirFormProducto, abrirMovimiento, pedir } from './hojas';
 import { anadirACesta } from '../entregas/cesta';
 import { iaEtiqueta } from '../albaranes/lector';
 
 export function exportarStockCsv(E: Estado = S()) {
-  descargarCsv(`stock-${hoyISO()}.csv`, [['SKU', 'Nombre', 'Categoría', 'Stock', 'Unidad', 'Mínimo', 'Estado', 'Ubicación', 'Proveedor', 'Código proveedor', 'Precio coste', 'Valor', 'EAN', 'N.º serie'],
-    ...E.products.map(p => [p.sku, p.name, CATS[p.cat].label, p.stock, UNIT[p.unit], p.min, ST[status(p)].t, p.loc, p.supplier, p.supplierRef || '', p.price, Math.round(p.stock * p.price * 100) / 100, p.ean || '', (p.serials || []).join(' ')])]);
+  descargarCsv(`stock-${hoyISO()}.csv`, [['SKU', 'Nombre', 'Categoría', 'Propiedad', 'Stock', 'Unidad', 'Mínimo', 'Estado', 'Ubicación', 'Proveedor', 'Código proveedor', 'Precio coste', 'Valor', 'EAN', 'N.º serie'],
+    ...E.products.map(p => [p.sku, p.name, CATS[p.cat].label, esCustodia(p) ? `Custodia ${E.propietarios.find(o => o.id === p.propietario)?.nombre || ''}` : 'Propio', p.stock, UNIT[p.unit], p.min, ST[status(p)].t, p.loc, p.supplier, p.supplierRef || '',
+      esCustodia(p) || E.rol !== 'admin' ? '' : p.price, esCustodia(p) || E.rol !== 'admin' ? '' : Math.round(valorProducto(p) * 100) / 100, p.ean || '', (p.serials || []).join(' ')])]);
 }
 export function exportarMovimientosCsv(E: Estado = S()) {
   descargarCsv(`movimientos-${hoyISO()}.csv`, [['Fecha', 'Tipo', 'SKU', 'Material', 'Cantidad', 'Unidad', 'Motivo', 'Referencia', 'Equipo', 'Operario', 'N.º serie'],
@@ -28,17 +30,20 @@ export default function StockView() {
 }
 
 function Kpis() {
-  const E = useAlmacen();
-  const val = invValue(E), cargVal = E.products.filter(p => p.cat === 'cargadores').reduce((a, p) => a + p.stock * p.price, 0);
+  const E = useAlmacen(), { verCostes } = usePermisos();
+  const val = invValue(E), cust = E.products.filter(esCustodia), custMal = cust.filter(p => status(p) !== 'green').length, custRojo = cust.filter(p => status(p) === 'red').length;
+  const aparamenta = E.products.filter(p => p.cat === 'aparamenta' && !esCustodia(p)).reduce((a, p) => a + valorProducto(p), 0);
   const crit = critical(E), sup = new Set(crit.map(p => p.supplier)).size, n = E.products.length || 1;
   const entHoy = E.entregas.filter(e => esHoy(e.ts)), firm = entHoy.filter(e => e.firma).length;
   const enRuta = E.equipos.filter(e => e.estado === 'ruta').length, green = E.products.filter(p => status(p) === 'green').length;
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-space-md">
+    <div className={`grid grid-cols-1 sm:grid-cols-2 gap-space-md ${verCostes ? 'xl:grid-cols-5' : 'xl:grid-cols-4'}`}>
       <Kpi icon="category" iconC="bg-surface-container-low text-primary" badge={<><Icon n="check_circle" className="ico-16" /> {Math.round(green / n * 100)}% OK</>} badgeC="text-tertiary bg-tertiary-fixed/30"
         value={num(E.products.length)} label="Referencias activas" foot="Pasillos en uso" footVal={`${aisles(E).length} pasillos`} bar={green / n * 100} barC="bg-primary" onClick={() => setUI({ est: 'all', page: 1 })} />
-      <Kpi icon="payments" iconC="bg-surface-container-low text-primary" badge="Coste neto" badgeC="text-secondary bg-surface-container-high" value={eur(val)} label="Valor total del inventario"
-        foot="Cargadores VE" footVal={`${eur(cargVal)} (${Math.round(cargVal / (val || 1) * 100)}%)`} footC="text-primary" bar={cargVal / (val || 1) * 100} barC="bg-primary-container" />
+      {verCostes && <Kpi icon="payments" iconC="bg-surface-container-low text-primary" badge="Solo material propio" badgeC="text-secondary bg-surface-container-high" value={eur(val)} label="Valor del inventario propio"
+        foot="Aparamenta" footVal={`${eur(aparamenta)} (${Math.round(aparamenta / (val || 1) * 100)}%)`} footC="text-primary" bar={aparamenta / (val || 1) * 100} barC="bg-primary-container" />}
+      <Kpi icon="handshake" iconC="bg-violet-100 text-violet-800" badge={custRojo ? `${custRojo} en rojo` : custMal ? `${custMal} bajos` : 'Todo en verde'} badgeC={custRojo ? 'bg-error-container text-error' : custMal ? 'bg-amber-100 text-amber-800' : 'bg-tertiary-fixed/30 text-tertiary'}
+        value={num(cust.reduce((a, p) => a + p.stock, 0))} label="En custodia de Esmove (ud)" foot="Referencias" footVal={`${cust.length} · sin precio`} footC="text-violet-800" bar={cust.length ? (cust.length - custMal) / cust.length * 100 : 0} barC="bg-violet-500" onClick={() => setUI({ prop: 'custodia', page: 1 })} />
       <Kpi icon="warning" iconC="bg-error-container text-error" badge={crit.length ? 'Urgente' : 'Sin alertas'} badgeC={crit.length ? 'text-error font-semibold bg-error-container' : 'text-tertiary bg-tertiary-fixed/30'}
         value={crit.length} valueC={crit.length ? 'text-error' : undefined} label="Productos en stock crítico" foot="Reposición pendiente" footVal={`${sup} proveedor${sup === 1 ? '' : 'es'}`} footC="text-error"
         bar={crit.length / n * 400} barC="bg-error" onClick={() => setUI({ est: 'red', page: 1 })} />
@@ -49,7 +54,7 @@ function Kpis() {
 }
 
 function StockDesk() {
-  const E = useAlmacen(), u = useUI();
+  const E = useAlmacen(), u = useUI(), perm = usePermisos();
   const lista = searchProducts(E, u.q, u), PER = 8, pages = Math.max(1, Math.ceil(lista.length / PER)), page = Math.min(u.page, pages);
   const pag = lista.slice((page - 1) * PER, page * PER);
   const catProds = E.products.filter(p => p.cat === u.catTab).sort((a, b) => ORD[status(a)] - ORD[status(b)] || b.stock * b.price - a.stock * a.price).slice(0, 3);
@@ -68,8 +73,8 @@ function StockDesk() {
         </div>
         <div className="flex items-center gap-space-sm flex-wrap">
           <button onClick={() => ir('scan')} className={`${BTN_S} px-space-md py-2.5`}><Icon n="barcode_scanner" className="text-secondary ico-20" />Escanear</button>
-          <button onClick={() => exportarStockCsv()} className={`${BTN_S} px-space-md py-2.5`}><Icon n="file_download" className="text-secondary ico-20" />Exportar CSV</button>
-          <button onClick={() => abrirFormProducto()} className={`${BTN_P} px-space-md py-2.5`}><Icon n="add_circle" className="ico-20" />Añadir referencia</button>
+          {perm.configurar && <button onClick={() => exportarStockCsv()} className={`${BTN_S} px-space-md py-2.5`}><Icon n="file_download" className="text-secondary ico-20" />Exportar CSV</button>}
+          <button onClick={() => perm.editarCatalogo ? abrirFormProducto() : abrirBorrador()} className={`${BTN_P} px-space-md py-2.5`}><Icon n="add_circle" className="ico-20" />{perm.editarCatalogo ? 'Añadir referencia' : 'Nueva referencia (borrador)'}</button>
         </div>
       </div>
       <Kpis />
@@ -102,6 +107,7 @@ function StockDesk() {
                 <input value={u.q} onChange={e => setUI({ q: e.target.value, page: 1 })} type="search" placeholder="Filtrar por nombre, SKU, proveedor, pasillo…" className={`${INP} pl-10`} /></div>
               <select value={u.cat} onChange={e => setUI({ cat: e.target.value, page: 1 })} className={`${INP} ${sel}`} aria-label="Categoría"><option value="all">Categoría: todas</option>{Object.entries(CATS).map(([k, c]) => <option key={k} value={k}>{c.label}</option>)}</select>
               <select value={u.est} onChange={e => setUI({ est: e.target.value, page: 1 })} className={`${INP} ${sel}`} aria-label="Estado"><option value="all">Estado: todos</option>{(['red', 'amber', 'green'] as const).map(s => <option key={s} value={s}>{ST[s].t}</option>)}</select>
+              <select value={u.prop} onChange={e => setUI({ prop: e.target.value, page: 1 })} className={`${INP} ${sel}`} aria-label="Propiedad"><option value="all">Propiedad: todo</option><option value="propia">Material propio</option><option value="custodia">En custodia</option></select>
               <select value={u.pas} onChange={e => setUI({ pas: e.target.value, page: 1 })} className={`${INP} ${sel}`} aria-label="Pasillo"><option value="all">Pasillo: todos</option>{ais.map(a => <option key={a} value={a}>Pasillo {a.replace('P', '')}</option>)}</select>
               <span className="font-mono text-label-sm text-secondary ml-auto">Mostrando {pag.length} de {lista.length} referencias</span>
             </div>
@@ -138,7 +144,7 @@ function StockDesk() {
               </div>); })()}
             <button onClick={() => ir('albaranes')} className={`${BTN_P} py-2.5`}><Icon n="document_scanner" className="ico-20" />Leer un albarán</button>
           </section>
-          <Donut E={E} />
+          {perm.verCostes && <Donut E={E} />}
           <Barras E={E} />
           <section className="bg-primary-fixed/50 rounded-xl p-space-md flex items-center justify-between gap-space-md">
             <div><h3 className="text-headline-sm font-semibold">Auditoría cíclica semanal</h3><p className="text-body-sm text-secondary">Pasillo {pasAud.replace('P', '')} · {E.products.filter(p => aisle(p.loc) === pasAud).length} referencias a recontar</p></div>
@@ -150,14 +156,14 @@ function StockDesk() {
   );
 }
 
-const limpiarFiltros = () => setUI({ q: '', est: 'all', pas: 'all', cat: 'all', page: 1 });
+const limpiarFiltros = () => setUI({ q: '', est: 'all', pas: 'all', cat: 'all', prop: 'all', page: 1 });
 
 function FilaStock({ p, pedido }: { p: Producto; pedido: boolean }) {
   const r = status(p) === 'red';
   return (
     <tr className={r ? 'bg-error-container/20' : ''}>
       <td><div className="flex items-center gap-2"><Icon n={r ? 'warning' : 'qr_code_2'} className={`${r ? 'text-error' : 'text-secondary'} ico-20`} /><div><div className={`font-mono text-label-md ${r ? 'text-error' : ''} break-all`}>{p.sku}</div>{p.ean && <div className="font-mono text-label-sm text-secondary">EAN {p.ean}</div>}</div></div></td>
-      <td className="max-w-[300px]"><button onClick={() => abrirFicha(p.sku)} className="text-left"><div className="font-semibold hover:text-primary">{p.name}</div><div className="text-body-sm text-secondary">{CATS[p.cat].label} · {p.supplier}{p.serialized ? ` · ${(p.serials || []).length} n.º serie` : ''}</div></button>{pedido && <span className="mt-1 inline-block"><Tag c="bg-amber-100 text-amber-800">Pedido en curso</Tag></span>}</td>
+      <td className="max-w-[300px]"><button onClick={() => abrirFicha(p.sku)} className="text-left"><div className="font-semibold hover:text-primary">{p.name}</div><div className="text-body-sm text-secondary">{CATS[p.cat].label} · {p.supplier}{p.serialized ? ` · ${(p.serials || []).length} n.º serie` : ''}</div></button><div className="flex flex-wrap gap-1 mt-1"><TagCustodia p={p} />{p.borrador && <Tag c="bg-amber-100 text-amber-800">Borrador</Tag>}{pedido && <Tag c="bg-amber-100 text-amber-800">Pedido en curso</Tag>}</div></td>
       <td><div className="inline-flex items-center gap-1.5 bg-surface-container-low px-2 py-1 rounded font-mono text-label-md text-primary"><Icon n="shelves" className="ico-18" />{p.loc}</div><div className="font-mono text-label-sm text-secondary mt-1">{locTxt(p.loc)}</div></td>
       <td><div className={`text-headline-sm font-bold ${r ? 'text-error' : ''}`}>{num(p.stock)} <span className="text-body-sm font-normal text-secondary">{UNIT[p.unit]}</span></div><div className={`font-mono text-label-sm ${r ? 'text-error' : 'text-secondary'}`}>Mín: {num(p.min)}</div></td>
       <td><Pill p={p} /></td>
@@ -172,7 +178,7 @@ function FilaStock({ p, pedido }: { p: Producto; pedido: boolean }) {
 
 function Donut({ E }: { E: Estado }) {
   const tot = invValue(E) || 1; let acc = 0;
-  const seg = Object.entries(CATS).map(([k, c]) => ({ k, c, v: E.products.filter(p => p.cat === k).reduce((a, p) => a + p.stock * p.price, 0) })).filter(x => x.v > 0).sort((a, b) => b.v - a.v);
+  const seg = Object.entries(CATS).map(([k, c]) => ({ k, c, v: E.products.filter(p => p.cat === k).reduce((a, p) => a + valorProducto(p), 0) })).filter(x => x.v > 0).sort((a, b) => b.v - a.v);
   const R = 52, C = 2 * Math.PI * R;
   return (
     <section className={`${CARD} p-space-md`}>
@@ -213,7 +219,7 @@ function StockMob() {
   const lista = searchProducts(E, u.q, u), nCrit = critical(E).length;
   const chip = (k: string, lbl: string, n: number) =>
     <button key={k} onClick={() => setUI({ cat: u.cat === k ? 'all' : k })} className={`shrink-0 inline-flex items-center gap-2 px-4 h-11 rounded-full font-mono text-label-md uppercase ${u.cat === k ? 'bg-primary text-white' : 'bg-surface-container-lowest text-on-surface shadow-sm'}`}>{lbl}<span className={`px-1.5 rounded ${u.cat === k ? 'bg-white/20' : 'bg-surface-container-high'}`}>{n}</span></button>;
-  const hayFiltro = u.est !== 'all' || u.pas !== 'all';
+  const hayFiltro = u.est !== 'all' || u.pas !== 'all' || u.prop !== 'all';
   return (
     <div className="px-4 pt-4 flex flex-col gap-4">
       <div className="flex items-center gap-3 bg-surface-container-low rounded-xl p-3">
@@ -230,6 +236,7 @@ function StockMob() {
       {u.filtros && <div className="grid grid-cols-2 gap-2 bg-surface-container-lowest rounded-xl p-3 shadow-sm">
         <label className="flex flex-col gap-1"><span className={LBL}>Estado</span><select value={u.est} onChange={e => setUI({ est: e.target.value })} className={`${INP} h-12`}>{[['all', 'Todos'], ['red', 'Crítico'], ['amber', 'Bajo'], ['green', 'Correcto']].map(([v, t]) => <option key={v} value={v}>{t}</option>)}</select></label>
         <label className="flex flex-col gap-1"><span className={LBL}>Pasillo</span><select value={u.pas} onChange={e => setUI({ pas: e.target.value })} className={`${INP} h-12`}><option value="all">Todos</option>{aisles(E).map(a => <option key={a} value={a}>Pasillo {a.replace('P', '')}</option>)}</select></label>
+        <label className="col-span-2 flex flex-col gap-1"><span className={LBL}>Propiedad</span><select value={u.prop} onChange={e => setUI({ prop: e.target.value })} className={`${INP} h-12`}><option value="all">Todo</option><option value="propia">Material propio</option><option value="custodia">En custodia de Esmove</option></select></label>
         <button onClick={limpiarFiltros} className={`col-span-2 ${BTN_T} h-11`}>Quitar filtros</button>
       </div>}
       <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-4 px-4 pb-1">{chip('all', 'Todos', E.products.length)}{Object.entries(CATS).map(([k, c]) => chip(k, c.label, E.products.filter(p => p.cat === k).length))}</div>
@@ -241,13 +248,14 @@ function StockMob() {
 }
 
 function CardMob({ p, pedido }: { p: Producto; pedido: boolean }) {
-  const r = status(p) === 'red';
+  const r = status(p) === 'red', { verCostes } = usePermisos();
   return (
     <article className={`bg-surface-container-lowest rounded-2xl shadow-sm p-4 flex flex-col gap-3 ${r ? 'ring-1 ring-error/25' : ''}`}>
       <button onClick={() => abrirFicha(p.sku)} className="flex gap-3 text-left"><Tile p={p} size="w-14 h-14" />
         <div className="min-w-0 flex-1">
           <div className="flex justify-between items-start gap-2"><span className={`font-mono text-label-sm ${r ? 'text-error' : 'text-secondary'} truncate`}>SKU: {p.sku}</span><Pill p={p} short /></div>
           <h3 className="text-[17px] font-semibold leading-snug line-clamp-2 mt-0.5">{p.name}</h3>
+          {(esCustodia(p) || p.borrador) && <div className="flex gap-1 mt-1"><TagCustodia p={p} />{p.borrador && <Tag c="bg-amber-100 text-amber-800">Borrador</Tag>}</div>}
           <div className="flex items-center gap-1.5 text-body-sm text-secondary mt-1"><Icon n="location_on" className="ico-16 text-primary" /><span className="font-mono text-label-md text-on-surface">{p.loc}</span><span>·</span><span className="truncate">{p.packLabel || CATS[p.cat].label}</span></div>
         </div>
       </button>
@@ -259,7 +267,7 @@ function CardMob({ p, pedido }: { p: Producto; pedido: boolean }) {
       <div className="grid grid-cols-3 bg-surface-container-low rounded-xl p-3 text-center">
         <div><div className={LBL}>Disponible</div><div className={`text-headline-md font-bold ${r ? 'text-error' : 'text-primary'}`}>{num(p.stock)} <span className="text-body-sm font-normal text-secondary">{UNIT[p.unit]}</span></div></div>
         <div><div className={LBL}>Mínimo</div><div className="text-headline-md font-bold">{num(p.min)} <span className="text-body-sm font-normal text-secondary">{UNIT[p.unit]}</span></div></div>
-        <div><div className={LBL}>{p.serialized ? 'N.º serie' : 'Valor'}</div><div className="text-headline-md font-bold text-secondary">{p.serialized ? (p.serials || []).length : <span className="text-body-lg">{eur(p.stock * p.price)}</span>}</div></div>
+        <div><div className={LBL}>{p.serialized ? 'N.º serie' : esCustodia(p) || !verCostes ? 'Formato' : 'Valor'}</div><div className="text-headline-md font-bold text-secondary">{p.serialized ? (p.serials || []).length : <span className="text-body-lg">{esCustodia(p) || !verCostes ? (p.pack > 1 ? num(p.pack) : '—') : eur(valorProducto(p))}</span>}</div></div>
       </div>
       <div className="grid grid-cols-[1fr_auto_auto] gap-2">
         <button onClick={() => abrirMovimiento(p.sku, 'salida')} disabled={p.stock <= 0} className={`${BTN_P} h-14 text-body-lg`}><Icon n="outbox" className="ico-fill" />Registrar salida</button>
@@ -273,11 +281,11 @@ function CardMob({ p, pedido }: { p: Producto; pedido: boolean }) {
 function VanView() {
   const E = useAlmacen(), u = useUI(), eq = E.equipos.find(e => e.id === u.almacen);
   if (!eq) { setTimeout(() => setUI({ almacen: 'central' })); return null; }
-  const vs = vanStock(E, eq.id), val = vs.reduce((a, x) => a + x.qty * (find(E, x.sku)?.price || 0), 0);
+  const vs = vanStock(E, eq.id), val = vs.reduce((a, x) => { const p = find(E, x.sku); return a + (p && !esCustodia(p) ? x.qty * p.price : 0); }, 0), { verCostes } = usePermisos();
   return (
     <div className="px-4 lg:px-gutter py-4 lg:py-space-lg flex flex-col gap-space-md max-w-5xl">
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <div><span className={LBL}>Stock a bordo · entregado − devuelto</span><h1 className="text-headline-lg-mobile lg:text-headline-lg font-bold">{eq.flota} · {eq.matricula}</h1><p className="text-secondary">{eq.nombre} · {eq.tecnicos.map(t => E.tecnicos.find(x => x.id === t)?.nombre).join(' + ')} · valor {eur(val)}</p></div>
+        <div><span className={LBL}>Stock a bordo · entregado − devuelto</span><h1 className="text-headline-lg-mobile lg:text-headline-lg font-bold">{eq.flota} · {eq.matricula}</h1><p className="text-secondary">{eq.nombre} · {eq.tecnicos.map(t => E.tecnicos.find(x => x.id === t)?.nombre).join(' + ')}{verCostes ? ` · valor propio ${eur(val)}` : ''}</p></div>
         <div className="flex gap-2"><button onClick={() => setUI({ almacen: 'central' })} className={`${BTN_S} px-4 h-11`}><Icon n="warehouse" className="ico-20" />Volver al almacén</button>
           <button onClick={() => { E.cesta.equipo = eq.id; ir('entregas'); }} className={`${BTN_P} px-4 h-11`}><Icon n="add_shopping_cart" className="ico-20" />Cargar material</button></div>
       </div>

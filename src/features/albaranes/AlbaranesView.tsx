@@ -11,7 +11,7 @@ import { crearStore } from '../../store/crear';
 import { useEsEscritorio } from '../../store/ui';
 import { toast } from '../../ui/toast';
 import { BTN_P, BTN_S, BTN_T, CARD, Icon, INP, LBL, Tag, Vacio } from '../../ui/base';
-import { abrirFormProducto } from '../inventario/hojas';
+import { abrirBorrador, abrirFormProducto } from '../inventario/hojas';
 import { DEMOS, demoPara, iaReal, leerConIA } from './lector';
 
 interface Linea { codigo: string; descripcion: string; cantidad: string; confianza: number; sku: string | null; how: string | null; include: boolean; series: string; nota: string }
@@ -192,7 +192,8 @@ function LineaAlb({ l, i, proveedor }: { l: Linea; i: number; proveedor: string 
   const E = S(), p = l.sku ? find(E, l.sku) : undefined, sn = p?.serialized ? parseSN(l.series) : [];
   const q = toNum(l.cantidad) || 0;
   const est = !p ? { t: 'No catalogado', c: 'bg-amber-100 text-amber-800' } : l.confianza >= .9 ? { t: `Coincide (+${num(q)} ${UNIT[p.unit]})`, c: 'bg-tertiary-fixed/30 text-tertiary' } : { t: `Revisar · ${Math.round(l.confianza * 100)}%`, c: 'bg-amber-100 text-amber-800' };
-  const crearSku = () => abrirFormProducto(undefined, { sku: l.codigo.toUpperCase(), name: l.descripcion, supplierRef: l.codigo || undefined, supplier: proveedor,
+  const alCrear = (sku: string) => { l.sku = sku; l.include = true; l.how = 'alta manual'; emit(); };
+  const crearSku = () => S().rol !== 'admin' ? abrirBorrador(l.codigo, alCrear) : abrirFormProducto(undefined, { sku: l.codigo.toUpperCase(), name: l.descripcion, supplierRef: l.codigo || undefined, supplier: proveedor,
     cat: /cargador|wallbox|mennekes|charger|conector/i.test(l.descripcion) ? 'cargadores' : 'aparamenta', serialized: /cargador|wallbox|mennekes|charger/i.test(l.descripcion) },
     sku => { l.sku = sku; l.include = true; l.how = 'alta manual'; emit(); });
   return (

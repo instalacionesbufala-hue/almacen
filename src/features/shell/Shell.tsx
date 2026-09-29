@@ -9,6 +9,7 @@ import { Avatar, BTN_P, Icon } from '../../ui/base';
 import { abrirAvisos, abrirMenu, abrirPerfil } from '../inventario/hojas';
 import { procesarArchivo } from '../albaranes/AlbaranesView';
 import { IndicadorSync } from './Sincronizacion';
+import { BotonPendientes } from './Pendientes';
 import { modoNube } from '../../store/nube/cliente';
 
 function nuevoAlbaran() {
@@ -77,6 +78,7 @@ export function CabeceraEscritorio() {
       <div className="flex items-center gap-space-md">
         <button onClick={nuevoAlbaran} className={`${BTN_P} px-space-md py-2`}><Icon n="auto_awesome" className="ico-20" /><span>Nuevo Albarán IA</span></button>
         <IndicadorSync />
+        <BotonPendientes />
         <button onClick={abrirAvisos} className="relative p-2 rounded-lg text-on-surface-variant hover:bg-surface-container-high" aria-label="Avisos de stock"><Icon n="notifications" />
           {nAvisos > 0 && <span className="absolute top-1 right-1 min-w-4 h-4 px-1 rounded-full bg-error text-white font-mono text-[10px] leading-4">{nAvisos}</span>}</button>
         <button onClick={abrirPerfil} className="flex items-center gap-space-sm pl-space-xs text-left rounded-lg hover:bg-surface-container-low pr-2 py-1"><Avatar n={E.operator} c="bg-inverse-surface text-white" />
@@ -96,6 +98,7 @@ export function CabeceraMovil({ vista }: { vista: Vista }) {
         <a href="#stock" className="flex items-center gap-2 min-w-0"><span className="w-9 h-9 rounded-lg bg-primary-container text-white grid place-items-center shrink-0"><Icon n="bolt" className="ico-fill" /></span>
           <span className="flex flex-col leading-none min-w-0"><span className="font-bold text-primary text-[15px] truncate">{MARCA.nombre.replace('Almacén ', '')}</span><span className="font-mono text-[8px] tracking-widest uppercase text-secondary mt-0.5">{MARCA.sub}</span></span></a>
         <div className="flex flex-col items-center shrink-0">{modoNube ? <IndicadorSync compacto /> : <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-tertiary-fixed/40 text-tertiary font-mono text-label-sm"><span className="w-1.5 h-1.5 rounded-full bg-tertiary pulso" />{online ? 'ONLINE' : 'OFFLINE'}</span>}<span className="font-mono text-label-sm text-secondary truncate max-w-[90px]">{VISTAS[vista].mob}</span></div>
+        <BotonPendientes />
         <SelectorAlmacen ancho="max-w-[72px]" />
         <button onClick={abrirMenu} className="relative shrink-0" aria-label="Menú"><Avatar n={E.operator} c="bg-inverse-surface text-white" />{nAvisos > 0 && <span className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-error ring-2 ring-white" />}</button>
       </div>

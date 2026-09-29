@@ -38,7 +38,7 @@ Se mantiene Supabase (plan gratuito). Además de lo anterior:
 - **Operario:** deja de ser seleccionable. Es siempre el usuario con sesión iniciada.
 - **Copias y pausa del plan gratuito:** una GitHub Action semanal hace `pg_dump` y guarda la copia cifrada **fuera de este repositorio**, que es público. Esa misma tarea mantiene activo el proyecto, porque el plan gratuito se pausa tras 7 días sin uso. Documenta dónde queda la copia y cómo restaurarla.
 
-### E-004 · Usuarios y permisos · PENDIENTE
+### E-004 · Usuarios y permisos · HECHO
 Autenticación con Supabase Auth (email y contraseña). Tabla `perfiles` (id = auth.uid, nombre, rol, activo). Nadie se registra por su cuenta: el administrador da de alta a los usuarios desde la app. Al desactivar un usuario, deja de poder entrar, pero su historial se conserva.
 
 Roles iniciales (el usuario puede ajustarlos):
@@ -258,3 +258,26 @@ Decisiones posteriores del usuario (29/09/2026, misma sesión):
 - No he podido probar contra un Supabase real: no tengo acceso a la cuenta. Realtime y el login solo se verifican cuando el usuario cree el proyecto (guía E-005).
 - La carga es completa, de todas las tablas (movimientos: los 2000 últimos) en cada cambio. Con el volumen de un almacén pequeño va sobrado; si crece, se pasa a cargas por tabla.
 - Los precios de productos en custodia llegan a la app como 0; la interfaz los ocultará en E-008 (el valor del inventario ya los excluye).
+
+### 29/09/2026 · E-004 · HECHO
+**Servidor** (`supabase/migrations/20260930000100_e004_permisos.sql`):
+- **Pendientes de validar** (`pendientes` + `recuentos`): una merma del almacén de más de 50 € (o de material en custodia, que no tiene precio y Esmove debe saberlo) no toca el stock y queda pendiente; lo mismo con cada diferencia de un recuento del almacén. El administrador la aprueba (se aplica el movimiento) o la rechaza con `validar_pendiente`. Lo resuelto ya no se puede modificar (trigger).
+- `registrar_recuento`: el administrador ajusta al momento; el almacén deja pendientes.
+- El importe estimado de los pendientes es una **columna sin permiso** para `authenticated`: solo se lee con `valores_pendientes()`, que exige ser administrador.
+- `crear_borrador_producto` (cualquier usuario, solo el código escaneado y un nombre). Un borrador no se puede mover hasta que el administrador lo completa con `guardar_producto`. `borrar_producto` (administrador, solo sin stock ni historial).
+- `actualizar_perfil` (rol y activo): nadie se quita a sí mismo el acceso de administrador y siempre queda al menos uno activo. Los perfiles no se borran (se conserva el historial). El almacén solo ve su propio perfil.
+- Función de servidor `supabase/functions/usuarios` (Deno): alta de usuarios con contraseña, cambio de contraseña y bloqueo en Auth al desactivar. Usa la clave de servicio, que solo existe en el servidor, y antes comprueba `es_admin()` con la sesión de quien llama. Validaciones en `_compartido/validar.ts` (probadas).
+- `config.toml`: `enable_signup = false` (nadie se registra por su cuenta). El primer administrador se crea desde el panel siguiendo la guía de E-005.
+
+**App:**
+- `usePermisos()`: el almacén no ve precios, valor, costes ni exportaciones.
+  - "Añadir referencia" pasa a ser "Nueva referencia (borrador)", también desde el escáner y desde "Crear SKU" en albaranes.
+  - No ve altas, bajas ni asignaciones de equipos, técnicos y dotación.
+  - En incidencias solo ve deterioro, rotura y pérdida.
+  - En modo demo se actúa como administrador.
+- Bandeja **"Pendientes de validar"** con contador en la cabecera y en Configuración; sección **Usuarios** (alta, rol, activar o desactivar, contraseña).
+- Adelantado de E-008 (lo visible del inventario): indicador "En custodia de Esmove", etiqueta en listas y fichas, filtro por propiedad y ni un euro en el material en custodia (valor, ficha, tarjeta ni CSV).
+
+**Pruebas:** 13 de E-004 en PGlite (entre ellas, el almacén intenta editar precios o borrar un movimiento y el servidor lo rechaza, incluso desde el panel), 6 de operaciones locales por rol y el contrato app ↔ servidor ampliado. En total, 84 en verde.
+
+**Decisión:** las mermas de custodia del almacén siempre quedan pendientes, porque no tienen precio y E-008 pide avisar a Esmove de los daños. Si el usuario prefiere otra regla, es una línea en `registrar_movimiento`.

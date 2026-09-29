@@ -48,6 +48,10 @@ export function Pill({ p, short }: { p: Pick<Producto, 'stock' | 'min'>; short?:
 export const Tile = ({ p, size = 'w-12 h-12' }: { p: Producto; size?: string }) =>
   <div className={`${size} shrink-0 rounded-xl grid place-items-center ${status(p) === 'red' ? 'bg-error-container text-error' : CATS[p.cat].tile}`}><Icon n={CATS[p.cat].icon} className="ico-28" /></div>;
 
+/** E-008: etiqueta visible del material que no es nuestro */
+export const TagCustodia = ({ p, nombre = 'Esmove' }: { p: Pick<Producto, 'propiedad'>; nombre?: string }) =>
+  p.propiedad === 'custodia' ? <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded font-mono text-label-sm bg-violet-100 text-violet-800 whitespace-nowrap"><span className="material-symbols-outlined ico-16" aria-hidden="true">handshake</span>Custodia {nombre}</span> : null;
+
 export const Tag = ({ children, c = 'bg-surface-container-high text-secondary' }: { children: ReactNode; c?: string }) =>
   <span className={`inline-flex items-center px-2 py-0.5 rounded font-mono text-label-sm ${c}`}>{children}</span>;
 

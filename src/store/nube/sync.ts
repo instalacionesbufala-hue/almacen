@@ -5,7 +5,7 @@
 import type { Estado } from '../../data/tipos';
 import { crearStore } from '../crear';
 import { aplicarLocal, descripcion, rpcDe, type Op } from '../ops';
-import { aEstado, TABLAS, type Tablas } from './mapeo';
+import { aEstado, COLUMNAS, TABLAS, type Tablas } from './mapeo';
 import { supabase } from './cliente';
 
 export interface Perfil { id: string; nombre: string; email: string | null; rol: 'admin' | 'almacen'; activo: boolean }
@@ -63,15 +63,17 @@ function marcarConexion(ok: boolean) { const s = sesion.get(); const c = ok ? 'e
 export async function recargar(): Promise<void> {
   if (!supabase || sesion.get().estado !== 'lista') return;
   const res = await Promise.all(TABLAS.map(t => {
-    const q = supabase!.from(t).select('*');
+    const q = supabase!.from(t).select(COLUMNAS[t] || '*');
     return t === 'movimientos' ? q.order('ts', { ascending: false }).limit(2000) : q;
   }));
   const fallo = res.find(r => r.error);
   if (fallo?.error) { marcarConexion(!esErrorDeRed(fallo.status, fallo.error.message)); return; }
   marcarConexion(true);
   const tablas = Object.fromEntries(TABLAS.map((t, i) => [t, res[i].data || []])) as unknown as Tablas;
+  const rol = sesion.get().perfil?.rol || 'almacen';
+  if (rol === 'admin') { const v = await supabase.rpc('valores_pendientes'); tablas.valores_pendientes = (v.data as Tablas['perfiles']) || []; }
   const actual = obtenerEstado();
-  const nuevo = aEstado(tablas, { cesta: actual.cesta, seq: actual.seq }, sesion.get().perfil?.nombre || '');
+  const nuevo = aEstado(tablas, { cesta: actual.cesta, seq: actual.seq }, sesion.get().perfil?.nombre || '', rol);
   for (const it of cola.get()) if (it.estado === 'pendiente') { try { aplicarLocal(nuevo, it.op); } catch { /* se resolverá al enviarla */ } }
   fijarEstado(nuevo);
   sesion.get().ultimaCarga = Date.now(); sesion.emit();

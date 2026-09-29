@@ -2,7 +2,7 @@
    parámetros correctos, y lo que devuelve la base de datos se convierte bien en el estado de la app (mapeo.ts). */
 import { beforeAll, describe, expect, it } from 'vitest';
 import { rpcDe, nuevoId, type Op } from '../../src/store/ops';
-import { aEstado, TABLAS, type Tablas } from '../../src/store/nube/mapeo';
+import { aEstado, COLUMNAS, TABLAS, type Tablas } from '../../src/store/nube/mapeo';
 import { ADMIN, ALMACEN, como, nuevaBD, type BD } from './pg';
 
 /** Ejecuta una operación como lo haría supabase.rpc(fn, args): parámetros con nombre */
@@ -15,7 +15,7 @@ async function rpc(db: BD, op: Op) {
 }
 async function estado(db: BD) {
   const t = {} as Record<string, unknown[]>;
-  for (const n of TABLAS) t[n] = (await db.query(`select * from ${n}`)).rows;
+  for (const n of TABLAS) t[n] = (await db.query(`select ${COLUMNAS[n] || '*'} from ${n}`)).rows;
   return aEstado(t as unknown as Tablas, { cesta: { equipo: '', receptor: null, lineas: [] }, seq: { ent: 0 } }, 'Prueba');
 }
 
@@ -71,5 +71,25 @@ describe('contrato de operaciones', () => {
     expect(E.equipos.find(e => e.id === 'F09')).toMatchObject({ estado: 'ruta', tecnicos: ['T9'] });
     expect(E.products.find(p => p.sku === 'NUEVA-REF')).toMatchObject({ stock: 50, price: 4.2 });
     expect(E.herramientas.find(h => h.id === 'H099')).toMatchObject({ equipo: 'F09', tecnico: 'T9', valor: 60 });
+  });
+
+  it('operaciones de E-004: borrador, recuento, validación, perfil y borrado', async () => {
+    await como(db, ALMACEN);
+    await rpc(db, { op: 'borrador', args: { sku: '', ean: '8412345678905', nombre: 'Caja estanca', cat: 'aparamenta' } });
+    await rpc(db, { op: 'recuento', args: { id: nuevoId(), pasillo: 'P03', lineas: [{ sku: 'BF-FIX-SX6', contado: 70 }] } });
+    await rpc(db, { op: 'movimiento', args: { id: nuevoId(), sku: '6040615316', tipo: 'merma', qty: 10, motivo: 'Corte sobrante', ref: '', series: [] } });
+    let E = await estado(db);
+    expect(E.pendientes.filter(p => p.estado === 'pendiente')).toHaveLength(2);
+    expect(E.products.find(p => p.sku === 'BORR-8412345678905')!.borrador).toBe(true);
+    await como(db, ADMIN);
+    E = await estado(db);
+    for (const p of E.pendientes) await rpc(db, { op: 'validarPendiente', args: { id: p.id, aprobar: true, nota: 'ok' } });
+    await rpc(db, { op: 'perfil', args: { id: ALMACEN, nombre: 'Operario Renombrado', rol: 'almacen', activo: true } });
+    await rpc(db, { op: 'borrarProducto', args: { sku: 'BORR-8412345678905' } });
+    E = await estado(db);
+    expect(E.products.find(p => p.sku === 'BF-FIX-SX6')!.stock).toBe(70);
+    expect(E.products.find(p => p.sku === '6040615316')!.stock).toBe(295);
+    expect(E.products.find(p => p.sku === 'BORR-8412345678905')).toBeUndefined();
+    expect(E.perfiles.find(p => p.id === ALMACEN)!.nombre).toBe('Operario Renombrado');
   });
 });

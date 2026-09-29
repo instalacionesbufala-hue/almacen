@@ -8,7 +8,7 @@ import { mover, S, useAlmacen } from '../../store/almacen';
 import { hayModal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 import { BTN_BASE, BTN_P, BTN_S, BTN_T, Icon, INP, LBL, Pill, Tile } from '../../ui/base';
-import { abrirFicha, abrirFormProducto, MovRow } from '../inventario/hojas';
+import { abrirBorrador, abrirFicha, abrirFormProducto, MovRow } from '../inventario/hojas';
 
 type Modo = 'entrada' | 'salida' | 'consulta';
 interface Hit { code: string; sku: string | null; serial: string; via: string }
@@ -141,7 +141,7 @@ export default function ScanView() {
         </div>
           : !p ? <div className="flex flex-col gap-4">
             <div className="flex items-center gap-3 bg-error-container/60 rounded-xl p-4"><Icon n="help" className="text-error ico-32" /><div><div className="font-semibold">“{hit.code}” no está en el catálogo</div><div className="text-body-sm text-secondary">Puedes darlo de alta ahora con este código.</div></div></div>
-            <button onClick={() => { const c = hit.code.replace(/^BUF:/i, '').split('|')[0]; abrirFormProducto(undefined, /^\d{8,14}$/.test(c) ? { ean: c } : { sku: c.toUpperCase() }, () => { setHit(null); }); }} className={`${BTN_P} h-14`}><Icon n="add_circle" className="ico-fill" />Crear referencia con este código</button>
+            <button onClick={() => { const c = hit.code.replace(/^BUF:/i, '').split('|')[0]; if (E.rol !== 'admin') abrirBorrador(c, () => setHit(null)); else abrirFormProducto(undefined, /^\d{8,14}$/.test(c) ? { ean: c } : { sku: c.toUpperCase() }, () => { setHit(null); }); }} className={`${BTN_P} h-14`}><Icon n="add_circle" className="ico-fill" />Crear referencia con este código</button>
             <button onClick={siguiente} className={`${BTN_T} h-14 text-body-lg`}><Icon n="skip_next" />Escanear siguiente</button>
             <Manual valor={manual} setValor={setManual} onEnviar={c => alLeer(c, 'teclado')} />
           </div>

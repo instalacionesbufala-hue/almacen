@@ -10,6 +10,7 @@ import { avisosDotacion, herramientasDe } from '../../domain/herramientas';
 import { ejecutar, guardar, S, useAlmacen } from '../../store/almacen';
 import { modoNube } from '../../store/nube/cliente';
 import { verificarEntregasServidor } from '../../store/nube/sync';
+import { usePermisos } from '../../store/permisos';
 import { ir, setUI, useEsEscritorio, useUI } from '../../store/ui';
 import { closeModal, openModal, SheetFoot, SheetHead } from '../../ui/modal';
 import { toast } from '../../ui/toast';
@@ -17,7 +18,7 @@ import { Avatar, BTN_P, BTN_S, BTN_T, CARD, Campo, ESTADO_EQ, FirmaImg, Icon, IN
 import { abrirRecibo } from '../entregas/EntregasView';
 
 export default function EquiposView() {
-  const E = useAlmacen(), u = useUI();
+  const E = useAlmacen(), u = useUI(), { gestionarFlota } = usePermisos();
   const enRuta = E.equipos.filter(e => e.estado === 'ruta').length;
   const libres = E.tecnicos.filter(t => !E.equipos.some(e => e.tecnicos.includes(t.id)));
   const tab = (k: 'equipos' | 'tecnicos', l: string, n: number, i: string) =>
@@ -27,7 +28,7 @@ export default function EquiposView() {
       <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-3">
         <div><span className={LBL}>Logística &amp; flota / gestión de equipos</span><h1 className="text-headline-lg-mobile lg:text-headline-lg font-bold">Equipos de instalación &amp; despacho móvil</h1></div>
         <div className="flex flex-wrap items-center gap-2"><span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-surface-container-high font-mono text-label-sm"><span className="w-2 h-2 rounded-full bg-tertiary-container" />{enRuta} en ruta · {E.tecnicos.length} operarios</span>
-          <button onClick={() => abrirFormEquipo()} className={`${BTN_P} px-4 h-11`}><Icon n="group_add" className="ico-20" />Crear equipo</button><button onClick={abrirFormTecnico} className={`${BTN_S} px-4 h-11`}><Icon n="person_add" className="ico-20" />Técnico</button></div>
+          {gestionarFlota && <><button onClick={() => abrirFormEquipo()} className={`${BTN_P} px-4 h-11`}><Icon n="group_add" className="ico-20" />Crear equipo</button><button onClick={abrirFormTecnico} className={`${BTN_S} px-4 h-11`}><Icon n="person_add" className="ico-20" />Técnico</button></>}</div>
       </div>
       <section className={`${CARD} p-4 lg:p-space-md flex gap-4 items-start`}><span className="w-11 h-11 rounded-xl bg-primary-fixed text-primary grid place-items-center shrink-0"><Icon n="alt_route" /></span>
         <div className="flex-1"><h2 className="text-headline-sm font-semibold">Operación flexible</h2><p className="text-body-md text-secondary">Cuadrillas en pareja (2 técnicos, 1 furgoneta) o técnicos individuales. El stock a bordo de cada furgoneta se calcula con lo entregado y firmado menos lo devuelto. Cada equipo tiene además su dotación de herramientas, EPIs y ropa.</p></div></section>
@@ -38,7 +39,7 @@ export default function EquiposView() {
           <div key={t.id} className="flex flex-wrap items-center gap-3 p-4 border-b border-surface-container"><Avatar n={t.nombre} />
             <div className="flex-1 min-w-[160px]"><div className="font-semibold">{t.nombre}</div><div className="font-mono text-label-sm text-secondary">{t.rol} · DNI {t.dni} · {dot.length} en dotación</div></div>
             <label className="flex items-center gap-2"><span className={LBL}>Equipo</span>
-              <select value={e?.id || ''} onChange={ev => { if (ejecutar({ op: 'asignarTecnico', args: { tecnico: t.id, equipo: ev.target.value || undefined } })) toast('Asignación actualizada.', 'ok'); }} className={`${INP} !w-auto h-11`}>
+              <select disabled={!gestionarFlota} value={e?.id || ''} onChange={ev => { if (ejecutar({ op: 'asignarTecnico', args: { tecnico: t.id, equipo: ev.target.value || undefined } })) toast('Asignación actualizada.', 'ok'); }} className={`${INP} !w-auto h-11`}>
                 <option value="">— Sin equipo —</option>{E.equipos.map(x => <option key={x.id} value={x.id}>{x.nombre} ({x.matricula})</option>)}</select></label>
           </div>); })}
           {libres.length > 0 && <p className="p-4 text-body-sm text-amber-800 bg-amber-50">{libres.length} técnico{libres.length === 1 ? '' : 's'} sin equipo: no podrán recibir entregas hasta asignarlos.</p>}</div>}
@@ -48,7 +49,7 @@ export default function EquiposView() {
 }
 
 function CardEquipo({ e }: { e: Equipo }) {
-  const E = useAlmacen();
+  const E = useAlmacen(), { gestionarFlota } = usePermisos();
   const vs = vanStock(E, e.id), ult = E.entregas.filter(x => x.equipo === e.id).sort((a, b) => b.ts - a.ts)[0];
   const top = [...vs].sort((a, b) => b.qty * (find(E, b.sku)?.price || 0) - a.qty * (find(E, a.sku)?.price || 0)).slice(0, 3);
   const dot = herramientasDe(E, { equipo: e.id }), avis = new Set(avisosDotacion(E).map(h => h.id)), dotAvisos = dot.filter(h => avis.has(h.id)).length;
@@ -73,7 +74,7 @@ function CardEquipo({ e }: { e: Equipo }) {
       {ult && <button onClick={() => abrirRecibo(ult.id)} className="text-left bg-surface-container-low rounded-xl p-3 flex items-center gap-3"><Icon n="draw" className="text-tertiary" />
         <div className="flex-1 min-w-0"><div className="font-mono text-label-sm text-secondary">Última entrega firmada</div><div className="font-semibold">{hace(ult.ts)} (#{numEntrega(ult)})</div></div><Icon n="visibility" className="text-primary" /></button>}
       <div className="mt-auto flex flex-col gap-2">
-        {e.tecnicos.length > 1 ? <button onClick={() => abrirFormEquipo(e)} className={`${BTN_T} h-11`}><Icon n="call_split" className="ico-20" />Desdoblar en técnicos (1+1)</button>
+        {!gestionarFlota ? null : e.tecnicos.length > 1 ? <button onClick={() => abrirFormEquipo(e)} className={`${BTN_T} h-11`}><Icon n="call_split" className="ico-20" />Desdoblar en técnicos (1+1)</button>
           : <button onClick={() => abrirEmparejar(e.id)} className={`${BTN_T} h-11`}><Icon n="call_merge" className="ico-20" />Formar pareja</button>}
         <button onClick={cargar} className={`${BTN_P} h-12`}><Icon n="inventory" className="ico-20" />{e.estado === 'depot' ? 'Asignar material para la ruta de hoy' : 'Gestionar carga de furgoneta'}</button>
       </div>

@@ -2,8 +2,9 @@
    - aplicarse en local (validación previa con src/domain y respuesta inmediata en pantalla), y
    - traducirse a su función SQL del servidor (la fuente de verdad en modo nube).
    En modo nube la operación se guarda en la cola y se reaplica en local hasta que el servidor la confirma. */
-import type { EstadoEquipo, Estado, Herramienta, LineaEntrega, Producto, TipoIncidencia, TipoMov } from '../data/tipos';
-import { applyMovement, find } from '../domain/reglas';
+import type { Rol, CatId, EstadoEquipo, Estado, Herramienta, LineaEntrega, Producto, TipoIncidencia, TipoMov } from '../data/tipos';
+import { applyMovement, find, delta } from '../domain/reglas';
+import { redondea } from '../domain/formato';
 import { asignarHerramienta, registrarIncidencia } from '../domain/herramientas';
 
 export interface OpMovimiento { id: string; sku: string; tipo: TipoMov; qty: number; motivo: string; ref: string; series: string[]; equipo?: string }
@@ -25,7 +26,12 @@ export type Op =
   | { op: 'asignarTecnico'; args: { tecnico: string; equipo?: string } }
   | { op: 'altaDotacion'; args: Herramienta }
   | { op: 'asignarDotacion'; args: { id: string; dotacion: string; equipo?: string; tecnico?: string } }
-  | { op: 'incidencia'; args: OpIncidencia };
+  | { op: 'incidencia'; args: OpIncidencia }
+  | { op: 'recuento'; args: { id: string; pasillo: string; lineas: { sku: string; contado: number }[] } }
+  | { op: 'validarPendiente'; args: { id: string; aprobar: boolean; nota: string } }
+  | { op: 'borrador'; args: { sku: string; ean: string; nombre: string; cat: CatId } }
+  | { op: 'borrarProducto'; args: { sku: string } }
+  | { op: 'perfil'; args: { id: string; nombre: string; rol: Rol; activo: boolean } };
 
 type Def<A> = { local: (S: Estado, a: A) => void; rpc: (a: A) => [string, Record<string, unknown>]; desc: (S: Estado, a: A) => string };
 type Defs = { [K in Op['op']]: Def<Extract<Op, { op: K }>['args']> };
@@ -34,7 +40,19 @@ const nombreProd = (S: Estado, sku: string) => find(S, sku)?.name || sku;
 
 export const OPS: Defs = {
   movimiento: {
-    local: (S, a) => { applyMovement(S, { id: a.id, sku: a.sku, type: a.tipo, qty: a.qty, reason: a.motivo, ref: a.ref, serials: a.series, equipo: a.equipo }); },
+    local: (S, a) => {
+      if (a.tipo === 'ajuste' && S.rol !== 'admin') throw new Error('Solo el administrador puede hacer ajustes');
+      if (a.tipo === 'merma' && S.rol !== 'admin') {
+        // el almacén no ve precios: el servidor decide si se aplica (≤ 50 €) o queda pendiente de validar
+        const p = find(S, a.sku); if (!p) throw new Error('Producto no encontrado');
+        if (!(a.qty > 0)) throw new Error('Indica una cantidad mayor que cero');
+        if (a.qty > p.stock) throw new Error(`Solo hay ${p.stock} de ${p.name}`);
+        if (!a.motivo.trim()) throw new Error('Indica el motivo del movimiento');
+        S.pendientes.unshift({ id: a.id, ts: Date.now(), tipo: 'merma', sku: a.sku, qty: a.qty, reason: a.motivo, ref: a.ref, serials: a.series, operator: S.operator, estado: 'pendiente', provisional: true });
+        return;
+      }
+      applyMovement(S, { id: a.id, sku: a.sku, type: a.tipo, qty: a.qty, reason: a.motivo, ref: a.ref, serials: a.series, equipo: a.equipo });
+    },
     rpc: a => ['registrar_movimiento', { p_id: a.id, p_sku: a.sku, p_tipo: a.tipo, p_cantidad: a.qty, p_motivo: a.motivo, p_referencia: a.ref, p_series: a.series, p_equipo: a.equipo ?? null }],
     desc: (S, a) => `${a.tipo} de ${a.qty} · ${nombreProd(S, a.sku)}`,
   },
@@ -135,7 +153,62 @@ export const OPS: Defs = {
     rpc: a => ['registrar_incidencia', { p_id: a.id, p_dotacion: a.dotacion, p_tipo: a.tipo, p_nota: a.nota, p_coste: a.coste ?? null, p_serie_nueva: a.serieNueva ?? null, p_caduca_nueva: a.caducaNueva ?? null }],
     desc: (S, a) => `${a.tipo} en ${S.herramientas.find(h => h.id === a.dotacion)?.nombre || a.dotacion}`,
   },
+  recuento: {
+    local: (S, a) => {
+      for (const l of a.lineas) {
+        const p = find(S, l.sku); if (!p) throw new Error('Producto no encontrado');
+        if (!(l.contado >= 0)) throw new Error('La cantidad contada no puede ser negativa');
+        const d = redondea(l.contado - p.stock); if (!d) continue;
+        if (S.rol === 'admin') applyMovement(S, { sku: p.sku, type: 'ajuste', qty: d, reason: 'Ajuste de inventario', ref: `Recuento pasillo ${a.pasillo}` });
+        else S.pendientes.unshift({ id: a.id + ':' + p.sku, ts: Date.now(), tipo: 'recuento', sku: p.sku, qty: d, reason: 'Diferencia de recuento', ref: `Recuento pasillo ${a.pasillo}`, serials: [], operator: S.operator, estado: 'pendiente', provisional: true });
+      }
+    },
+    rpc: a => ['registrar_recuento', { p_id: a.id, p_pasillo: a.pasillo, p_lineas: a.lineas }],
+    desc: (_S, a) => `Recuento del pasillo ${a.pasillo}`,
+  },
+  validarPendiente: {
+    local: (S, a) => {
+      if (S.rol !== 'admin') throw new Error('Solo el administrador puede validar');
+      const pe = S.pendientes.find(x => x.id === a.id); if (!pe || pe.estado !== 'pendiente') return;
+      if (a.aprobar) {
+        const tipo = pe.tipo === 'merma' ? 'merma' : 'ajuste';
+        const p = find(S, pe.sku); if (p && p.stock + delta(tipo, pe.qty) < 0) throw new Error(`Solo hay ${p.stock} de ${p.name}: no se puede aplicar`);
+        applyMovement(S, { sku: pe.sku, type: tipo, qty: pe.qty, reason: pe.tipo === 'merma' ? pe.reason : 'Ajuste de inventario (recuento validado)', ref: pe.ref, serials: pe.serials });
+      }
+      pe.estado = a.aprobar ? 'aprobado' : 'rechazado'; pe.resueltoPor = S.operator; pe.nota = a.nota;
+    },
+    rpc: a => ['validar_pendiente', { p_pendiente: a.id, p_aprobar: a.aprobar, p_nota: a.nota }],
+    desc: (_S, a) => a.aprobar ? 'Aprobar pendiente' : 'Rechazar pendiente',
+  },
+  borrador: {
+    local: (S, a) => {
+      const sku = (a.sku || (a.ean ? 'BORR-' + a.ean : '')).trim().toUpperCase();
+      if (!sku) throw new Error('Escanea o escribe el código');
+      if (S.products.some(p => p.sku === sku || (a.ean && p.ean === a.ean))) throw new Error('Ya existe una referencia con ese código');
+      S.products.push({ sku, ean: a.ean || undefined, name: a.nombre.trim() || `Borrador ${sku}`, cat: a.cat, unit: 'ud', pack: 1, packLabel: '', stock: 0, min: 0, loc: 'P00-E00-N0', supplier: '', price: 0,
+        serialized: a.cat === 'cargadores', serials: a.cat === 'cargadores' ? [] : undefined, borrador: true });
+    },
+    rpc: a => ['crear_borrador_producto', { p_sku: a.sku, p_ean: a.ean, p_nombre: a.nombre, p_categoria: a.cat }],
+    desc: (_S, a) => `Borrador ${a.sku || a.ean}`,
+  },
+  borrarProducto: {
+    local: (S, a) => {
+      if (S.rol !== 'admin') throw new Error('Solo el administrador puede borrar referencias');
+      const p = find(S, a.sku); if (!p) return;
+      if (S.movements.some(m => m.sku === a.sku)) throw new Error('La referencia tiene historial: no se puede borrar (deja el mínimo a 0 si ya no se usa)');
+      if (p.stock !== 0) throw new Error('Solo se puede borrar una referencia sin stock');
+      S.products = S.products.filter(x => x !== p);
+    },
+    rpc: a => ['borrar_producto', { p_sku: a.sku }],
+    desc: (_S, a) => `Borrar ${a.sku}`,
+  },
+  perfil: {
+    local: (S, a) => { const u = S.perfiles.find(x => x.id === a.id); if (u) Object.assign(u, { nombre: a.nombre, rol: a.rol, activo: a.activo }); },
+    rpc: a => ['actualizar_perfil', { p_id: a.id, p_nombre: a.nombre, p_rol: a.rol, p_activo: a.activo }],
+    desc: (_S, a) => `Usuario ${a.nombre}`,
+  },
 };
+
 
 export function aplicarLocal(S: Estado, o: Op) { (OPS[o.op].local as (S: Estado, a: unknown) => void)(S, o.args); }
 export function rpcDe(o: Op) { return (OPS[o.op].rpc as (a: unknown) => [string, Record<string, unknown>])(o.args); }

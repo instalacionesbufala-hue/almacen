@@ -6,6 +6,7 @@ import { eur, fechaHora, hace, hoyISO, norm, num, toNum, uid } from '../../domai
 import { descargarCsv } from '../../domain/csv';
 import { ejecutar, S, useAlmacen } from '../../store/almacen';
 import { nuevoId } from '../../store/ops';
+import { usePermisos } from '../../store/permisos';
 import { closeModal, openModal, SheetFoot, SheetHead } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 import { BTN_P, BTN_S, BTN_T, CARD, Campo, Icon, INP, Kpi, LBL, Tag, Vacio } from '../../ui/base';
@@ -23,7 +24,7 @@ function Caducidad({ h }: { h: Herramienta }) {
 const EstadoTag = ({ h }: { h: Herramienta }) => <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-mono text-label-sm uppercase whitespace-nowrap ${ESTADO_HERR[h.estado].c}`}><span className="w-1.5 h-1.5 rounded-full bg-current" />{ESTADO_HERR[h.estado].t}</span>;
 
 export default function DotacionView() {
-  const E = useAlmacen();
+  const E = useAlmacen(), perm = usePermisos();
   const [clase, setClase] = useState<'all' | ClaseDotacion>('all'), [q, setQ] = useState(''), [quien, setQuien] = useState('all'), [soloAvisos, setSoloAvisos] = useState(false);
   const avisos = new Set(avisosDotacion(E).map(h => h.id));
   const toks = norm(q).split(/\s+/).filter(Boolean);
@@ -43,13 +44,13 @@ export default function DotacionView() {
     <div className="px-4 lg:px-gutter py-4 lg:py-space-lg flex flex-col gap-4 lg:gap-space-lg max-w-[1600px]">
       <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-3">
         <div><span className={LBL}>Herramientas · EPIs · ropa de trabajo</span><h1 className="text-headline-lg-mobile lg:text-headline-lg font-bold">Dotación de equipos y técnicos</h1></div>
-        <div className="flex flex-wrap gap-2"><button onClick={exportar} className={`${BTN_S} px-4 h-11`}><Icon n="file_download" className="ico-20" />CSV</button><button onClick={() => abrirAltaDotacion(clase === 'all' ? 'herramienta' : clase)} className={`${BTN_P} px-4 h-11`}><Icon n="add_circle" className="ico-20" />Nueva ficha</button></div>
+        <div className="flex flex-wrap gap-2">{perm.configurar && <button onClick={exportar} className={`${BTN_S} px-4 h-11`}><Icon n="file_download" className="ico-20" />CSV</button>}{perm.gestionarFlota && <button onClick={() => abrirAltaDotacion(clase === 'all' ? 'herramienta' : clase)} className={`${BTN_P} px-4 h-11`}><Icon n="add_circle" className="ico-20" />Nueva ficha</button>}</div>
       </div>
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-space-md">
         <Kpi icon="inventory" iconC="bg-surface-container-low text-primary" badge={`${E.herramientas.length - activos.length} de baja`} badgeC="text-secondary bg-surface-container-high" value={activos.length} label="Fichas activas" foot="Asignadas" footVal={`${activos.filter(h => h.equipo || h.tecnico).length}`} bar={activos.filter(h => h.equipo || h.tecnico).length / (activos.length || 1) * 100} barC="bg-primary" onClick={() => setSoloAvisos(false)} />
         <Kpi icon="build" iconC="bg-error-container text-error" badge={averias ? 'Revisar' : 'Todo bien'} badgeC={averias ? 'bg-error-container text-error' : 'bg-tertiary-fixed/30 text-tertiary'} value={averias} valueC={averias ? 'text-error' : undefined} label="Rotas, perdidas o deterioradas" foot="Pendiente de reponer" footVal={`${activos.filter(h => h.estado === 'rota' || h.estado === 'perdida').length}`} footC="text-error" bar={averias / (activos.length || 1) * 100} barC="bg-error" onClick={() => setSoloAvisos(true)} />
         <Kpi icon="health_and_safety" iconC="bg-amber-100 text-amber-800" badge="30 días" badgeC="bg-amber-100 text-amber-800" value={epiVenc} valueC={epiVenc ? 'text-amber-800' : undefined} label="EPIs vencidos o por vencer" foot="EPIs activos" footVal={`${activos.filter(h => h.clase === 'epi').length}`} bar={epiVenc / (activos.filter(h => h.clase === 'epi').length || 1) * 100} barC="bg-amber-400" onClick={() => { setClase('epi'); setSoloAvisos(true); }} />
-        <Kpi icon="payments" iconC="bg-surface-container-low text-primary" badge="Valor" badgeC="text-secondary bg-surface-container-high" value={eur(valor)} label="Valor de la dotación" foot="Coste de incidencias" footVal={eur(E.herramientas.reduce((a, h) => a + costeIncidencias(h), 0))} bar={100} barC="bg-primary-container" />
+        {perm.verCostes && <Kpi icon="payments" iconC="bg-surface-container-low text-primary" badge="Valor" badgeC="text-secondary bg-surface-container-high" value={eur(valor)} label="Valor de la dotación" foot="Coste de incidencias" footVal={eur(E.herramientas.reduce((a, h) => a + costeIncidencias(h), 0))} bar={100} barC="bg-primary-container" />}
       </div>
       <div className="flex flex-col lg:flex-row gap-2">
         <div className="inline-flex bg-surface-container-low rounded-xl p-1 overflow-x-auto no-scrollbar">
@@ -71,9 +72,9 @@ export default function DotacionView() {
               <div className="text-body-sm text-secondary truncate">{h.marca}{h.serie && ` · ${h.serie}`}{h.talla && ` · Talla ${h.talla}`}</div></div>
           </button>
           <div className="flex flex-wrap items-center gap-2"><span className="inline-flex items-center gap-1 text-body-sm"><Icon n="badge" className="ico-18 text-secondary" />{quienTxt(h)}</span><Caducidad h={h} /></div>
-          {h.estado !== 'baja' && <div className="grid grid-cols-2 gap-2 mt-auto">
+          {h.estado !== 'baja' && <div className={`grid gap-2 mt-auto ${perm.gestionarFlota ? 'grid-cols-2' : 'grid-cols-1'}`}>
             <button onClick={() => abrirIncidencia(h.id)} className={`${BTN_T} h-12`}><Icon n="report" className="ico-20" />Incidencia</button>
-            <button onClick={() => abrirAsignar(h.id)} className={`${BTN_S} h-12`}><Icon n="assignment_ind" className="ico-20" />Asignar</button></div>}
+            {perm.gestionarFlota && <button onClick={() => abrirAsignar(h.id)} className={`${BTN_S} h-12`}><Icon n="assignment_ind" className="ico-20" />Asignar</button>}</div>}
         </article>)) : <div className={`${CARD} md:col-span-2 2xl:col-span-3`}><Vacio>No hay fichas con esos filtros.</Vacio></div>}</div>
     </div>
   );
@@ -82,9 +83,9 @@ export default function DotacionView() {
 /* ---------- Ficha con historial ---------- */
 export const abrirFichaDotacion = (id: string) => openModal(<FichaDotacion id={id} />);
 function FichaDotacion({ id }: { id: string }) {
-  const E = useAlmacen(), h = herramienta(E, id);
+  const E = useAlmacen(), h = herramienta(E, id), { verCostes, gestionarFlota } = usePermisos();
   if (!h) return <SheetHead title="Ficha no encontrada" />;
-  const datos: [string, string][] = [['Clase', CLASE[h.clase].t], ['Marca / modelo', h.marca || '—'], ['N.º serie / lote', h.serie || '—'], ['Talla', h.talla || '—'], ['Cantidad', num(h.cantidad)], ['Valor unitario', eur(h.valor)], ['Caducidad / revisión', h.caduca ? new Date(h.caduca + 'T00:00:00').toLocaleDateString('es-ES') : '—'], ['Coste de incidencias', eur(costeIncidencias(h))]];
+  const datos: [string, string][] = [['Clase', CLASE[h.clase].t], ['Marca / modelo', h.marca || '—'], ['N.º serie / lote', h.serie || '—'], ['Talla', h.talla || '—'], ['Cantidad', num(h.cantidad)], ...(verCostes ? [['Valor unitario', eur(h.valor)] as [string, string]] : []), ['Caducidad / revisión', h.caduca ? new Date(h.caduca + 'T00:00:00').toLocaleDateString('es-ES') : '—'], ...(verCostes ? [['Coste de incidencias', eur(costeIncidencias(h))] as [string, string]] : [])];
   return (<>
     <SheetHead title={h.nombre} sub={`${h.id} · ${quienTxt(h)}`} />
     <div className="p-5 flex flex-col gap-4">
@@ -94,21 +95,23 @@ function FichaDotacion({ id }: { id: string }) {
         <ol className="flex flex-col gap-0">{[...h.historial].reverse().map(i => (
           <li key={i.id} className="flex gap-3 py-2 border-b border-surface-container last:border-0">
             <span className="w-9 h-9 rounded-lg bg-surface-container-low grid place-items-center shrink-0 text-primary"><Icon n={INCIDENCIA[i.tipo].icon} className="ico-20" /></span>
-            <div className="flex-1 min-w-0"><div className="font-medium">{INCIDENCIA[i.tipo].t}{i.coste ? ` · ${eur(i.coste)}` : ''}</div>
+            <div className="flex-1 min-w-0"><div className="font-medium">{INCIDENCIA[i.tipo].t}{i.coste && verCostes ? ` · ${eur(i.coste)}` : ''}</div>
               <div className="text-body-sm text-secondary">{i.nota}{i.serieAnterior ? ` · retirada la unidad ${i.serieAnterior}` : ''} · {i.operator}</div></div>
             <span className="font-mono text-label-sm text-secondary shrink-0" title={fechaHora(i.ts)}>{hace(i.ts)}</span>
           </li>))}</ol></div>
     </div>
     {h.estado !== 'baja' && <SheetFoot className="grid grid-cols-2 gap-2">
       <button onClick={() => abrirIncidencia(h.id)} className={`${BTN_T} h-12`}><Icon n="report" className="ico-20" />Registrar incidencia</button>
-      <button onClick={() => abrirAsignar(h.id)} className={`${BTN_P} h-12`}><Icon n="assignment_ind" className="ico-20" />Asignar</button></SheetFoot>}
+      {gestionarFlota && <button onClick={() => abrirAsignar(h.id)} className={`${BTN_P} h-12`}><Icon n="assignment_ind" className="ico-20" />Asignar</button>}</SheetFoot>}
   </>);
 }
 
 /* ---------- Incidencia: deterioro, rotura, pérdida, reparación, reposición, baja ---------- */
 export const abrirIncidencia = (id: string) => openModal(<Incidencia id={id} />);
 function Incidencia({ id }: { id: string }) {
-  const E = useAlmacen(), h = herramienta(E, id)!, posibles = incidenciasPosibles(h);
+  const E = useAlmacen(), h = herramienta(E, id)!, { gestionarFlota } = usePermisos();
+  // el almacén registra roturas, pérdidas y deterioro; reparar, reponer y dar de baja es del administrador
+  const posibles = incidenciasPosibles(h).filter(t => gestionarFlota || ['deterioro', 'rotura', 'perdida'].includes(t));
   const [tipo, setTipo] = useState<TipoIncidencia>(posibles[0]), [nota, setNota] = useState(''), [coste, setCoste] = useState(''), [serie, setSerie] = useState(''), [caduca, setCaduca] = useState('');
   const conCoste = tipo === 'reparacion' || tipo === 'reposicion';
   const guardarInc = () => {
