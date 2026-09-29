@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+
+<html lang="es"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0" name="viewport"/><meta content="web_dashboard" name="shell-type"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/><link href="https://fonts.googleapis.com" rel="preconnect"/><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/><link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&amp;family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><style>@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = { darkMode: "class", theme: { extend: { "colors": { "background": "#f8f9ff", "error": "#ba1a1a", "on-tertiary-fixed": "#002113", "on-secondary-fixed": "#131b2e", "tertiary-fixed": "#6ffbbe", "primary-container": "#1d4ed8", "primary-fixed": "#dce1ff", "on-tertiary-fixed-variant": "#005236", "secondary-fixed": "#dae2fd", "on-secondary-fixed-variant": "#3f465c", "surface": "#f8f9ff", "inverse-surface": "#213145", "surface-variant": "#d3e4fe", "surface-bright": "#f8f9ff", "on-primary": "#ffffff", "outline-variant": "#c4c5d7", "primary-fixed-dim": "#b7c4ff", "surface-container-lowest": "#ffffff", "on-background": "#0b1c30", "on-secondary": "#ffffff", "secondary-fixed-dim": "#bec6e0", "on-secondary-container": "#5c647a", "surface-tint": "#2151da", "on-primary-container": "#cad3ff", "secondary-container": "#dae2fd", "secondary": "#565e74", "tertiary-container": "#006a48", "inverse-primary": "#b7c4ff", "tertiary": "#004f35", "on-error-container": "#93000a", "on-primary-fixed": "#001551", "surface-container-low": "#eff4ff", "on-surface-variant": "#434655", "on-surface": "#0b1c30", "on-error": "#ffffff", "surface-dim": "#cbdbf5", "primary": "#0037b0", "surface-container": "#e5eeff", "tertiary-fixed-dim": "#4edea3", "on-tertiary-container": "#60eeb1", "inverse-on-surface": "#eaf1ff", "outline": "#747686", "on-primary-fixed-variant": "#0039b5", "surface-container-highest": "#d3e4fe", "surface-container-high": "#dce9ff", "error-container": "#ffdad6", "on-tertiary": "#ffffff" }, "borderRadius": { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" }, "spacing": { "space-sm": "0.5rem", "margin-mobile": "1rem", "gutter": "1.5rem", "space-lg": "1.5rem", "space-xl": "2.5rem", "space-xs": "0.25rem", "space-md": "1rem", "gutter-mobile": "0.75rem", "margin": "2rem" }, "fontFamily": { "body-lg": ["Plus Jakarta Sans"], "headline-md": ["Plus Jakarta Sans"], "headline-xl": ["Plus Jakarta Sans"], "label-md": ["JetBrains Mono"], "label-sm": ["JetBrains Mono"], "headline-lg": ["Plus Jakarta Sans"], "headline-sm": ["Plus Jakarta Sans"], "headline-xl-mobile": ["Plus Jakarta Sans"], "headline-lg-mobile": ["Plus Jakarta Sans"], "label-lg": ["JetBrains Mono"], "body-sm": ["Plus Jakarta Sans"], "body-md": ["Plus Jakarta Sans"] }, "fontSize": { "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }], "headline-md": ["20px", { "lineHeight": "28px", "letterSpacing": "-0.01em", "fontWeight": "600" }], "headline-xl": ["36px", { "lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "700" }], "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.04em", "fontWeight": "500" }], "label-sm": ["10px", { "lineHeight": "14px", "letterSpacing": "0.06em", "fontWeight": "500" }], "headline-lg": ["28px", { "lineHeight": "36px", "letterSpacing": "-0.02em", "fontWeight": "700" }], "headline-sm": ["16px", { "lineHeight": "24px", "fontWeight": "600" }], "headline-xl-mobile": ["28px", { "lineHeight": "34px", "letterSpacing": "-0.01em", "fontWeight": "700" }], "headline-lg-mobile": ["22px", { "lineHeight": "28px", "letterSpacing": "-0.01em", "fontWeight": "600" }], "label-lg": ["14px", { "lineHeight": "20px", "letterSpacing": "0.02em", "fontWeight": "600" }], "body-sm": ["12px", { "lineHeight": "16px", "fontWeight": "400" }], "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }] } } } }</script></head><body class="bg-surface font-body-md text-on-surface antialiased"><aside class="fixed left-0 top-0 h-full w-72 bg-surface-container-lowest z-50 flex flex-col justify-between shadow-[0_1px_8px_rgba(0,0,0,0.04)]"><div class="flex flex-col"><div class="h-16 px-space-md flex items-center gap-space-sm bg-surface-container-lowest"><img alt="VoltStock Logo" class="h-8 w-auto object-contain" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBJ_RUonVqa6lFQ-RCjBnOd7vmKwQ99d-QTsQwp_KoIM5oTBS_HFnhVO6rWrYKXDB4JI1ouqfywG45a2NaoqV9Qm6Hnz14NYcF_nVY6DHVrSoDXQmewTObwNZC_LjhwTic88_dmp8v1xXIKcFk1f2XxjidUt5L2zrZKgcHbb1Ga-iNdnBjooZahT3UIwEWb0-HJR-EXGAOzOwObe7F3BDGWBRFMaboCRdVTq_OMBFS20WDRUwNRwd1r"/><div class="flex flex-col"><span class="font-headline-sm text-headline-sm text-on-surface tracking-tight leading-none">VoltStock</span><span class="font-label-sm text-label-sm text-secondary uppercase tracking-wider">EV Depot &amp; Logistics</span></div></div><div class="px-space-md pt-space-md pb-space-xs"><span class="font-label-sm text-label-sm text-outline uppercase tracking-wider px-space-xs">Operaciones</span></div><nav class="flex flex-col gap-space-xs px-space-sm" data-active-classes="bg-primary-container text-on-primary font-headline-sm"><a class="flex items-center gap-space-sm px-space-md py-space-sm rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors" data-path="dashboard-stock" href="#"><span class="material-symbols-outlined text-space-lg">inventory_2</span><span class="font-body-md text-body-md">Stock General</span></a><a class="flex items-center gap-space-sm px-space-md py-space-sm rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors" data-path="albaranes-recepcion-ia" href="#"><span class="material-symbols-outlined text-space-lg">document_scanner</span><span class="font-body-md text-body-md">Albaranes &amp; Recepción IA</span></a><a class="flex items-center gap-space-sm px-space-md py-space-sm rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors" data-path="equipos-tecnicos" href="#"><span class="material-symbols-outlined text-space-lg">badge</span><span class="font-body-md text-body-md">Equipos &amp; Técnicos</span></a><a class="flex items-center gap-space-sm px-space-md py-space-sm rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors" data-path="entregas-firmas" href="#"><span class="material-symbols-outlined text-space-lg">draw</span><span class="font-body-md text-body-md">Entregas &amp; Firmas</span></a></nav><div class="px-space-md pt-space-lg pb-space-xs"><span class="font-label-sm text-label-sm text-outline uppercase tracking-wider px-space-xs">Sistema</span></div><nav class="flex flex-col gap-space-xs px-space-sm" data-active-classes="bg-primary-container text-on-primary font-headline-sm"><a class="flex items-center gap-space-sm px-space-md py-space-sm rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors" data-path="configuracion-auditoria" href="#"><span class="material-symbols-outlined text-space-lg">admin_panel_settings</span><span class="font-body-md text-body-md">Configuración &amp; Auditoría</span></a></nav></div><div class="p-space-md bg-surface-container-low m-space-sm rounded-xl flex items-center justify-between"><div class="flex items-center gap-space-sm"><span class="flex h-2.5 w-2.5 rounded-full bg-tertiary-container animate-pulse"></span><div class="flex flex-col"><span class="font-label-md text-label-md text-on-surface">Depot Nodo Central</span><span class="font-label-sm text-label-sm text-secondary">4 Hubs Activos</span></div></div><span class="material-symbols-outlined text-secondary text-space-lg">ev_station</span></div></aside><div class="pl-72"><header class="fixed top-0 left-72 right-0 h-16 bg-surface-container-lowest/90 backdrop-blur-md z-40 px-gutter flex items-center justify-between shadow-[0_1px_8px_rgba(0,0,0,0.04)]"><div class="flex items-center gap-space-md flex-1 max-w-2xl"><div class="relative flex-1"><span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-space-lg">search</span><input class="w-full pl-10 pr-12 py-space-xs bg-surface-container-low rounded-lg text-on-surface placeholder:text-on-surface-variant font-body-sm text-body-sm focus:outline-none focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary" placeholder="Buscar referencia, SKU, número de serie o cargador VE..." type="text"/><span class="absolute right-3 top-1/2 -translate-y-1/2 font-label-sm text-label-sm text-outline bg-surface-container-highest px-1.5 py-0.5 rounded">⌘K</span></div><div class="flex items-center bg-surface-container-low rounded-lg px-space-sm py-1"><span class="material-symbols-outlined text-primary text-space-lg mr-1">warehouse</span><select class="bg-transparent font-label-md text-label-md text-on-surface focus:outline-none cursor-pointer pr-space-xs"><option>Almacén Central (Logistics Hub)</option><option>Furgoneta T-01 (M. Gómez / R. Ruiz)</option><option>Furgoneta T-02 (C. Sánchez)</option><option>Almacén Obra Norte</option></select></div></div><div class="flex items-center gap-space-md"><button class="flex items-center gap-space-xs bg-primary hover:bg-primary-container text-on-primary px-space-md py-space-xs rounded-lg font-headline-sm text-headline-sm transition-colors shadow-sm"><span class="material-symbols-outlined text-space-lg">auto_awesome</span><span>Nuevo Albarán IA</span></button><button class="relative p-space-xs rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors"><span class="material-symbols-outlined">notifications</span><span class="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-error"></span></button><div class="flex items-center gap-space-sm pl-space-xs"><img alt="Profile" class="w-8 h-8 rounded-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCRFxtmGDcQIr22kw5eY4rmIY7XBMC5MWYihoVUvmm1pKswGS_bIQntKs4t-Ocjo1_xYfwS2o0Nf0-j5tSsAwH3spkBZZwKhWkZAw_PxetA08ZHvVMlzJMJWetnkzQah-Rz_3GkAPVK10zn-4vZ6XtcAmGz_84bGBnJlbpBxyNxpAYMC_FFC3bCs2fkGcDcIeNusDssZNTGjp6wtx3xeS3PLFOKyZ2D_A0SFlxz7JaeUwknoZh0fC94"/><div class="hidden xl:flex flex-col text-left"><span class="font-headline-sm text-headline-sm text-on-surface leading-tight">Marc Vila</span><span class="font-label-sm text-label-sm text-secondary">Jefe de Operaciones</span></div></div></div></header><main class="w-full pt-16 bg-surface px-gutter py-space-lg"><div class="flex flex-col w-full gap-space-lg">
+<!-- Operational Telemetry Bar & Context Header -->
+<div class="flex flex-col xl:flex-row xl:items-end justify-between gap-space-md">
+<div class="flex flex-col gap-space-xs">
+<div class="flex items-center gap-space-xs">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-tertiary-container/15 text-tertiary font-label-sm text-label-sm tracking-widest uppercase">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary-fixed animate-ping"></span>
+          Sincronización en Tiempo Real
+        </span>
+<span class="font-label-sm text-label-sm text-secondary">|</span>
+<span class="font-label-sm text-label-sm text-secondary">Nave Central • Sector B · Hub Madrid Sur</span>
+</div>
+<div class="flex items-baseline gap-space-sm">
+<h1 class="font-headline-lg text-headline-lg text-on-surface tracking-tight">Depot &amp; Control de Stock</h1>
+<span class="font-label-md text-label-md text-primary font-medium bg-primary-fixed/40 px-2 py-0.5 rounded">v4.8-active</span>
+</div>
+</div>
+<!-- Quick Action Toolstrip -->
+<div class="flex items-center gap-space-sm flex-wrap">
+<button class="flex items-center gap-space-xs bg-surface-container-lowest hover:bg-surface-container text-on-surface px-space-md py-space-sm rounded-lg font-headline-sm text-headline-sm shadow-sm transition-all duration-200">
+<span class="material-symbols-outlined text-space-lg text-secondary">barcode_scanner</span>
+<span>Escanear Lote</span>
+</button>
+<button class="flex items-center gap-space-xs bg-surface-container-lowest hover:bg-surface-container text-on-surface px-space-md py-space-sm rounded-lg font-headline-sm text-headline-sm shadow-sm transition-all duration-200">
+<span class="material-symbols-outlined text-space-lg text-secondary">file_download</span>
+<span>Exportar CSV</span>
+</button>
+<button class="flex items-center gap-space-xs bg-primary hover:bg-primary-container text-on-primary px-space-md py-space-sm rounded-lg font-headline-sm text-headline-sm shadow-sm hover:shadow transition-all duration-200">
+<span class="material-symbols-outlined text-space-lg">add_circle</span>
+<span>Añadir Referencia</span>
+</button>
+</div>
+</div>
+<!-- Primary Metric Cards (Bento Ribbon) -->
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-space-md">
+<!-- Card 1: Referencias Activas -->
+<div class="p-space-md bg-surface-container-lowest rounded-xl shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
+<div class="flex justify-between items-start mb-space-sm">
+<div class="p-2 rounded-lg bg-surface-container-low text-primary">
+<span class="material-symbols-outlined text-space-lg">category</span>
+</div>
+<span class="inline-flex items-center gap-1 font-label-sm text-label-sm text-tertiary bg-tertiary-fixed/30 px-2 py-0.5 rounded-full">
+<span class="material-symbols-outlined text-[14px]">trending_up</span> +3.2%
+        </span>
+</div>
+<div class="flex flex-col">
+<span class="font-headline-xl text-headline-xl text-on-surface font-bold tracking-tight">3.420</span>
+<span class="font-body-md text-body-md text-secondary font-medium">SKUs Activos en Depot</span>
+</div>
+<div class="mt-space-sm pt-space-xs flex items-center justify-between text-secondary">
+<span class="font-label-sm text-label-sm">Capacidad estanterías</span>
+<span class="font-label-sm text-label-sm font-semibold text-on-surface">88.4% ocupación</span>
+</div>
+<div class="w-full bg-surface-container-high h-1 rounded-full mt-1.5 overflow-hidden">
+<div class="bg-primary h-full rounded-full transition-all duration-500" style="width: 88.4%"></div>
+</div>
+</div>
+<!-- Card 2: Valoración de Inventario -->
+<div class="p-space-md bg-surface-container-lowest rounded-xl shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
+<div class="flex justify-between items-start mb-space-sm">
+<div class="p-2 rounded-lg bg-surface-container-low text-primary">
+<span class="material-symbols-outlined text-space-lg">payments</span>
+</div>
+<span class="font-label-sm text-label-sm text-secondary bg-surface-container-high px-2 py-0.5 rounded">Coste Medio</span>
+</div>
+<div class="flex flex-col">
+<span class="font-headline-xl text-headline-xl text-on-surface font-bold tracking-tight">184.250€</span>
+<span class="font-body-md text-body-md text-secondary font-medium">Valoración Total Stock</span>
+</div>
+<div class="mt-space-sm pt-space-xs flex items-center justify-between text-secondary">
+<span class="font-label-sm text-label-sm">Cargadores VE</span>
+<span class="font-label-sm text-label-sm font-semibold text-primary">112.400€ (61%)</span>
+</div>
+<div class="w-full bg-surface-container-high h-1 rounded-full mt-1.5 overflow-hidden">
+<div class="bg-primary-container h-full rounded-full transition-all duration-500" style="width: 61%"></div>
+</div>
+</div>
+<!-- Card 3: Alertas de Stock Bajo -->
+<div class="p-space-md bg-surface-container-lowest rounded-xl shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
+<div class="flex justify-between items-start mb-space-sm">
+<div class="p-2 rounded-lg bg-error-container text-error">
+<span class="material-symbols-outlined text-space-lg">warning</span>
+</div>
+<span class="inline-flex items-center gap-1 font-label-sm text-label-sm text-error font-semibold bg-error-container px-2 py-0.5 rounded-full">
+          Urgente
+        </span>
+</div>
+<div class="flex flex-col">
+<span class="font-headline-xl text-headline-xl text-error font-bold tracking-tight">8</span>
+<span class="font-body-md text-body-md text-secondary font-medium">Alertas Stock Crítico</span>
+</div>
+<div class="mt-space-sm pt-space-xs flex items-center justify-between">
+<span class="font-label-sm text-label-sm text-secondary">Reposición pendiente</span>
+<span class="font-label-sm text-label-sm text-error font-semibold">5 proveedores</span>
+</div>
+<div class="w-full bg-surface-container-high h-1 rounded-full mt-1.5 overflow-hidden">
+<div class="bg-error h-full rounded-full transition-all duration-500" style="width: 72%"></div>
+</div>
+</div>
+<!-- Card 4: Entregas Técnicos Hoy -->
+<div class="p-space-md bg-surface-container-lowest rounded-xl shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
+<div class="flex justify-between items-start mb-space-sm">
+<div class="p-2 rounded-lg bg-tertiary-fixed/40 text-tertiary">
+<span class="material-symbols-outlined text-space-lg">assignment_turned_in</span>
+</div>
+<span class="font-label-sm text-label-sm text-tertiary font-semibold bg-tertiary-fixed/30 px-2 py-0.5 rounded-full">
+          100% Firmados
+        </span>
+</div>
+<div class="flex flex-col">
+<span class="font-headline-xl text-headline-xl text-on-surface font-bold tracking-tight">14 / 14</span>
+<span class="font-body-md text-body-md text-secondary font-medium">Albaranes Asignados</span>
+</div>
+<div class="mt-space-sm pt-space-xs flex items-center justify-between text-secondary">
+<span class="font-label-sm text-label-sm">Furgonetas en ruta</span>
+<span class="font-label-sm text-label-sm font-semibold text-tertiary">6 cuadrillas</span>
+</div>
+<div class="w-full bg-surface-container-high h-1 rounded-full mt-1.5 overflow-hidden">
+<div class="bg-tertiary h-full rounded-full transition-all duration-500" style="width: 100%"></div>
+</div>
+</div>
+</div>
+<!-- Main Workstation Layout: 12-Column Grid -->
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-space-lg items-start">
+<!-- Primary Inventory Center (8 Columns) -->
+<div class="lg:col-span-8 flex flex-col gap-space-lg">
+<!-- Category Quick Switcher & Showcase Banner -->
+<div class="bg-surface-container-lowest p-space-md rounded-xl shadow-sm flex flex-col gap-space-md">
+<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-space-sm pb-space-xs">
+<div>
+<h2 class="font-headline-md text-headline-md text-on-surface">Categorías Estratégicas</h2>
+<p class="font-body-sm text-body-sm text-secondary">Control granular de suministros eléctricos para despliegues de movilidad</p>
+</div>
+<!-- Category Tabs -->
+<div class="inline-flex bg-surface-container-low p-1 rounded-lg self-start sm:self-center" id="categoryTabs">
+<button class="px-space-md py-1.5 rounded-md font-headline-sm text-headline-sm bg-surface-container-lowest text-primary shadow-sm transition-all" data-category="ve">
+              Cargadores VE
+            </button>
+<button class="px-space-md py-1.5 rounded-md font-headline-sm text-headline-sm text-secondary hover:text-on-surface transition-all" data-category="obra">
+              Material de Obra
+            </button>
+<button class="px-space-md py-1.5 rounded-md font-headline-sm text-headline-sm text-secondary hover:text-on-surface transition-all" data-category="herramientas">
+              Herramientas
+            </button>
+</div>
+</div>
+<!-- Category Showcase Grid -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-space-md" id="cardsContainer">
+<!-- Item Card 1 -->
+<div class="bg-surface-container-low/70 p-space-md rounded-xl flex flex-col justify-between hover:bg-surface-container-low transition-colors group">
+<div class="flex flex-col gap-space-xs">
+<div class="flex items-center justify-between">
+<span class="font-label-sm text-label-sm font-semibold text-secondary uppercase tracking-wider">SKU: WBX-PULSAR-22</span>
+<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-label-sm text-label-sm bg-tertiary-fixed/30 text-tertiary font-medium">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary-fixed"></span> Operativo
+                </span>
+</div>
+<div class="my-space-xs relative h-28 w-full rounded-lg overflow-hidden bg-surface-container-highest">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" data-alt="Close up studio shot of an elegant matte black Wallbox Pulsar Plus electric vehicle EV home charger with LED ring light and integrated Type 2 charging cable mounted in a high-tech warehouse logistics facility, dramatic clean lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB_uPJEFPzwL-rIedjEOCAkfvpAcyfCEUEDLdeUjEm4Kdqhyj0wHJsStLy8ExAkzjbY71f2KrsMTvTnQvI-VrLJ7cUBraznHPWHxGafHzbSJsqposQlEVierH5_aZu7Yuvb0u_5-ikU5J4G_32Ga3BbFJC7hjGjrceHh0e-40pcc7oHzFNb_k9XhsrRXfw4VzJksosuLlK7Q1FXIq2axf32V4CUfAevNBCthCJ5YR4MJ4liLdlI-v1f"/>
+<span class="absolute bottom-2 left-2 px-1.5 py-0.5 rounded bg-surface-container-lowest/90 backdrop-blur font-label-sm text-label-sm text-on-surface">22kW • Trifásico</span>
+</div>
+<h3 class="font-headline-sm text-headline-sm text-on-surface line-clamp-1">Wallbox Pulsar Plus</h3>
+<p class="font-body-sm text-body-sm text-secondary line-clamp-2">Punto de recarga inteligente con conectividad Bluetooth/Wi-Fi y balanceador dinámico.</p>
+</div>
+<div class="mt-space-md pt-space-xs flex items-center justify-between">
+<div>
+<span class="font-label-sm text-label-sm text-secondary block">Stock Real</span>
+<span class="font-headline-md text-headline-md text-on-surface font-bold">24 <span class="font-label-sm text-label-sm font-normal text-secondary">u.</span></span>
+</div>
+<div class="text-right">
+<span class="font-label-sm text-label-sm text-secondary block">Reservados</span>
+<span class="font-label-md text-label-md font-semibold text-primary">6 asignados</span>
+</div>
+</div>
+</div>
+<!-- Item Card 2 -->
+<div class="bg-surface-container-low/70 p-space-md rounded-xl flex flex-col justify-between hover:bg-surface-container-low transition-colors group">
+<div class="flex flex-col gap-space-xs">
+<div class="flex items-center justify-between">
+<span class="font-label-sm text-label-sm font-semibold text-secondary uppercase tracking-wider">SKU: CIR-ENEXT-S</span>
+<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-label-sm text-label-sm bg-tertiary-fixed/30 text-tertiary font-medium">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary-fixed"></span> Operativo
+                </span>
+</div>
+<div class="my-space-xs relative h-28 w-full rounded-lg overflow-hidden bg-surface-container-highest">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" data-alt="High tech Circutor eNext electric vehicle smart charger wall station installed on industrial depot rack, clean blue indicator lighting and modern metallic grey finish, product studio photography" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA-yT9UnBFqFAN1ufFH0-YIrNFkkKxcLJ7qD-AujkFqQ6u_MiXbsUZhFzamnGn9P7PJxBaZdMM37_JS_UQLzvVf1U0udvGyUPigs5EqioAc_sP9S6qXtizmqjzuID9NWIr4piORlUl5Xc5SbTvvoWfV1n4j1wWBKButpNqNvXT1WeLp4hj0DCaskza42UT7Spa0PXbj7RR7GFX7aHGDfKKWGw5S5PPgdvi6IuyAkukx7SwXdri36znH"/>
+<span class="absolute bottom-2 left-2 px-1.5 py-0.5 rounded bg-surface-container-lowest/90 backdrop-blur font-label-sm text-label-sm text-on-surface">7.4kW • Monofásico</span>
+</div>
+<h3 class="font-headline-sm text-headline-sm text-on-surface line-clamp-1">Circutor eNext Park</h3>
+<p class="font-body-sm text-body-sm text-secondary line-clamp-2">Cargador robusto para flotas y parkings corporativos con autenticación por App.</p>
+</div>
+<div class="mt-space-md pt-space-xs flex items-center justify-between">
+<div>
+<span class="font-label-sm text-label-sm text-secondary block">Stock Real</span>
+<span class="font-headline-md text-headline-md text-on-surface font-bold">12 <span class="font-label-sm text-label-sm font-normal text-secondary">u.</span></span>
+</div>
+<div class="text-right">
+<span class="font-label-sm text-label-sm text-secondary block">Mínimo Depot</span>
+<span class="font-label-md text-label-md font-semibold text-secondary">8 u. límite</span>
+</div>
+</div>
+</div>
+<!-- Item Card 3: Low stock warning -->
+<div class="bg-surface-container-low/70 p-space-md rounded-xl flex flex-col justify-between hover:bg-surface-container-low transition-colors group">
+<div class="flex flex-col gap-space-xs">
+<div class="flex items-center justify-between">
+<span class="font-label-sm text-label-sm font-semibold text-secondary uppercase tracking-wider">SKU: MNK-AMTR-11</span>
+<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-label-sm text-label-sm bg-error-container text-error font-medium">
+<span class="w-1.5 h-1.5 rounded-full bg-error"></span> Reponer
+                </span>
+</div>
+<div class="my-space-xs relative h-28 w-full rounded-lg overflow-hidden bg-surface-container-highest">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" data-alt="Industrial Mennekes Amtron professional wallbox charger resting on inventory pallet in warehouse logistics depot, ultra clear technical photography sharp contrast" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCdSBqmkoaGZK1i0uoohial1QB8CJdZH_oBYNpQsN6cBdNZQtSrwqF1ajljHMK8je4sZPIwvKY4WEciY8QfaDsxpScbVAPYzrA5I48TM50OaMmPqjMzWchxyj8H848LWm8zRGc3S5Pg9EJleb-xCtkIIm91TCN-CJPdHp3YXKVx-FXNzJIVTfl6C2RUULcutE3_QSoCPZaHIjI-6k1gOLysU4piCcEDst8Avc4MDq8Lqrxn7NLflsUb"/>
+<span class="absolute bottom-2 left-2 px-1.5 py-0.5 rounded bg-surface-container-lowest/90 backdrop-blur font-label-sm text-label-sm text-on-surface">11kW • Trifásico</span>
+</div>
+<h3 class="font-headline-sm text-headline-sm text-on-surface line-clamp-1">Mennekes Amtron 4You</h3>
+<p class="font-body-sm text-body-sm text-secondary line-clamp-2">Punto de recarga premium industrial con protección térmica integrada.</p>
+</div>
+<div class="mt-space-md pt-space-xs flex items-center justify-between">
+<div>
+<span class="font-label-sm text-label-sm text-secondary block">Stock Real</span>
+<span class="font-headline-md text-headline-md text-error font-bold">2 <span class="font-label-sm text-label-sm font-normal text-error">u.</span></span>
+</div>
+<div class="text-right">
+<span class="font-label-sm text-label-sm text-secondary block">Alerta</span>
+<span class="font-label-md text-label-md font-semibold text-error">Faltan 6 u.</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Advanced Data Table & Filters -->
+<div class="bg-surface-container-lowest rounded-xl shadow-sm overflow-hidden flex flex-col">
+<!-- Table Control Toolbar -->
+<div class="p-space-md flex flex-col md:flex-row md:items-center justify-between gap-space-sm bg-surface-container-lowest">
+<div class="flex items-center gap-space-sm flex-1">
+<div class="relative flex-1 max-w-sm">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-space-lg">search</span>
+<input class="w-full pl-10 pr-4 py-2 bg-surface-container-low rounded-lg text-on-surface font-body-sm text-body-sm placeholder:text-on-surface-variant focus:outline-none focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary transition-all" id="tableSearch" placeholder="Buscar por SKU, descripción o ubicación..." type="text"/>
+</div>
+<div class="flex items-center gap-space-xs">
+<select class="bg-surface-container-low py-2 px-3 rounded-lg font-label-sm text-label-sm text-on-surface focus:outline-none cursor-pointer" id="statusFilter">
+<option value="all">Estado: Todos</option>
+<option value="in_stock">En Stock</option>
+<option value="critical">Stock Crítico</option>
+<option value="transit">En Tránsito</option>
+</select>
+<select class="hidden sm:block bg-surface-container-low py-2 px-3 rounded-lg font-label-sm text-label-sm text-on-surface focus:outline-none cursor-pointer">
+<option>Nave: Nave Central</option>
+<option>Nave: Nave Satélite Norte</option>
+<option>Furgonetas Móviles</option>
+</select>
+</div>
+</div>
+<div class="flex items-center gap-space-xs self-end md:self-center">
+<span class="font-label-sm text-label-sm text-secondary">Mostrando <span class="font-semibold text-on-surface">5 de 3.420</span> registros</span>
+</div>
+</div>
+<!-- Table Container -->
+<div class="overflow-x-auto w-full">
+<table class="w-full text-left">
+<thead>
+<tr class="bg-surface-container-low/50">
+<th class="px-space-md py-3 font-label-sm text-label-sm uppercase tracking-wider text-secondary">Referencia / SKU</th>
+<th class="px-space-md py-3 font-label-sm text-label-sm uppercase tracking-wider text-secondary">Descripción Detallada</th>
+<th class="px-space-md py-3 font-label-sm text-label-sm uppercase tracking-wider text-secondary">Ubicación Física</th>
+<th class="px-space-md py-3 font-label-sm text-label-sm uppercase tracking-wider text-secondary text-center">Disponible</th>
+<th class="px-space-md py-3 font-label-sm text-label-sm uppercase tracking-wider text-secondary">Estado</th>
+<th class="px-space-md py-3 font-label-sm text-label-sm uppercase tracking-wider text-secondary text-right">Acciones</th>
+</tr>
+</thead>
+<tbody class="divide-y-0" id="inventoryTableBody">
+<!-- Row 1 -->
+<tr class="hover:bg-surface-container-low/60 transition-colors group">
+<td class="px-space-md py-3.5">
+<div class="flex items-center gap-space-xs">
+<span class="material-symbols-outlined text-secondary text-space-lg group-hover:text-primary transition-colors">qr_code_2</span>
+<div>
+<span class="font-label-md text-label-md font-semibold text-on-surface block">WBX-PULSAR-22</span>
+<span class="font-label-sm text-label-sm text-secondary">ID: 8092-A</span>
+</div>
+</div>
+</td>
+<td class="px-space-md py-3.5">
+<span class="font-headline-sm text-headline-sm text-on-surface block">Wallbox Pulsar Plus 22kW Cable 5m</span>
+<span class="font-body-sm text-body-sm text-secondary">Cargador VE · Conector Tipo 2 Mennekes</span>
+</td>
+<td class="px-space-md py-3.5">
+<span class="inline-flex items-center gap-1 font-label-md text-label-md bg-surface-container px-2 py-0.5 rounded text-on-surface font-medium">
+<span class="material-symbols-outlined text-space-md text-primary">shelves</span>
+                    B-03-N1
+                  </span>
+<span class="block font-label-sm text-label-sm text-secondary mt-0.5">Pasillo B • Estante 03</span>
+</td>
+<td class="px-space-md py-3.5 text-center">
+<span class="font-headline-sm text-headline-sm text-on-surface font-bold">24</span>
+<span class="font-label-sm text-label-sm text-secondary block">Min: 5</span>
+</td>
+<td class="px-space-md py-3.5">
+<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full font-label-sm text-label-sm bg-tertiary-fixed/30 text-tertiary font-semibold uppercase tracking-wider">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary-fixed"></span> En Stock
+                  </span>
+</td>
+<td class="px-space-md py-3.5 text-right">
+<div class="flex items-center justify-end gap-1">
+<button class="p-1.5 hover:bg-surface-container rounded text-primary transition-colors" title="Añadir Stock">
+<span class="material-symbols-outlined text-space-lg">add_box</span>
+</button>
+<button class="p-1.5 hover:bg-surface-container rounded text-secondary transition-colors" title="Ajuste Manual">
+<span class="material-symbols-outlined text-space-lg">tune</span>
+</button>
+<button class="p-1.5 hover:bg-surface-container rounded text-secondary transition-colors" title="Trazabilidad">
+<span class="material-symbols-outlined text-space-lg">history</span>
+</button>
+</div>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="hover:bg-surface-container-low/60 transition-colors group">
+<td class="px-space-md py-3.5">
+<div class="flex items-center gap-space-xs">
+<span class="material-symbols-outlined text-secondary text-space-lg group-hover:text-primary transition-colors">qr_code_2</span>
+<div>
+<span class="font-label-md text-label-md font-semibold text-on-surface block">CAB-LH-5G6</span>
+<span class="font-label-sm text-label-sm text-secondary">ID: 4410-C</span>
+</div>
+</div>
+</td>
+<td class="px-space-md py-3.5">
+<span class="font-headline-sm text-headline-sm text-on-surface block">Manguera Libre Halógenos RZ1-K 5G6mm²</span>
+<span class="font-body-sm text-body-sm text-secondary">Bobina 100m · Conductor Cobre Clase 5</span>
+</td>
+<td class="px-space-md py-3.5">
+<span class="inline-flex items-center gap-1 font-label-md text-label-md bg-surface-container px-2 py-0.5 rounded text-on-surface font-medium">
+<span class="material-symbols-outlined text-space-md text-primary">shelves</span>
+                    C-12-Suelo
+                  </span>
+<span class="block font-label-sm text-label-sm text-secondary mt-0.5">Pasillo C • Bobinero</span>
+</td>
+<td class="px-space-md py-3.5 text-center">
+<span class="font-headline-sm text-headline-sm text-on-surface font-bold">8 <span class="font-label-sm text-label-sm font-normal text-secondary">bobinas</span></span>
+<span class="font-label-sm text-label-sm text-secondary block">Min: 2</span>
+</td>
+<td class="px-space-md py-3.5">
+<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full font-label-sm text-label-sm bg-tertiary-fixed/30 text-tertiary font-semibold uppercase tracking-wider">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary-fixed"></span> En Stock
+                  </span>
+</td>
+<td class="px-space-md py-3.5 text-right">
+<div class="flex items-center justify-end gap-1">
+<button class="p-1.5 hover:bg-surface-container rounded text-primary transition-colors" title="Añadir Stock">
+<span class="material-symbols-outlined text-space-lg">add_box</span>
+</button>
+<button class="p-1.5 hover:bg-surface-container rounded text-secondary transition-colors" title="Ajuste Manual">
+<span class="material-symbols-outlined text-space-lg">tune</span>
+</button>
+<button class="p-1.5 hover:bg-surface-container rounded text-secondary transition-colors" title="Trazabilidad">
+<span class="material-symbols-outlined text-space-lg">history</span>
+</button>
+</div>
+</td>
+</tr>
+<!-- Row 3 (Stock Crítico) -->
+<tr class="hover:bg-surface-container-low/60 transition-colors group bg-error-container/10">
+<td class="px-space-md py-3.5">
+<div class="flex items-center gap-space-xs">
+<span class="material-symbols-outlined text-error text-space-lg">warning</span>
+<div>
+<span class="font-label-md text-label-md font-semibold text-error block">SCH-IC60N-40</span>
+<span class="font-label-sm text-label-sm text-secondary">ID: 9112-E</span>
+</div>
+</div>
+</td>
+<td class="px-space-md py-3.5">
+<span class="font-headline-sm text-headline-sm text-on-surface block">Magnetotérmico Schneider Acti9 4P 40A Curva C</span>
+<span class="font-body-sm text-body-sm text-secondary">Protección cuadro recarga ITC-BT-52</span>
+</td>
+<td class="px-space-md py-3.5">
+<span class="inline-flex items-center gap-1 font-label-md text-label-md bg-surface-container px-2 py-0.5 rounded text-on-surface font-medium">
+<span class="material-symbols-outlined text-space-md text-primary">shelves</span>
+                    A-04-N2
+                  </span>
+<span class="block font-label-sm text-label-sm text-secondary mt-0.5">Pasillo A • Módulo Modular</span>
+</td>
+<td class="px-space-md py-3.5 text-center">
+<span class="font-headline-sm text-headline-sm text-error font-bold">1</span>
+<span class="font-label-sm text-label-sm text-error font-medium block">Min: 12</span>
+</td>
+<td class="px-space-md py-3.5">
+<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full font-label-sm text-label-sm bg-error-container text-error font-semibold uppercase tracking-wider">
+<span class="w-1.5 h-1.5 rounded-full bg-error"></span> Stock Crítico
+                  </span>
+</td>
+<td class="px-space-md py-3.5 text-right">
+<div class="flex items-center justify-end gap-1">
+<button class="p-1.5 hover:bg-error-container/40 rounded text-error transition-colors" title="Añadir Stock">
+<span class="material-symbols-outlined text-space-lg">add_box</span>
+</button>
+<button class="p-1.5 hover:bg-surface-container rounded text-secondary transition-colors" title="Ajuste Manual">
+<span class="material-symbols-outlined text-space-lg">tune</span>
+</button>
+<button class="p-1.5 hover:bg-surface-container rounded text-secondary transition-colors" title="Trazabilidad">
+<span class="material-symbols-outlined text-space-lg">history</span>
+</button>
+</div>
+</td>
+</tr>
+<!-- Row 4 (In Transit) -->
+<tr class="hover:bg-surface-container-low/60 transition-colors group">
+<td class="px-space-md py-3.5">
+<div class="flex items-center gap-space-xs">
+<span class="material-symbols-outlined text-secondary text-space-lg group-hover:text-primary transition-colors">qr_code_2</span>
+<div>
+<span class="font-label-md text-label-md font-semibold text-on-surface block">MTR-A1532-EV</span>
+<span class="font-label-sm text-label-sm text-secondary">ID: 3004-K</span>
+</div>
+</div>
+</td>
+<td class="px-space-md py-3.5">
+<span class="font-headline-sm text-headline-sm text-on-surface block">Comprobador EVSE Metrel Multifunción A1532</span>
+<span class="font-body-sm text-body-sm text-secondary">Simulador de vehículo VE para ensayo seguridad</span>
+</td>
+<td class="px-space-md py-3.5">
+<span class="inline-flex items-center gap-1 font-label-md text-label-md bg-secondary-fixed/50 px-2 py-0.5 rounded text-on-surface font-medium">
+<span class="material-symbols-outlined text-space-md text-secondary">local_shipping</span>
+                    FURG-T01
+                  </span>
+<span class="block font-label-sm text-label-sm text-secondary mt-0.5">Asignado a Carlos S.</span>
+</td>
+<td class="px-space-md py-3.5 text-center">
+<span class="font-headline-sm text-headline-sm text-on-surface font-bold">3 <span class="font-label-sm text-label-sm font-normal text-secondary">de 4</span></span>
+<span class="font-label-sm text-label-sm text-secondary block">1 en calibración</span>
+</td>
+<td class="px-space-md py-3.5">
+<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full font-label-sm text-label-sm bg-primary-fixed/50 text-primary font-semibold uppercase tracking-wider">
+<span class="w-1.5 h-1.5 rounded-full bg-primary"></span> En Tránsito
+                  </span>
+</td>
+<td class="px-space-md py-3.5 text-right">
+<div class="flex items-center justify-end gap-1">
+<button class="p-1.5 hover:bg-surface-container rounded text-primary transition-colors" title="Añadir Stock">
+<span class="material-symbols-outlined text-space-lg">add_box</span>
+</button>
+<button class="p-1.5 hover:bg-surface-container rounded text-secondary transition-colors" title="Ajuste Manual">
+<span class="material-symbols-outlined text-space-lg">tune</span>
+</button>
+<button class="p-1.5 hover:bg-surface-container rounded text-secondary transition-colors" title="Trazabilidad">
+<span class="material-symbols-outlined text-space-lg">history</span>
+</button>
+</div>
+</td>
+</tr>
+<!-- Row 5 -->
+<tr class="hover:bg-surface-container-low/60 transition-colors group">
+<td class="px-space-md py-3.5">
+<div class="flex items-center gap-space-xs">
+<span class="material-symbols-outlined text-secondary text-space-lg group-hover:text-primary transition-colors">qr_code_2</span>
+<div>
+<span class="font-label-md text-label-md font-semibold text-on-surface block">UNX-CAN-60x100</span>
+<span class="font-label-sm text-label-sm text-secondary">ID: 1109-U</span>
+</div>
+</div>
+</td>
+<td class="px-space-md py-3.5">
+<span class="font-headline-sm text-headline-sm text-on-surface block">Canaleta Aislante Unex 60x100mm en U23X</span>
+<span class="font-body-sm text-body-sm text-secondary">Tramo de 2 metros · Fijación en pared</span>
+</td>
+<td class="px-space-md py-3.5">
+<span class="inline-flex items-center gap-1 font-label-md text-label-md bg-surface-container px-2 py-0.5 rounded text-on-surface font-medium">
+<span class="material-symbols-outlined text-space-md text-primary">shelves</span>
+                    D-01-N3
+                  </span>
+<span class="block font-label-sm text-label-sm text-secondary mt-0.5">Pasillo D • Perfilería</span>
+</td>
+<td class="px-space-md py-3.5 text-center">
+<span class="font-headline-sm text-headline-sm text-on-surface font-bold">54 <span class="font-label-sm text-label-sm font-normal text-secondary">barras</span></span>
+<span class="font-label-sm text-label-sm text-secondary block">Min: 20</span>
+</td>
+<td class="px-space-md py-3.5">
+<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full font-label-sm text-label-sm bg-tertiary-fixed/30 text-tertiary font-semibold uppercase tracking-wider">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary-fixed"></span> En Stock
+                  </span>
+</td>
+<td class="px-space-md py-3.5 text-right">
+<div class="flex items-center justify-end gap-1">
+<button class="p-1.5 hover:bg-surface-container rounded text-primary transition-colors" title="Añadir Stock">
+<span class="material-symbols-outlined text-space-lg">add_box</span>
+</button>
+<button class="p-1.5 hover:bg-surface-container rounded text-secondary transition-colors" title="Ajuste Manual">
+<span class="material-symbols-outlined text-space-lg">tune</span>
+</button>
+<button class="p-1.5 hover:bg-surface-container rounded text-secondary transition-colors" title="Trazabilidad">
+<span class="material-symbols-outlined text-space-lg">history</span>
+</button>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Table Footer Pagination -->
+<div class="p-space-md bg-surface-container-low/40 flex items-center justify-between">
+<span class="font-label-sm text-label-sm text-secondary">Página 1 de 68</span>
+<div class="flex items-center gap-space-xs">
+<button class="px-3 py-1 bg-surface-container rounded font-label-sm text-label-sm text-secondary opacity-50 cursor-not-allowed">Anterior</button>
+<button class="px-3 py-1 bg-primary text-on-primary rounded font-label-sm text-label-sm font-semibold">1</button>
+<button class="px-3 py-1 bg-surface-container hover:bg-surface-container-high rounded font-label-sm text-label-sm text-on-surface">2</button>
+<button class="px-3 py-1 bg-surface-container hover:bg-surface-container-high rounded font-label-sm text-label-sm text-on-surface">3</button>
+<span class="px-1 text-secondary">...</span>
+<button class="px-3 py-1 bg-surface-container hover:bg-surface-container-high rounded font-label-sm text-label-sm text-on-surface">Siguiente</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Right Telemetry & Live Activity Sidebar (4 Columns) -->
+<div class="lg:col-span-4 flex flex-col gap-space-lg">
+<!-- Live AI Activity Card -->
+<div class="bg-surface-container-lowest p-space-md rounded-xl shadow-sm flex flex-col gap-space-md relative overflow-hidden">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-space-xs">
+<span class="material-symbols-outlined text-primary text-space-lg">auto_awesome</span>
+<h2 class="font-headline-md text-headline-md text-on-surface">Recepción IA &amp; Entradas</h2>
+</div>
+<span class="px-2 py-0.5 rounded-full bg-primary-fixed text-primary font-label-sm text-label-sm font-bold uppercase tracking-wider">OCR En Vivo</span>
+</div>
+<!-- Latest AI Processed Receipt -->
+<div class="p-space-md bg-primary-fixed/20 rounded-xl flex flex-col gap-space-sm relative">
+<div class="flex items-center justify-between">
+<span class="font-label-sm text-label-sm font-semibold text-primary uppercase">Albarán Escaneado #ALB-9844</span>
+<span class="font-label-sm text-label-sm text-secondary flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">schedule</span> Hace 25 min
+            </span>
+</div>
+<div class="flex items-center gap-space-sm">
+<div class="w-10 h-10 rounded-lg bg-surface-container-lowest flex items-center justify-center text-primary shadow-sm font-bold">
+              SE
+            </div>
+<div>
+<span class="font-headline-sm text-headline-sm text-on-surface block">Schneider Electric España</span>
+<span class="font-label-sm text-label-sm text-secondary">Entrada directa • +42 artículos detectados</span>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-space-xs pt-space-xs font-label-sm text-label-sm">
+<div class="bg-surface-container-lowest/80 p-2 rounded">
+<span class="text-secondary block">Diferenciales Superinmunizados</span>
+<span class="font-bold text-on-surface text-label-md">24 unidades</span>
+</div>
+<div class="bg-surface-container-lowest/80 p-2 rounded">
+<span class="text-secondary block">Descargadores Sobretensión</span>
+<span class="font-bold text-on-surface text-label-md">18 unidades</span>
+</div>
+</div>
+<div class="flex items-center justify-between pt-space-xs">
+<span class="font-label-sm text-label-sm text-tertiary font-medium flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">check_circle</span> Validación OCR 99.8%
+            </span>
+<a class="font-label-sm text-label-sm text-primary font-semibold hover:underline" href="#">Ver Albarán →</a>
+</div>
+</div>
+<!-- Latest Outgoing Tech Dispatch -->
+<div class="p-space-md bg-surface-container-low rounded-xl flex flex-col gap-space-sm">
+<div class="flex items-center justify-between">
+<span class="font-label-sm text-label-sm font-semibold text-secondary uppercase">Última Salida a Furgoneta</span>
+<span class="font-label-sm text-label-sm text-secondary flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">schedule</span> Hace 42 min
+            </span>
+</div>
+<div class="flex items-center gap-space-sm">
+<div class="w-10 h-10 rounded-lg bg-surface-container flex items-center justify-center text-secondary shadow-sm">
+<span class="material-symbols-outlined">directions_car</span>
+</div>
+<div>
+<span class="font-headline-sm text-headline-sm text-on-surface block">Equipo 1 • Carlos M. &amp; David R.</span>
+<span class="font-label-sm text-label-sm text-secondary">Furgoneta T-01 • Obra Repsol Valdebebas</span>
+</div>
+</div>
+<div class="bg-surface-container-lowest p-2.5 rounded-lg flex flex-col gap-1 font-body-sm text-body-sm">
+<div class="flex justify-between items-center">
+<span class="text-on-surface font-medium">2x Wallbox Pulsar Plus 22kW</span>
+<span class="font-label-sm text-label-sm text-secondary font-mono">SN# 9081, 9082</span>
+</div>
+<div class="flex justify-between items-center text-secondary">
+<span>Kit fijación química + 30m manguera</span>
+<span class="font-label-sm text-label-sm text-tertiary font-semibold">Firma Biométrica OK</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Depot Utilization & Stock Distribution Visualizer -->
+<div class="bg-surface-container-lowest p-space-md rounded-xl shadow-sm flex flex-col gap-space-md">
+<div class="flex items-center justify-between">
+<h2 class="font-headline-md text-headline-md text-on-surface">Distribución de Activos</h2>
+<span class="font-label-sm text-label-sm text-secondary">Depot Central</span>
+</div>
+<!-- Inline SVG Category Radial Chart -->
+<div class="flex items-center justify-center py-space-xs relative">
+<svg class="w-44 h-44 -rotate-90" viewbox="0 0 100 100">
+<!-- Background Ring -->
+<circle class="text-surface-container-high" cx="50" cy="50" fill="transparent" r="40" stroke="currentColor" stroke-width="12"></circle>
+<!-- Chargers Segment (61%) -->
+<circle class="text-primary" cx="50" cy="50" fill="transparent" r="40" stroke="currentColor" stroke-dasharray="251.2" stroke-dashoffset="97.9" stroke-linecap="round" stroke-width="12"></circle>
+<!-- Material Obra (27%) -->
+<circle class="text-secondary" cx="50" cy="50" fill="transparent" r="40" stroke="currentColor" stroke-dasharray="251.2" stroke-dashoffset="183.3" stroke-linecap="round" stroke-width="12"></circle>
+<!-- Tools (12%) -->
+<circle class="text-tertiary" cx="50" cy="50" fill="transparent" r="40" stroke="currentColor" stroke-dasharray="251.2" stroke-dashoffset="221" stroke-linecap="round" stroke-width="12"></circle>
+</svg>
+<div class="absolute flex flex-col items-center justify-center text-center">
+<span class="font-headline-lg text-headline-lg text-on-surface font-bold leading-none">3.420</span>
+<span class="font-label-sm text-label-sm text-secondary uppercase tracking-widest mt-1">Total Ítems</span>
+</div>
+</div>
+<!-- Legend Matrix -->
+<div class="flex flex-col gap-2 pt-space-xs">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="w-3 h-3 rounded-full bg-primary"></span>
+<span class="font-body-sm text-body-sm text-on-surface font-medium">Cargadores VE &amp; Estaciones</span>
+</div>
+<span class="font-label-md text-label-md text-on-surface font-semibold">61%</span>
+</div>
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="w-3 h-3 rounded-full bg-secondary"></span>
+<span class="font-body-sm text-body-sm text-on-surface font-medium">Materiales Eléctricos / Canalización</span>
+</div>
+<span class="font-label-md text-label-md text-on-surface font-semibold">27%</span>
+</div>
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="w-3 h-3 rounded-full bg-tertiary"></span>
+<span class="font-body-sm text-body-sm text-on-surface font-medium">Equipos de Ensayo &amp; Herramientas</span>
+</div>
+<span class="font-label-md text-label-md text-on-surface font-semibold">12%</span>
+</div>
+</div>
+</div>
+<!-- Quick Maintenance / Audit Trigger Widget -->
+<div class="p-space-md bg-gradient-to-br from-surface-container-high via-surface-container to-surface-container-low rounded-xl flex items-center justify-between">
+<div class="flex flex-col">
+<span class="font-headline-sm text-headline-sm text-on-surface font-semibold">Auditoría Cíclica Semanal</span>
+<span class="font-body-sm text-body-sm text-secondary">Pasillo B (Cargadores) vence en 2 días</span>
+</div>
+<button class="px-space-md py-2 bg-surface-container-lowest hover:bg-surface-bright text-on-surface rounded-lg font-label-md text-label-md font-semibold shadow-sm transition-colors">
+          Iniciar Conteo
+        </button>
+</div>
+</div>
+</div>
+</div>
+<!-- Client-side Interactive Script for Instant Category Swapping and Search Filtering -->
+<script>
+  (function() {
+    // Dynamic mock dataset for category cards
+    const categoryData = {
+      ve: [
+        {
+          sku: "WBX-PULSAR-22",
+          title: "Wallbox Pulsar Plus",
+          desc: "Punto de recarga inteligente con conectividad Bluetooth/Wi-Fi y balanceador dinámico.",
+          stock: 24,
+          status: "Operativo",
+          statusColor: "bg-tertiary-fixed/30 text-tertiary",
+          dotColor: "bg-tertiary-fixed",
+          detail: "22kW • Trifásico",
+          extraLabel: "Reservados",
+          extraVal: "6 asignados",
+          prompt: "Close up studio shot of an elegant matte black Wallbox Pulsar Plus electric vehicle EV home charger with LED ring light and integrated Type 2 charging cable mounted in a high-tech warehouse logistics facility, dramatic clean lighting"
+        },
+        {
+          sku: "CIR-ENEXT-S",
+          title: "Circutor eNext Park",
+          desc: "Cargador robusto para flotas y parkings corporativos con autenticación por App.",
+          stock: 12,
+          status: "Operativo",
+          statusColor: "bg-tertiary-fixed/30 text-tertiary",
+          dotColor: "bg-tertiary-fixed",
+          detail: "7.4kW • Monofásico",
+          extraLabel: "Mínimo Depot",
+          extraVal: "8 u. límite",
+          prompt: "High tech Circutor eNext electric vehicle smart charger wall station installed on industrial depot rack, clean blue indicator lighting and modern metallic grey finish, product studio photography"
+        },
+        {
+          sku: "MNK-AMTR-11",
+          title: "Mennekes Amtron 4You",
+          desc: "Punto de recarga premium industrial con protección térmica integrada.",
+          stock: 2,
+          status: "Reponer",
+          statusColor: "bg-error-container text-error",
+          dotColor: "bg-error",
+          detail: "11kW • Trifásico",
+          extraLabel: "Alerta",
+          extraVal: "Faltan 6 u.",
+          prompt: "Industrial Mennekes Amtron professional wallbox charger resting on inventory pallet in warehouse logistics depot, ultra clear technical photography sharp contrast"
+        }
+      ],
+      obra: [
+        {
+          sku: "CAB-LH-5G6",
+          title: "Manguera RZ1-K 5G6mm²",
+          desc: "Cable de cobre libre de halógenos de alta seguridad para acometidas de puntos de recarga.",
+          stock: 8,
+          status: "Operativo",
+          statusColor: "bg-tertiary-fixed/30 text-tertiary",
+          dotColor: "bg-tertiary-fixed",
+          detail: "Bobina 100m • CPR Cca",
+          extraLabel: "Longitud total",
+          extraVal: "800 metros",
+          prompt: "Heavy industrial copper conductor electrical cable spools coiled neatly on warehouse wooden pallets, halogen free insulated jackets, bright technical warehouse illumination"
+        },
+        {
+          sku: "SCH-IC60N-40",
+          title: "Magnetotérmico Schneider 40A",
+          desc: "Interruptor termomagnético 4P con poder de corte 6000A para cuadros VE dedicados.",
+          stock: 1,
+          status: "Crítico",
+          statusColor: "bg-error-container text-error",
+          dotColor: "bg-error",
+          detail: "4 Polos • Curva C",
+          extraLabel: "Demanda hoy",
+          extraVal: "6 requeridos",
+          prompt: "Schneider Acti9 electrical circuit breaker mounted in electrical panel rack inside industrial depot warehouse with modern clean lighting, architectural details"
+        },
+        {
+          sku: "TUB-CORR-32",
+          title: "Tubo Corrugado Blindado 32mm",
+          desc: "Canalización flexible de polipropileno reforzado para canalización subterránea y garajes.",
+          stock: 35,
+          status: "Operativo",
+          statusColor: "bg-tertiary-fixed/30 text-tertiary",
+          dotColor: "bg-tertiary-fixed",
+          detail: "Rollos 50m • Antiaplastamiento",
+          extraLabel: "Ubicación",
+          extraVal: "Patio Exterior D",
+          prompt: "Stack of heavy duty protective electrical corrugated conduits on industrial shelving racks in organized supply depot facility, professional studio depth of field"
+        }
+      ],
+      herramientas: [
+        {
+          sku: "MTR-A1532-EV",
+          title: "Comprobador Metrel A1532",
+          desc: "Adaptador analizador para la verificación completa de seguridad según norma EN 61851-1.",
+          stock: 3,
+          status: "En Uso",
+          statusColor: "bg-primary-fixed/50 text-primary",
+          dotColor: "bg-primary",
+          detail: "Simulador EVSE Tipo 2",
+          extraLabel: "En Calibración",
+          extraVal: "1 unidad",
+          prompt: "Professional Metrel high precision electric vehicle diagnostic tester device with digital display and color coded probe cables resting on modern workstation bench in electronics laboratory"
+        },
+        {
+          sku: "FLK-376-FC",
+          title: "Pinza Amperimétrica Fluke 376",
+          desc: "Pinza de verdadero valor eficaz CA/CC con tecnología iFlex para medidas de hasta 2500A.",
+          stock: 6,
+          status: "Operativo",
+          statusColor: "bg-tertiary-fixed/30 text-tertiary",
+          dotColor: "bg-tertiary-fixed",
+          detail: "True-RMS • Bluetooth Fluke Connect",
+          extraLabel: "Asignadas",
+          extraVal: "4 furgonetas",
+          prompt: "Fluke industrial clamp multimeter on dark metallic workshop table next to wiring components and blueprints, crisp commercial electrical tooling photography"
+        },
+        {
+          sku: "HLT-TE6-22",
+          title: "Martillo Perforador Hilti TE 6-22",
+          desc: "Perforador inalámbrico con control activo del par ATC y aspirador integrado sin polvo.",
+          stock: 5,
+          status: "Operativo",
+          statusColor: "bg-tertiary-fixed/30 text-tertiary",
+          dotColor: "bg-tertiary-fixed",
+          detail: "Batería Nuron 22V",
+          extraLabel: "Estado Baterías",
+          extraVal: "100% Carga",
+          prompt: "Heavy duty red cordless rotary hammer power drill tool resting on industrial storage cart in EV charging installation workshop, high resolution professional photography"
+        }
+      ]
+    };
+
+    // Category Switcher
+    const tabs = document.querySelectorAll('#categoryTabs button');
+    const container = document.getElementById('cardsContainer');
+
+    tabs.forEach(tab => {
+      tab.addEventListener('click', function() {
+        tabs.forEach(t => {
+          t.classList.remove('bg-surface-container-lowest', 'text-primary', 'shadow-sm');
+          t.classList.add('text-secondary');
+        });
+        this.classList.add('bg-surface-container-lowest', 'text-primary', 'shadow-sm');
+        this.classList.remove('text-secondary');
+
+        const cat = this.getAttribute('data-category');
+        renderCategory(cat);
+      });
+    });
+
+    function renderCategory(cat) {
+      const items = categoryData[cat] || categoryData.ve;
+      container.innerHTML = items.map(item => `
+        <div class="bg-surface-container-low/70 p-space-md rounded-xl flex flex-col justify-between hover:bg-surface-container-low transition-colors group">
+          <div class="flex flex-col gap-space-xs">
+            <div class="flex items-center justify-between">
+              <span class="font-label-sm text-label-sm font-semibold text-secondary uppercase tracking-wider">SKU: ${item.sku}</span>
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-label-sm text-label-sm ${item.statusColor} font-medium">
+                <span class="w-1.5 h-1.5 rounded-full ${item.dotColor}"></span> ${item.status}
+              </span>
+            </div>
+            <div class="my-space-xs relative h-28 w-full rounded-lg overflow-hidden bg-surface-container-highest">
+              <img src="placeholder" data-alt="${item.prompt}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
+              <span class="absolute bottom-2 left-2 px-1.5 py-0.5 rounded bg-surface-container-lowest/90 backdrop-blur font-label-sm text-label-sm text-on-surface">${item.detail}</span>
+            </div>
+            <h3 class="font-headline-sm text-headline-sm text-on-surface line-clamp-1">${item.title}</h3>
+            <p class="font-body-sm text-body-sm text-secondary line-clamp-2">${item.desc}</p>
+          </div>
+          <div class="mt-space-md pt-space-xs flex items-center justify-between">
+            <div>
+              <span class="font-label-sm text-label-sm text-secondary block">Stock Real</span>
+              <span class="font-headline-md text-headline-md ${item.status === 'Reponer' || item.status === 'Crítico' ? 'text-error font-bold' : 'text-on-surface font-bold'}">${item.stock} <span class="font-label-sm text-label-sm font-normal text-secondary">u.</span></span>
+            </div>
+            <div class="text-right">
+              <span class="font-label-sm text-label-sm text-secondary block">${item.extraLabel}</span>
+              <span class="font-label-md text-label-md font-semibold text-on-surface">${item.extraVal}</span>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // Quick Search filter inside Table
+    const searchInput = document.getElementById('tableSearch');
+    const tableBody = document.getElementById('inventoryTableBody');
+    if (searchInput && tableBody) {
+      searchInput.addEventListener('input', function(e) {
+        const query = e.target.value.toLowerCase().trim();
+        const rows = tableBody.querySelectorAll('tr');
+        rows.forEach(row => {
+          const text = row.textContent.toLowerCase();
+          row.style.display = text.includes(query) ? '' : 'none';
+        });
+      });
+    }
+
+    // Status dropdown filter
+    const statusSelect = document.getElementById('statusFilter');
+    if (statusSelect && tableBody) {
+      statusSelect.addEventListener('change', function(e) {
+        const val = e.target.value;
+        const rows = tableBody.querySelectorAll('tr');
+        rows.forEach(row => {
+          if (val === 'all') {
+            row.style.display = '';
+          } else if (val === 'critical') {
+            row.style.display = row.textContent.includes('Crítico') ? '' : 'none';
+          } else if (val === 'in_stock') {
+            row.style.display = row.textContent.includes('En Stock') ? '' : 'none';
+          } else if (val === 'transit') {
+            row.style.display = row.textContent.includes('Tránsito') ? '' : 'none';
+          }
+        });
+      });
+    }
+
+  })();
+</script></main></div></body></html>

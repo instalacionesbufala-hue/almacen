@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+
+<html lang="es"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/><meta content="mobile_tab" name="shell-type"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/><link href="https://fonts.googleapis.com" rel="preconnect"/><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/><link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;600;700&amp;family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><style>@layer base{html,body{width:100vw;margin:0;padding:0;}body{overscroll-behavior:none;}.pb-safe{padding-bottom:env(safe-area-inset-bottom,0px);}.pt-safe{padding-top:env(safe-area-inset-top,0px);}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = { darkMode: "class", theme: { extend: { "colors": { "on-secondary": "#ffffff", "on-background": "#0b1c30", "on-tertiary-fixed-variant": "#005236", "on-tertiary-container": "#60eeb1", "on-tertiary-fixed": "#002113", "on-tertiary": "#ffffff", "surface-bright": "#f8f9ff", "on-primary-fixed-variant": "#0039b5", "inverse-primary": "#b7c4ff", "secondary-fixed": "#dae2fd", "primary-container": "#1d4ed8", "surface-container-highest": "#d3e4fe", "surface-tint": "#2151da", "tertiary-container": "#006a48", "on-primary": "#ffffff", "surface-variant": "#d3e4fe", "surface-container-low": "#eff4ff", "tertiary-fixed-dim": "#4edea3", "on-secondary-container": "#5c647a", "inverse-on-surface": "#eaf1ff", "on-surface": "#0b1c30", "tertiary": "#004f35", "error-container": "#ffdad6", "surface": "#f8f9ff", "secondary-container": "#dae2fd", "on-primary-container": "#cad3ff", "on-primary-fixed": "#001551", "outline": "#747686", "on-secondary-fixed": "#131b2e", "surface-container-high": "#dce9ff", "primary-fixed": "#dce1ff", "secondary-fixed-dim": "#bec6e0", "tertiary-fixed": "#6ffbbe", "secondary": "#565e74", "on-surface-variant": "#434655", "background": "#f8f9ff", "on-error-container": "#93000a", "primary-fixed-dim": "#b7c4ff", "surface-dim": "#cbdbf5", "on-error": "#ffffff", "inverse-surface": "#213145", "on-secondary-fixed-variant": "#3f465c", "surface-container-lowest": "#ffffff", "outline-variant": "#c4c5d7", "primary": "#0037b0", "surface-container": "#e5eeff", "error": "#ba1a1a" }, "borderRadius": { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" }, "spacing": { "gutter": "1.5rem", "space-xs": "0.25rem", "margin": "2rem", "space-lg": "1.5rem", "space-xl": "2.5rem", "margin-mobile": "1rem", "gutter-mobile": "0.75rem", "space-sm": "0.5rem", "space-md": "1rem" }, "fontFamily": { "label-sm": ["JetBrains Mono"], "label-md": ["JetBrains Mono"], "headline-sm": ["Plus Jakarta Sans"], "headline-md": ["Plus Jakarta Sans"], "headline-lg-mobile": ["Plus Jakarta Sans"], "headline-lg": ["Plus Jakarta Sans"], "body-sm": ["Plus Jakarta Sans"], "headline-xl-mobile": ["Plus Jakarta Sans"], "body-md": ["Plus Jakarta Sans"], "label-lg": ["JetBrains Mono"], "headline-xl": ["Plus Jakarta Sans"], "body-lg": ["Plus Jakarta Sans"] }, "fontSize": { "label-sm": ["10px", { "lineHeight": "14px", "letterSpacing": "0.06em", "fontWeight": "500" }], "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.04em", "fontWeight": "500" }], "headline-sm": ["16px", { "lineHeight": "24px", "fontWeight": "600" }], "headline-md": ["20px", { "lineHeight": "28px", "letterSpacing": "-0.01em", "fontWeight": "600" }], "headline-lg-mobile": ["22px", { "lineHeight": "28px", "letterSpacing": "-0.01em", "fontWeight": "600" }], "headline-lg": ["28px", { "lineHeight": "36px", "letterSpacing": "-0.02em", "fontWeight": "700" }], "body-sm": ["12px", { "lineHeight": "16px", "fontWeight": "400" }], "headline-xl-mobile": ["28px", { "lineHeight": "34px", "letterSpacing": "-0.01em", "fontWeight": "700" }], "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }], "label-lg": ["14px", { "lineHeight": "20px", "letterSpacing": "0.02em", "fontWeight": "600" }], "headline-xl": ["36px", { "lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "700" }], "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }] } } } };</script></head><body class="bg-surface font-body-md text-on-surface antialiased flex flex-col min-h-screen"><header class="fixed top-0 w-full z-50 pt-safe bg-surface-container-lowest/90 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)]"><div class="h-16 px-4 flex items-center justify-between gap-2"><div class="flex items-center gap-2 min-w-0"><img alt="Brand logo. - Primary color: #1d4ed8 - Font: plusJakartaSans - Mode: light - Roundness: rounded-md" class="h-8 w-auto object-contain flex-shrink-0" src="https://lh3.googleusercontent.com/aida/AEtjO1WnBlud70W82IG9ZYFq5-yjHVo6nK5TWXnKCZAsdqu1dis49Om0UMJ9AwsvUGGSwDWt_V3XeiDTx-GcUUFgQoDqeI87plWZPP7asvfmH6qHEuZhH0cLcc7jG5rJ04W77PjdOvaUcdAiUkPuMqwGvPqIuwWaFbRrQb4kaWV78Rnow5KDmJwxhJbvOVLVKBbhzEkPZJGvGo_EQP2bQI-W0fYLLL-nDccOeBcT1SBEo2lgxw91tJrIG_7sPEA"/><div class="flex flex-col min-w-0"><div class="flex items-center gap-1.5"><span class="font-headline-sm text-headline-sm text-on-surface font-bold truncate tracking-tight">VoltStock</span><span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-surface-container text-on-tertiary-fixed-variant font-label-sm text-label-sm uppercase"><span class="w-1.5 h-1.5 rounded-full bg-tertiary animate-pulse"></span>Online</span></div><span class="font-label-sm text-label-sm text-on-surface-variant truncate">Inventario</span></div></div><div class="flex items-center gap-2 flex-shrink-0"><button aria-label="Selector de nave o almacén" class="h-11 px-2.5 rounded-lg bg-surface-container-low text-on-surface flex items-center gap-1.5 hover:bg-surface-container transition-colors"><span class="material-symbols-outlined text-[18px] text-primary">warehouse</span><span class="font-label-sm text-label-sm font-semibold tracking-wide uppercase">Nave 04</span><span class="material-symbols-outlined text-[16px] text-on-surface-variant">arrow_drop_down</span></button><img alt="Profile" class="w-8 h-8 rounded-full object-cover" src="https://lh3.googleusercontent.com/aida/AEtjO1X3_lB_3z5kUaJ9vjlXVMqcqUH6qcQdNQb6XvjspwDuENuctltrOm4MJpdqhHg81eYJzJfiT6tTjtr0AY9eQ718aQPNbnOZMcln14cz04VnJd52SjbN56tJXp-GpJcDZFE48YcQ2QoYn8oIEl8R_hTbRDRhCP6g01GsxWLE7STRAR1WGYEfN1apAo8itv7zrkc5wx-ohbKkYNxwY7Maw9zb5HA5Bkasf1eCCKrjF3Aqjuqrz6iFNiYJFQk"/></div></div></header><main class="flex-1 w-full pt-16 pb-24 bg-surface flex flex-col"><div class="flex flex-col w-full">
+<!-- Live Sync Warehouse Banner -->
+<section class="px-4 py-2.5 bg-surface-container-low flex items-center justify-between shadow-sm">
+<div class="flex items-center gap-2.5 min-w-0">
+<div class="w-8 h-8 rounded-lg bg-surface-container-high flex items-center justify-center flex-shrink-0 text-primary">
+<span class="material-symbols-outlined text-[18px]">cell_tower</span>
+</div>
+<div class="flex flex-col min-w-0">
+<div class="flex items-center gap-1.5">
+<span class="font-headline-sm text-headline-sm text-on-surface truncate">Nave Central A-4</span>
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary-fixed-dim"></span>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant truncate">Sincronizado: hace 3 min · ERP Activo</span>
+</div>
+</div>
+<button aria-label="Sincronizar stock manual" class="h-9 px-3 rounded-lg bg-surface-container-lowest text-primary font-label-sm text-label-sm shadow-sm flex items-center gap-1.5 active:scale-95 transition-transform" id="sync-btn">
+<span class="material-symbols-outlined text-[16px] text-primary" id="sync-icon">sync</span>
+<span class="font-semibold uppercase tracking-wider">Sync</span>
+</button>
+</section>
+<!-- Search & Hardware Trigger Scanner Bar -->
+<section class="p-4 bg-surface">
+<div class="flex items-center gap-2 w-full">
+<div class="relative flex-1 flex items-center bg-surface-container-lowest rounded-xl shadow-sm">
+<span class="material-symbols-outlined text-[20px] text-outline absolute left-3 pointer-events-none">search</span>
+<input class="w-full h-12 pl-10 pr-10 bg-transparent text-on-surface font-body-md text-body-md placeholder:text-outline focus:outline-none" id="product-search" placeholder="Ref, SKU, EAN o estantería..." type="text"/>
+<button aria-label="Borrar búsqueda" class="hidden absolute right-3 w-6 h-6 rounded-full bg-surface-container flex items-center justify-center text-outline hover:text-on-surface" id="clear-search">
+<span class="material-symbols-outlined text-[14px]">close</span>
+</button>
+</div>
+<!-- Quick Scan Trigger -->
+<button aria-label="Escanear código de barras o QR" class="w-12 h-12 rounded-xl bg-primary text-on-primary flex items-center justify-center shadow-md active:bg-primary-container transition-colors flex-shrink-0">
+<span class="material-symbols-outlined text-[24px]">barcode_scanner</span>
+</button>
+<!-- Filter Modal Toggle -->
+<button aria-label="Filtros avanzados" class="w-12 h-12 rounded-xl bg-surface-container text-on-surface flex items-center justify-center shadow-sm active:bg-surface-container-high transition-colors flex-shrink-0">
+<span class="material-symbols-outlined text-[22px]">tune</span>
+</button>
+</div>
+</section>
+<!-- Horizontal Filter Chips Carousel -->
+<section class="w-full overflow-x-auto no-scrollbar px-4 pb-2 -mt-1 flex items-center gap-2">
+<button class="filter-chip active flex-shrink-0 px-3.5 py-2 rounded-full bg-primary text-on-primary font-label-md text-label-md uppercase shadow-sm flex items-center gap-1.5 transition-all" data-category="all">
+<span>Todos</span>
+<span class="px-1.5 py-0.2 rounded-full bg-on-primary/20 text-on-primary font-label-sm text-label-sm font-semibold">3.420</span>
+</button>
+<button class="filter-chip flex-shrink-0 px-3.5 py-2 rounded-full bg-surface-container-lowest text-on-surface font-label-md text-label-md uppercase shadow-sm flex items-center gap-1.5 transition-all" data-category="evse">
+<span>Cargadores VE</span>
+<span class="px-1.5 py-0.2 rounded-full bg-surface-container text-on-surface-variant font-label-sm text-label-sm font-semibold">38</span>
+</button>
+<button class="filter-chip flex-shrink-0 px-3.5 py-2 rounded-full bg-surface-container-lowest text-on-surface font-label-md text-label-md uppercase shadow-sm flex items-center gap-1.5 transition-all" data-category="material">
+<span>Material Obra</span>
+<span class="px-1.5 py-0.2 rounded-full bg-surface-container text-on-surface-variant font-label-sm text-label-sm font-semibold">142</span>
+</button>
+<button class="filter-chip flex-shrink-0 px-3.5 py-2 rounded-full bg-surface-container-lowest text-on-surface font-label-md text-label-md uppercase shadow-sm flex items-center gap-1.5 transition-all" data-category="tools">
+<span>Herramientas</span>
+<span class="px-1.5 py-0.2 rounded-full bg-surface-container text-on-surface-variant font-label-sm text-label-sm font-semibold">18</span>
+</button>
+<button class="filter-chip flex-shrink-0 px-3.5 py-2 rounded-full bg-surface-container-lowest text-error font-label-md text-label-md uppercase shadow-sm flex items-center gap-1.5 transition-all" data-category="critical">
+<span class="w-2 h-2 rounded-full bg-error animate-ping"></span>
+<span class="font-bold">Stock Crítico</span>
+<span class="px-1.5 py-0.2 rounded-full bg-error-container text-on-error-container font-label-sm text-label-sm font-bold">8</span>
+</button>
+</section>
+<!-- Inventory Product List -->
+<section class="px-4 py-2 flex flex-col gap-3.5" id="inventory-list">
+<!-- Card 1: Wallbox Pulsar Plus -->
+<article class="bg-surface-container-lowest rounded-xl shadow-sm p-3.5 flex flex-col gap-3 relative overflow-hidden" data-category="evse">
+<div class="flex items-start justify-between gap-2">
+<div class="flex items-center gap-3 min-w-0">
+<img class="w-14 h-14 rounded-lg object-cover bg-surface-container-low flex-shrink-0" data-alt="High-voltage EV charger unit compact wallbox design against warehouse metal shelf in professional illumination blue accents clean industrial finish" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBMfjxZZcixpRs7Cp1WQtA6hBv17EO27GoawyOMyUxpbHEdmJWltQDA_2twE2EXmooVJbcy6J99VyBTdeu3ochGN7aBuFpQULUG82d_-B2xexQ7l6rt7wSJnto-1jEc8D_OOItqFI5ZlVC0PW_J4C5FAS7SL-sUOpQf1OSQHKTFuvsADpoF4o22bl4C1LFlH3fTqh9C_0Ah5yvrTro8OLCscR_hwfJY92gRSpSj0SyjWKJAXxgLQLiS"/>
+<div class="flex flex-col min-w-0">
+<span class="font-label-sm text-label-sm text-outline tracking-wider uppercase truncate">SKU: WBX-PLS-22K</span>
+<h2 class="font-headline-sm text-headline-sm text-on-surface font-bold truncate">Wallbox Pulsar Plus 22kW</h2>
+<div class="flex items-center gap-1.5 mt-0.5">
+<span class="material-symbols-outlined text-[14px] text-primary">pin_drop</span>
+<span class="font-label-sm text-label-sm font-semibold text-on-surface-variant">B-03-N1</span>
+<span class="text-outline-variant">•</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Depósito Principal</span>
+</div>
+</div>
+</div>
+<span class="px-2.5 py-1 rounded-full bg-surface-container-low text-tertiary font-label-sm text-label-sm font-bold flex items-center gap-1 flex-shrink-0">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary"></span>
+          EN STOCK
+        </span>
+</div>
+<!-- Telemetry Strip -->
+<div class="grid grid-cols-3 gap-2 p-2 rounded-lg bg-surface-container-low text-center">
+<div class="flex flex-col">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Disponibles</span>
+<span class="font-headline-md text-headline-md font-bold text-primary">24 <span class="font-label-sm text-label-sm text-on-surface-variant">uds</span></span>
+</div>
+<div class="flex flex-col border-none">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Reservadas</span>
+<span class="font-headline-md text-headline-md font-bold text-secondary">06 <span class="font-label-sm text-label-sm text-on-surface-variant">uds</span></span>
+</div>
+<div class="flex flex-col border-none">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Mín. Almacén</span>
+<span class="font-headline-md text-headline-md font-bold text-on-surface">10 <span class="font-label-sm text-label-sm text-on-surface-variant">uds</span></span>
+</div>
+</div>
+<!-- Quick Action Buttons -->
+<div class="flex items-center gap-2 pt-0.5">
+<button class="add-to-delivery flex-1 h-10 px-3 rounded-lg bg-primary text-on-primary font-label-md text-label-md font-bold flex items-center justify-center gap-1.5 shadow-sm active:bg-primary-container transition-colors" data-sku="WBX-PLS-22K">
+<span class="material-symbols-outlined text-[18px]">add_task</span>
+<span>Entrega (+)</span>
+</button>
+<button class="h-10 px-2.5 rounded-lg bg-surface-container text-on-surface font-label-md text-label-md flex items-center justify-center gap-1 active:bg-surface-container-high transition-colors" title="Ficha Técnica">
+<span class="material-symbols-outlined text-[18px] text-primary">description</span>
+</button>
+<button class="h-10 px-2.5 rounded-lg bg-surface-container text-on-surface font-label-md text-label-md flex items-center justify-center gap-1 active:bg-surface-container-high transition-colors" title="Modificar Ubicación">
+<span class="material-symbols-outlined text-[18px] text-secondary">edit_location</span>
+</button>
+</div>
+</article>
+<!-- Card 2: Circutor eNext Park -->
+<article class="bg-surface-container-lowest rounded-xl shadow-sm p-3.5 flex flex-col gap-3 relative overflow-hidden" data-category="evse">
+<div class="flex items-start justify-between gap-2">
+<div class="flex items-center gap-3 min-w-0">
+<img class="w-14 h-14 rounded-lg object-cover bg-surface-container-low flex-shrink-0" data-alt="Commercial electric vehicle floor charger pedestal station dual socket metallic clean industrial warehouse setting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAkG75NzLV5D71XzNLGocI4kGa-FOYJgeg-M8pNc6M9R_sR2erK9U_PISD8HkZXnEha-Gh4YERIb_rhT-Dhh3JvucpdfebxRqXy1WnjVFljl9h28dGJ0ejwy8L7LB45518XjJI1FcRpW_wbwtv2NhE-QjBSWAUCxM3fKWNCRUAI4Pjv7UoCtnYNUTYSyAP0cbXLTX2lgmQyit3-rdXouT_EhDyiq77FTEn9retGoL-zuEy8vZZWsipe"/>
+<div class="flex flex-col min-w-0">
+<span class="font-label-sm text-label-sm text-outline tracking-wider uppercase truncate">SKU: CIR-ENX-74K</span>
+<h2 class="font-headline-sm text-headline-sm text-on-surface font-bold truncate">Circutor eNext Park 7.4kW</h2>
+<div class="flex items-center gap-1.5 mt-0.5">
+<span class="material-symbols-outlined text-[14px] text-primary">pin_drop</span>
+<span class="font-label-sm text-label-sm font-semibold text-on-surface-variant">B-05-N2</span>
+<span class="text-outline-variant">•</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Zona Carga Rápida</span>
+</div>
+</div>
+</div>
+<span class="px-2.5 py-1 rounded-full bg-surface-container-low text-tertiary font-label-sm text-label-sm font-bold flex items-center gap-1 flex-shrink-0">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary"></span>
+          EN STOCK
+        </span>
+</div>
+<!-- Telemetry Strip -->
+<div class="grid grid-cols-3 gap-2 p-2 rounded-lg bg-surface-container-low text-center">
+<div class="flex flex-col">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Disponibles</span>
+<span class="font-headline-md text-headline-md font-bold text-primary">12 <span class="font-label-sm text-label-sm text-on-surface-variant">uds</span></span>
+</div>
+<div class="flex flex-col">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Mínimo</span>
+<span class="font-headline-md text-headline-md font-bold text-on-surface">08 <span class="font-label-sm text-label-sm text-on-surface-variant">uds</span></span>
+</div>
+<div class="flex flex-col">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Tránsito</span>
+<span class="font-headline-md text-headline-md font-bold text-secondary">04 <span class="font-label-sm text-label-sm text-on-surface-variant">uds</span></span>
+</div>
+</div>
+<!-- Quick Action Buttons -->
+<div class="flex items-center gap-2 pt-0.5">
+<button class="add-to-delivery flex-1 h-10 px-3 rounded-lg bg-primary text-on-primary font-label-md text-label-md font-bold flex items-center justify-center gap-1.5 shadow-sm active:bg-primary-container transition-colors" data-sku="CIR-ENX-74K">
+<span class="material-symbols-outlined text-[18px]">add_task</span>
+<span>Entrega (+)</span>
+</button>
+<button class="h-10 px-2.5 rounded-lg bg-surface-container text-on-surface font-label-md text-label-md flex items-center justify-center gap-1 active:bg-surface-container-high transition-colors" title="Ficha Técnica">
+<span class="material-symbols-outlined text-[18px] text-primary">description</span>
+</button>
+<button class="h-10 px-2.5 rounded-lg bg-surface-container text-on-surface font-label-md text-label-md flex items-center justify-center gap-1 active:bg-surface-container-high transition-colors" title="Modificar Ubicación">
+<span class="material-symbols-outlined text-[18px] text-secondary">edit_location</span>
+</button>
+</div>
+</article>
+<!-- Card 3: Magnetotérmico Schneider (CRITICAL STOCK) -->
+<article class="bg-surface-container-lowest rounded-xl shadow-md p-3.5 flex flex-col gap-3 relative overflow-hidden" data-category="critical">
+<div class="flex items-start justify-between gap-2">
+<div class="flex items-center gap-3 min-w-0">
+<div class="w-14 h-14 rounded-lg bg-error-container/40 flex items-center justify-center flex-shrink-0 text-error">
+<span class="material-symbols-outlined text-[28px]">electric_meter</span>
+</div>
+<div class="flex flex-col min-w-0">
+<span class="font-label-sm text-label-sm text-error font-bold tracking-wider uppercase truncate">SKU: SCH-IC60-40A</span>
+<h2 class="font-headline-sm text-headline-sm text-on-surface font-bold truncate">Magnetotérmico Schneider iC60N</h2>
+<div class="flex items-center gap-1.5 mt-0.5">
+<span class="font-body-sm text-body-sm font-semibold text-on-surface">4 Polos · Curva C · 40A</span>
+</div>
+</div>
+</div>
+<span class="px-2 py-1 rounded-full bg-error-container text-on-error-container font-label-sm text-label-sm font-bold flex items-center gap-1 flex-shrink-0 animate-pulse">
+<span class="w-1.5 h-1.5 rounded-full bg-error"></span>
+          CRÍTICO
+        </span>
+</div>
+<!-- Critical Alert Info Box -->
+<div class="p-2.5 rounded-lg bg-error-container/30 flex items-center justify-between gap-2">
+<div class="flex items-center gap-2 min-w-0">
+<span class="material-symbols-outlined text-[18px] text-error flex-shrink-0">warning</span>
+<div class="flex flex-col min-w-0">
+<span class="font-label-sm text-label-sm font-bold text-on-error-container uppercase">1 unidad restante (Mín: 12)</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant truncate">Ubicación: Cajón E-01-C3</span>
+</div>
+</div>
+<button class="h-8 px-3 rounded-md bg-error text-on-error font-label-sm text-label-sm font-bold uppercase tracking-wider flex items-center gap-1 shadow-sm active:opacity-90 transition-opacity flex-shrink-0">
+<span class="material-symbols-outlined text-[14px]">local_shipping</span>
+          Pedir
+        </button>
+</div>
+<!-- Quick Action Buttons -->
+<div class="flex items-center gap-2 pt-0.5">
+<button class="add-to-delivery flex-1 h-10 px-3 rounded-lg bg-surface-container-high text-on-surface font-label-md text-label-md font-bold flex items-center justify-center gap-1.5 shadow-sm active:bg-surface-container transition-colors" data-sku="SCH-IC60-40A">
+<span class="material-symbols-outlined text-[18px]">add_task</span>
+<span>Entrega (+)</span>
+</button>
+<button class="h-10 px-2.5 rounded-lg bg-surface-container text-on-surface font-label-md text-label-md flex items-center justify-center gap-1 active:bg-surface-container-high transition-colors" title="Ficha Técnica">
+<span class="material-symbols-outlined text-[18px] text-primary">description</span>
+</button>
+<button class="h-10 px-2.5 rounded-lg bg-surface-container text-on-surface font-label-md text-label-md flex items-center justify-center gap-1 active:bg-surface-container-high transition-colors" title="Modificar Ubicación">
+<span class="material-symbols-outlined text-[18px] text-secondary">edit_location</span>
+</button>
+</div>
+</article>
+<!-- Card 4: Bobina Cable Libre Halógenos -->
+<article class="bg-surface-container-lowest rounded-xl shadow-sm p-3.5 flex flex-col gap-3 relative overflow-hidden" data-category="material">
+<div class="flex items-start justify-between gap-2">
+<div class="flex items-center gap-3 min-w-0">
+<img class="w-14 h-14 rounded-lg object-cover bg-surface-container-low flex-shrink-0" data-alt="Heavy industrial green cable spool copper core coiled neatly on industrial pallet in modern electrical logistics hub" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDTp9fym_kIhl-IHA39yvtg3Gb9YkOCVSmuoTWLVrXPZS-I8NOc6gA3x_ip9YqJVRFIhZAwHDT3H9KZBnWPVRqp31kmqUA9svppVMjo_E8EVEK3XAcAPcGlnZtGVhDmmZfTHIu28_9rBddanhe5MOMSr7O7ZPzkagoeSFvWRpffoMNRpZmMqwZWSrwUyShEuVGG5OdG-Dr7Jx_57dFlo_wctlFgaQs4SB_QyfDQgihA2smTvyNyyG3g"/>
+<div class="flex flex-col min-w-0">
+<span class="font-label-sm text-label-sm text-outline tracking-wider uppercase truncate">SKU: CAB-RZ1K-5G6</span>
+<h2 class="font-headline-sm text-headline-sm text-on-surface font-bold truncate">Cable RZ1-K 5G6mm² (100m)</h2>
+<div class="flex items-center gap-1.5 mt-0.5">
+<span class="material-symbols-outlined text-[14px] text-primary">pin_drop</span>
+<span class="font-label-sm text-label-sm font-semibold text-on-surface-variant">C-12-Suelo</span>
+<span class="text-outline-variant">•</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Bobinas Pesadas</span>
+</div>
+</div>
+</div>
+<span class="px-2.5 py-1 rounded-full bg-surface-container-low text-on-surface-variant font-label-sm text-label-sm font-bold flex items-center gap-1 flex-shrink-0">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+          8 BOBINAS
+        </span>
+</div>
+<div class="flex items-center justify-between p-2 rounded-lg bg-surface-container-low">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px] text-secondary">straighten</span>
+<span class="font-body-sm text-body-sm text-on-surface font-medium">800 metros totales en lote</span>
+</div>
+<span class="font-label-sm text-label-sm uppercase font-semibold text-primary">Lote #2024-09B</span>
+</div>
+<!-- Quick Action Buttons -->
+<div class="flex items-center gap-2 pt-0.5">
+<button class="add-to-delivery flex-1 h-10 px-3 rounded-lg bg-primary text-on-primary font-label-md text-label-md font-bold flex items-center justify-center gap-1.5 shadow-sm active:bg-primary-container transition-colors" data-sku="CAB-RZ1K-5G6">
+<span class="material-symbols-outlined text-[18px]">add_task</span>
+<span>Entrega (+)</span>
+</button>
+<button class="h-10 px-2.5 rounded-lg bg-surface-container text-on-surface font-label-md text-label-md flex items-center justify-center gap-1 active:bg-surface-container-high transition-colors" title="Ficha Técnica">
+<span class="material-symbols-outlined text-[18px] text-primary">description</span>
+</button>
+<button class="h-10 px-2.5 rounded-lg bg-surface-container text-on-surface font-label-md text-label-md flex items-center justify-center gap-1 active:bg-surface-container-high transition-colors" title="Modificar Ubicación">
+<span class="material-symbols-outlined text-[18px] text-secondary">edit_location</span>
+</button>
+</div>
+</article>
+<!-- Card 5: Comprobador EVSE Metrel Multifunción -->
+<article class="bg-surface-container-lowest rounded-xl shadow-sm p-3.5 flex flex-col gap-3 relative overflow-hidden" data-category="tools">
+<div class="flex items-start justify-between gap-2">
+<div class="flex items-center gap-3 min-w-0">
+<div class="w-14 h-14 rounded-lg bg-surface-container flex items-center justify-center flex-shrink-0 text-primary">
+<span class="material-symbols-outlined text-[28px]">hardware</span>
+</div>
+<div class="flex flex-col min-w-0">
+<span class="font-label-sm text-label-sm text-outline tracking-wider uppercase truncate">SKU: MET-A1532-EVSE</span>
+<h2 class="font-headline-sm text-headline-sm text-on-surface font-bold truncate">Comprobador EVSE Metrel A1532</h2>
+<div class="flex items-center gap-1.5 mt-0.5">
+<span class="material-symbols-outlined text-[14px] text-secondary">directions_car</span>
+<span class="font-label-sm text-label-sm font-semibold text-secondary">Asignado: Furg-01</span>
+<span class="text-outline-variant">•</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Calibrado</span>
+</div>
+</div>
+</div>
+<span class="px-2.5 py-1 rounded-full bg-secondary-container text-on-secondary-fixed font-label-sm text-label-sm font-bold flex items-center gap-1 flex-shrink-0">
+          3 UDS TOTAL
+        </span>
+</div>
+<div class="p-2.5 rounded-lg bg-surface-container-low flex items-center justify-between">
+<div class="flex flex-col">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase">En Taller Central</span>
+<span class="font-headline-sm text-headline-sm font-bold text-on-surface">1 ud libre</span>
+</div>
+<div class="flex items-center gap-1 text-primary">
+<span class="material-symbols-outlined text-[16px]">verified_user</span>
+<span class="font-label-sm text-label-sm font-bold">Certificado OK</span>
+</div>
+</div>
+<!-- Quick Action Buttons -->
+<div class="flex items-center gap-2 pt-0.5">
+<button class="add-to-delivery flex-1 h-10 px-3 rounded-lg bg-primary text-on-primary font-label-md text-label-md font-bold flex items-center justify-center gap-1.5 shadow-sm active:bg-primary-container transition-colors" data-sku="MET-A1532-EVSE">
+<span class="material-symbols-outlined text-[18px]">add_task</span>
+<span>Entrega (+)</span>
+</button>
+<button class="h-10 px-2.5 rounded-lg bg-surface-container text-on-surface font-label-md text-label-md flex items-center justify-center gap-1 active:bg-surface-container-high transition-colors" title="Ficha Técnica">
+<span class="material-symbols-outlined text-[18px] text-primary">description</span>
+</button>
+<button class="h-10 px-2.5 rounded-lg bg-surface-container text-on-surface font-label-md text-label-md flex items-center justify-center gap-1 active:bg-surface-container-high transition-colors" title="Historial Asignaciones">
+<span class="material-symbols-outlined text-[18px] text-secondary">history</span>
+</button>
+</div>
+</article>
+</section>
+<!-- Floating Toast Notification on Delivery Item Addition -->
+<div class="fixed bottom-20 left-1/2 -translate-x-1/2 bg-inverse-surface text-inverse-on-surface px-4 py-2.5 rounded-xl shadow-xl flex items-center gap-2.5 transition-all opacity-0 pointer-events-none translate-y-4 z-40 max-w-[90vw]" id="toast">
+<span class="material-symbols-outlined text-[20px] text-tertiary-fixed">check_circle</span>
+<span class="font-body-sm text-body-sm font-medium" id="toast-message">Material añadido al albarán</span>
+</div>
+</div>
+<script>
+  (function() {
+    // 1. Category Filtering
+    const chips = document.querySelectorAll('.filter-chip');
+    const articles = document.querySelectorAll('#inventory-list article');
+
+    chips.forEach(chip => {
+      chip.addEventListener('click', () => {
+        chips.forEach(c => {
+          c.classList.remove('bg-primary', 'text-on-primary');
+          c.classList.add('bg-surface-container-lowest', 'text-on-surface');
+        });
+        chip.classList.add('bg-primary', 'text-on-primary');
+        chip.classList.remove('bg-surface-container-lowest', 'text-on-surface');
+
+        const category = chip.getAttribute('data-category');
+        articles.forEach(article => {
+          if (category === 'all' || article.getAttribute('data-category') === category) {
+            article.style.display = 'flex';
+          } else {
+            article.style.display = 'none';
+          }
+        });
+      });
+    });
+
+    // 2. Search Predictor & Filter
+    const searchInput = document.getElementById('product-search');
+    const clearBtn = document.getElementById('clear-search');
+
+    searchInput.addEventListener('input', (e) => {
+      const query = e.target.value.toLowerCase().trim();
+      clearBtn.style.display = query.length > 0 ? 'flex' : 'none';
+
+      articles.forEach(article => {
+        const text = article.innerText.toLowerCase();
+        if (text.includes(query)) {
+          article.style.display = 'flex';
+        } else {
+          article.style.display = 'none';
+        }
+      });
+    });
+
+    clearBtn.addEventListener('click', () => {
+      searchInput.value = '';
+      clearBtn.style.display = 'none';
+      articles.forEach(article => article.style.display = 'flex');
+    });
+
+    // 3. Add to Delivery Micro-interaction Toast
+    const toast = document.getElementById('toast');
+    const toastMsg = document.getElementById('toast-message');
+    let toastTimeout;
+
+    const deliveryButtons = document.querySelectorAll('.add-to-delivery');
+    deliveryButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const sku = btn.getAttribute('data-sku');
+        toastMsg.innerText = `+1 unidad (${sku}) sumada a Entrega`;
+        toast.classList.remove('opacity-0', 'translate-y-4', 'pointer-events-none');
+        toast.classList.add('opacity-100', 'translate-y-0');
+
+        clearTimeout(toastTimeout);
+        toastTimeout = setTimeout(() => {
+          toast.classList.add('opacity-0', 'translate-y-4', 'pointer-events-none');
+          toast.classList.remove('opacity-100', 'translate-y-0');
+        }, 2200);
+      });
+    });
+
+    // 4. Warehouse Sync micro-animation
+    const syncBtn = document.getElementById('sync-btn');
+    const syncIcon = document.getElementById('sync-icon');
+
+    syncBtn.addEventListener('click', () => {
+      syncIcon.classList.add('animate-spin');
+      setTimeout(() => {
+        syncIcon.classList.remove('animate-spin');
+        toastMsg.innerText = 'Stock sincronizado con ERP Nave 04';
+        toast.classList.remove('opacity-0', 'translate-y-4', 'pointer-events-none');
+        toast.classList.add('opacity-100', 'translate-y-0');
+        setTimeout(() => {
+          toast.classList.add('opacity-0', 'translate-y-4', 'pointer-events-none');
+        }, 2000);
+      }, 900);
+    });
+  })();
+</script></main><nav class="fixed bottom-0 w-full z-50 pb-safe bg-surface-container-lowest/95 backdrop-blur-xl shadow-[0_-2px_12px_rgba(11,28,48,0.06)]" data-active-classes="text-primary font-semibold"><div class="h-16 px-2 flex items-center justify-around"><a aria-current="page" class="flex-1 min-w-[44px] min-h-[44px] flex flex-col items-center justify-center gap-0.5 transition-colors text-primary font-semibold" data-path="inventario" href="#"><span class="material-symbols-outlined text-[22px]">inventory_2</span><span class="font-label-sm text-label-sm tracking-tight">Inventario</span></a><a class="relative -top-2 flex flex-col items-center justify-center min-w-[56px] min-h-[56px]" data-path="escanear-material" href="#"><div class="w-12 h-12 rounded-xl bg-primary text-on-primary flex items-center justify-center shadow-[0_4px_12px_rgba(0,55,176,0.3)] hover:bg-primary-container transition-all"><span class="material-symbols-outlined text-[26px]">qr_code_scanner</span></div><span class="font-label-sm text-label-sm text-primary font-bold mt-1">Escanear</span></a><a class="flex-1 min-w-[44px] min-h-[44px] flex flex-col items-center justify-center gap-0.5 text-on-surface-variant hover:text-on-surface transition-colors" data-path="entrega-y-firma" href="#"><span class="material-symbols-outlined text-[22px]">assignment_turned_in</span><span class="font-label-sm text-label-sm tracking-tight">Entrega</span></a><a class="flex-1 min-w-[44px] min-h-[44px] flex flex-col items-center justify-center gap-0.5 text-on-surface-variant hover:text-on-surface transition-colors" data-path="cuadrillas" href="#"><span class="material-symbols-outlined text-[22px]">local_shipping</span><span class="font-label-sm text-label-sm tracking-tight">Cuadrillas</span></a></div></nav></body></html>

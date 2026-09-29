@@ -1,0 +1,981 @@
+<!DOCTYPE html>
+
+<html lang="es"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0" name="viewport"/><meta content="web_dashboard" name="shell-type"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/><link href="https://fonts.googleapis.com" rel="preconnect"/><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/><link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&amp;family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><style>@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = { darkMode: "class", theme: { extend: { "colors": { "background": "#f8f9ff", "error": "#ba1a1a", "on-tertiary-fixed": "#002113", "on-secondary-fixed": "#131b2e", "tertiary-fixed": "#6ffbbe", "primary-container": "#1d4ed8", "primary-fixed": "#dce1ff", "on-tertiary-fixed-variant": "#005236", "secondary-fixed": "#dae2fd", "on-secondary-fixed-variant": "#3f465c", "surface": "#f8f9ff", "inverse-surface": "#213145", "surface-variant": "#d3e4fe", "surface-bright": "#f8f9ff", "on-primary": "#ffffff", "outline-variant": "#c4c5d7", "primary-fixed-dim": "#b7c4ff", "surface-container-lowest": "#ffffff", "on-background": "#0b1c30", "on-secondary": "#ffffff", "secondary-fixed-dim": "#bec6e0", "on-secondary-container": "#5c647a", "surface-tint": "#2151da", "on-primary-container": "#cad3ff", "secondary-container": "#dae2fd", "secondary": "#565e74", "tertiary-container": "#006a48", "inverse-primary": "#b7c4ff", "tertiary": "#004f35", "on-error-container": "#93000a", "on-primary-fixed": "#001551", "surface-container-low": "#eff4ff", "on-surface-variant": "#434655", "on-surface": "#0b1c30", "on-error": "#ffffff", "surface-dim": "#cbdbf5", "primary": "#0037b0", "surface-container": "#e5eeff", "tertiary-fixed-dim": "#4edea3", "on-tertiary-container": "#60eeb1", "inverse-on-surface": "#eaf1ff", "outline": "#747686", "on-primary-fixed-variant": "#0039b5", "surface-container-highest": "#d3e4fe", "surface-container-high": "#dce9ff", "error-container": "#ffdad6", "on-tertiary": "#ffffff" }, "borderRadius": { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" }, "spacing": { "space-sm": "0.5rem", "margin-mobile": "1rem", "gutter": "1.5rem", "space-lg": "1.5rem", "space-xl": "2.5rem", "space-xs": "0.25rem", "space-md": "1rem", "gutter-mobile": "0.75rem", "margin": "2rem" }, "fontFamily": { "body-lg": ["Plus Jakarta Sans"], "headline-md": ["Plus Jakarta Sans"], "headline-xl": ["Plus Jakarta Sans"], "label-md": ["JetBrains Mono"], "label-sm": ["JetBrains Mono"], "headline-lg": ["Plus Jakarta Sans"], "headline-sm": ["Plus Jakarta Sans"], "headline-xl-mobile": ["Plus Jakarta Sans"], "headline-lg-mobile": ["Plus Jakarta Sans"], "label-lg": ["JetBrains Mono"], "body-sm": ["Plus Jakarta Sans"], "body-md": ["Plus Jakarta Sans"] }, "fontSize": { "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }], "headline-md": ["20px", { "lineHeight": "28px", "letterSpacing": "-0.01em", "fontWeight": "600" }], "headline-xl": ["36px", { "lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "700" }], "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.04em", "fontWeight": "500" }], "label-sm": ["10px", { "lineHeight": "14px", "letterSpacing": "0.06em", "fontWeight": "500" }], "headline-lg": ["28px", { "lineHeight": "36px", "letterSpacing": "-0.02em", "fontWeight": "700" }], "headline-sm": ["16px", { "lineHeight": "24px", "fontWeight": "600" }], "headline-xl-mobile": ["28px", { "lineHeight": "34px", "letterSpacing": "-0.01em", "fontWeight": "700" }], "headline-lg-mobile": ["22px", { "lineHeight": "28px", "letterSpacing": "-0.01em", "fontWeight": "600" }], "label-lg": ["14px", { "lineHeight": "20px", "letterSpacing": "0.02em", "fontWeight": "600" }], "body-sm": ["12px", { "lineHeight": "16px", "fontWeight": "400" }], "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }] } } } }</script></head><body class="bg-surface font-body-md text-on-surface antialiased"><aside class="fixed left-0 top-0 h-full w-72 bg-surface-container-lowest z-50 flex flex-col justify-between shadow-[0_1px_8px_rgba(0,0,0,0.04)]"><div class="flex flex-col"><div class="h-16 px-space-md flex items-center gap-space-sm bg-surface-container-lowest"><img alt="VoltStock Logo" class="h-8 w-auto object-contain" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBJ_RUonVqa6lFQ-RCjBnOd7vmKwQ99d-QTsQwp_KoIM5oTBS_HFnhVO6rWrYKXDB4JI1ouqfywG45a2NaoqV9Qm6Hnz14NYcF_nVY6DHVrSoDXQmewTObwNZC_LjhwTic88_dmp8v1xXIKcFk1f2XxjidUt5L2zrZKgcHbb1Ga-iNdnBjooZahT3UIwEWb0-HJR-EXGAOzOwObe7F3BDGWBRFMaboCRdVTq_OMBFS20WDRUwNRwd1r"/><div class="flex flex-col"><span class="font-headline-sm text-headline-sm text-on-surface tracking-tight leading-none">VoltStock</span><span class="font-label-sm text-label-sm text-secondary uppercase tracking-wider">EV Depot &amp; Logistics</span></div></div><div class="px-space-md pt-space-md pb-space-xs"><span class="font-label-sm text-label-sm text-outline uppercase tracking-wider px-space-xs">Operaciones</span></div><nav class="flex flex-col gap-space-xs px-space-sm" data-active-classes="bg-primary-container text-on-primary font-headline-sm"><a class="flex items-center gap-space-sm px-space-md py-space-sm rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors" data-path="dashboard-stock" href="#"><span class="material-symbols-outlined text-space-lg">inventory_2</span><span class="font-body-md text-body-md">Stock General</span></a><a class="flex items-center gap-space-sm px-space-md py-space-sm rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors" data-path="albaranes-recepcion-ia" href="#"><span class="material-symbols-outlined text-space-lg">document_scanner</span><span class="font-body-md text-body-md">Albaranes &amp; Recepción IA</span></a><a class="flex items-center gap-space-sm px-space-md py-space-sm rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors" data-path="equipos-tecnicos" href="#"><span class="material-symbols-outlined text-space-lg">badge</span><span class="font-body-md text-body-md">Equipos &amp; Técnicos</span></a><a class="flex items-center gap-space-sm px-space-md py-space-sm rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors" data-path="entregas-firmas" href="#"><span class="material-symbols-outlined text-space-lg">draw</span><span class="font-body-md text-body-md">Entregas &amp; Firmas</span></a></nav><div class="px-space-md pt-space-lg pb-space-xs"><span class="font-label-sm text-label-sm text-outline uppercase tracking-wider px-space-xs">Sistema</span></div><nav class="flex flex-col gap-space-xs px-space-sm" data-active-classes="bg-primary-container text-on-primary font-headline-sm"><a class="flex items-center gap-space-sm px-space-md py-space-sm rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors" data-path="configuracion-auditoria" href="#"><span class="material-symbols-outlined text-space-lg">admin_panel_settings</span><span class="font-body-md text-body-md">Configuración &amp; Auditoría</span></a></nav></div><div class="p-space-md bg-surface-container-low m-space-sm rounded-xl flex items-center justify-between"><div class="flex items-center gap-space-sm"><span class="flex h-2.5 w-2.5 rounded-full bg-tertiary-container animate-pulse"></span><div class="flex flex-col"><span class="font-label-md text-label-md text-on-surface">Depot Nodo Central</span><span class="font-label-sm text-label-sm text-secondary">4 Hubs Activos</span></div></div><span class="material-symbols-outlined text-secondary text-space-lg">ev_station</span></div></aside><div class="pl-72"><header class="fixed top-0 left-72 right-0 h-16 bg-surface-container-lowest/90 backdrop-blur-md z-40 px-gutter flex items-center justify-between shadow-[0_1px_8px_rgba(0,0,0,0.04)]"><div class="flex items-center gap-space-md flex-1 max-w-2xl"><div class="relative flex-1"><span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-space-lg">search</span><input class="w-full pl-10 pr-12 py-space-xs bg-surface-container-low rounded-lg text-on-surface placeholder:text-on-surface-variant font-body-sm text-body-sm focus:outline-none focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary" placeholder="Buscar referencia, SKU, número de serie o cargador VE..." type="text"/><span class="absolute right-3 top-1/2 -translate-y-1/2 font-label-sm text-label-sm text-outline bg-surface-container-highest px-1.5 py-0.5 rounded">⌘K</span></div><div class="flex items-center bg-surface-container-low rounded-lg px-space-sm py-1"><span class="material-symbols-outlined text-primary text-space-lg mr-1">warehouse</span><select class="bg-transparent font-label-md text-label-md text-on-surface focus:outline-none cursor-pointer pr-space-xs"><option>Almacén Central (Logistics Hub)</option><option>Furgoneta T-01 (M. Gómez / R. Ruiz)</option><option>Furgoneta T-02 (C. Sánchez)</option><option>Almacén Obra Norte</option></select></div></div><div class="flex items-center gap-space-md"><button class="flex items-center gap-space-xs bg-primary hover:bg-primary-container text-on-primary px-space-md py-space-xs rounded-lg font-headline-sm text-headline-sm transition-colors shadow-sm"><span class="material-symbols-outlined text-space-lg">auto_awesome</span><span>Nuevo Albarán IA</span></button><button class="relative p-space-xs rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors"><span class="material-symbols-outlined">notifications</span><span class="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-error"></span></button><div class="flex items-center gap-space-sm pl-space-xs"><img alt="Profile" class="w-8 h-8 rounded-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCRFxtmGDcQIr22kw5eY4rmIY7XBMC5MWYihoVUvmm1pKswGS_bIQntKs4t-Ocjo1_xYfwS2o0Nf0-j5tSsAwH3spkBZZwKhWkZAw_PxetA08ZHvVMlzJMJWetnkzQah-Rz_3GkAPVK10zn-4vZ6XtcAmGz_84bGBnJlbpBxyNxpAYMC_FFC3bCs2fkGcDcIeNusDssZNTGjp6wtx3xeS3PLFOKyZ2D_A0SFlxz7JaeUwknoZh0fC94"/><div class="hidden xl:flex flex-col text-left"><span class="font-headline-sm text-headline-sm text-on-surface leading-tight">Marc Vila</span><span class="font-label-sm text-label-sm text-secondary">Jefe de Operaciones</span></div></div></div></header><main class="w-full pt-16 bg-surface px-gutter py-space-lg"><div class="flex flex-col w-full gap-space-lg">
+<!-- Sub-header & Action Bar -->
+<div class="flex flex-col lg:flex-row lg:items-center justify-between gap-space-md">
+<div class="flex flex-col">
+<div class="flex items-center gap-space-xs text-secondary font-label-md">
+<span>LOGÍSTICA &amp; FLOTA</span>
+<span>/</span>
+<span class="text-primary font-semibold">GESTIÓN DE EQUIPOS Y DESPLIEGUE</span>
+</div>
+<h1 class="font-headline-lg text-headline-lg text-on-surface tracking-tight mt-1">
+        Equipos de Instalación &amp; Despacho Móvil
+      </h1>
+</div>
+<!-- Scalability Badge & Top CTA -->
+<div class="flex flex-wrap items-center gap-space-sm">
+<div class="flex items-center gap-2 bg-surface-container-high px-space-md py-space-xs rounded-full">
+<span class="flex h-2 w-2 rounded-full bg-tertiary-container animate-pulse"></span>
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">3 Vehículos en Ruta | 6 Operarios</span>
+</div>
+<button class="flex items-center gap-space-xs bg-primary hover:bg-primary-container text-on-primary px-space-md py-space-sm rounded-lg font-headline-sm text-headline-sm transition-all shadow-md active:scale-95" onclick="document.getElementById('modal-nuevo-equipo').classList.remove('hidden')">
+<span class="material-symbols-outlined text-space-lg">group_add</span>
+<span>Crear Equipo / Técnico</span>
+</button>
+</div>
+</div>
+<!-- Banner Informativo Escalabilidad -->
+<div class="relative overflow-hidden bg-surface-container-lowest rounded-xl p-space-md shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-space-md">
+<div class="flex items-start md:items-center gap-space-md">
+<div class="p-space-sm bg-primary-fixed rounded-xl text-primary flex items-center justify-center">
+<span class="material-symbols-outlined text-2xl">alt_route</span>
+</div>
+<div class="flex flex-col">
+<span class="font-headline-sm text-headline-sm text-on-surface">Arquitectura de Operación Flexible</span>
+<p class="font-body-md text-body-md text-secondary">
+          Estructura adaptable por nodo logístico: configura cuadrillas en parejas tándem (2 técnicos) o reconvierte a esquemas individuales (1 técnico) al incorporar nuevos vehículos a la flota activa.
+        </p>
+</div>
+</div>
+<div class="flex items-center gap-space-xs shrink-0 self-end md:self-auto">
+<span class="font-label-sm text-label-sm text-primary font-semibold bg-primary-fixed/60 px-space-sm py-1 rounded-full uppercase">Flota 100% Electrificada</span>
+</div>
+</div>
+<!-- Switch de Modo Organizativo & Segmented Controls -->
+<div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-space-md">
+<div class="inline-flex bg-surface-container-low p-1 rounded-xl shadow-inner">
+<button class="flex items-center gap-space-xs px-space-md py-space-xs rounded-lg font-headline-sm text-headline-sm bg-surface-container-lowest text-primary shadow-sm transition-all" id="tab-equipos-btn" onclick="switchView('equipos')">
+<span class="material-symbols-outlined text-space-lg">local_shipping</span>
+<span>Equipos de Instalación</span>
+<span class="bg-primary/10 text-primary font-label-sm text-label-sm px-2 py-0.5 rounded-full">3</span>
+</button>
+<button class="flex items-center gap-space-xs px-space-md py-space-xs rounded-lg font-headline-sm text-headline-sm text-secondary hover:text-on-surface transition-all" id="tab-tecnicos-btn" onclick="switchView('tecnicos')">
+<span class="material-symbols-outlined text-space-lg">engineering</span>
+<span>Técnicos Individuales</span>
+<span class="bg-surface-container text-secondary font-label-sm text-label-sm px-2 py-0.5 rounded-full">6</span>
+</button>
+</div>
+<!-- Filtros de Estado en tiempo real -->
+<div class="flex items-center gap-space-xs">
+<span class="font-label-sm text-label-sm text-outline uppercase tracking-wider hidden md:inline">Ver:</span>
+<span class="px-space-sm py-1 bg-surface-container-lowest rounded-full font-label-sm text-label-sm text-tertiary font-semibold flex items-center gap-1 shadow-sm">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary"></span> 2 En Ruta
+      </span>
+<span class="px-space-sm py-1 bg-surface-container-lowest rounded-full font-label-sm text-label-sm text-primary font-semibold flex items-center gap-1 shadow-sm">
+<span class="w-1.5 h-1.5 rounded-full bg-primary"></span> 1 En Depot / Asignando
+      </span>
+</div>
+</div>
+<!-- CONTENEDOR 1: VISTA DE EQUIPOS (Default) -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-space-lg" id="view-equipos">
+<!-- EQUIPO 1: Furgoneta 01 -->
+<div class="bg-surface-container-lowest rounded-xl p-space-md shadow-sm flex flex-col justify-between transition-all hover:shadow-md">
+<div class="flex flex-col gap-space-md">
+<!-- Top Rail Header -->
+<div class="flex items-start justify-between">
+<div class="flex items-center gap-space-sm">
+<div class="w-10 h-10 rounded-xl bg-surface-container-high flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-2xl">directions_car</span>
+</div>
+<div class="flex flex-col">
+<span class="font-label-sm text-label-sm text-secondary uppercase font-semibold">Equipo Alfa · Flota 01</span>
+<span class="font-headline-md text-headline-md text-on-surface">4821-LXB</span>
+</div>
+</div>
+<span class="bg-tertiary-fixed text-on-tertiary-fixed px-space-sm py-0.5 rounded-full font-label-sm text-label-sm uppercase flex items-center gap-1">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary animate-pulse"></span>
+            En Ruta
+          </span>
+</div>
+<!-- Personal Asignado -->
+<div class="bg-surface-container-low rounded-lg p-space-sm flex flex-col gap-2">
+<span class="font-label-sm text-label-sm text-secondary uppercase">Personal Operativo (2 Técnicos)</span>
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<div class="w-7 h-7 rounded-full bg-primary-fixed text-on-primary-fixed flex items-center justify-center font-label-sm font-bold">CM</div>
+<div class="flex flex-col">
+<span class="font-headline-sm text-headline-sm text-on-surface leading-tight">Carlos Mendoza</span>
+<span class="font-label-sm text-label-sm text-secondary">Oficial de 1ª (Líder)</span>
+</div>
+</div>
+<span class="material-symbols-outlined text-tertiary text-lg" title="Certificado BT / VE">verified</span>
+</div>
+<div class="flex items-center justify-between pt-1">
+<div class="flex items-center gap-2">
+<div class="w-7 h-7 rounded-full bg-secondary-fixed text-on-secondary-fixed flex items-center justify-center font-label-sm font-bold">DR</div>
+<div class="flex flex-col">
+<span class="font-headline-sm text-headline-sm text-on-surface leading-tight">David Ruiz</span>
+<span class="font-label-sm text-label-sm text-secondary">Técnico de Apoyo</span>
+</div>
+</div>
+<span class="material-symbols-outlined text-tertiary text-lg" title="Certificado PRL Altura">verified</span>
+</div>
+</div>
+<!-- Stock en Furgoneta -->
+<div class="flex flex-col gap-space-xs">
+<div class="flex items-center justify-between">
+<span class="font-label-sm text-label-sm text-secondary uppercase">Stock a Bordo Verificado</span>
+<span class="font-label-sm text-label-sm text-primary font-bold">100% Conciliado</span>
+</div>
+<div class="grid grid-cols-3 gap-2">
+<div class="bg-surface-container-high/60 p-2 rounded-lg text-center flex flex-col items-center">
+<span class="material-symbols-outlined text-primary text-base">ev_charger</span>
+<span class="font-headline-sm text-headline-sm text-on-surface">3 uds</span>
+<span class="font-label-sm text-label-sm text-secondary truncate w-full">Cargador 22kW</span>
+</div>
+<div class="bg-surface-container-high/60 p-2 rounded-lg text-center flex flex-col items-center">
+<span class="material-symbols-outlined text-primary text-base">cable</span>
+<span class="font-headline-sm text-headline-sm text-on-surface">150m</span>
+<span class="font-label-sm text-label-sm text-secondary truncate w-full">Manguera 5G6</span>
+</div>
+<div class="bg-surface-container-high/60 p-2 rounded-lg text-center flex flex-col items-center">
+<span class="material-symbols-outlined text-primary text-base">home_repair_service</span>
+<span class="font-headline-sm text-headline-sm text-on-surface">1 Kit</span>
+<span class="font-label-sm text-label-sm text-secondary truncate w-full">Hilti TE-60</span>
+</div>
+</div>
+</div>
+<!-- Albarán Reciente -->
+<div class="bg-surface-container-high/40 rounded-lg p-space-sm flex items-center justify-between text-body-sm">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-tertiary text-lg">draw</span>
+<div class="flex flex-col">
+<span class="font-label-sm text-label-sm text-secondary">Última Entrega Firmada</span>
+<span class="font-headline-sm text-headline-sm text-on-surface">Hoy · 08:30h (#ENT-2024-0412)</span>
+</div>
+</div>
+<button class="text-primary hover:text-primary-container p-1 rounded" onclick="verAlbaranModal('ENT-2024-0412', 'Carlos Mendoza', 'Furgoneta 01 (4821-LXB)', '3x Cargador Policharger Pro 22kW, 150m Cable 5G6, 1x Maletín Hilti TE-60')">
+<span class="material-symbols-outlined text-xl">visibility</span>
+</button>
+</div>
+</div>
+<!-- Footer Actions -->
+<div class="pt-space-md mt-space-md flex flex-col gap-space-xs">
+<button class="w-full flex items-center justify-center gap-2 py-space-xs px-space-sm bg-surface-container-high hover:bg-surface-container-highest text-on-surface-variant font-headline-sm text-headline-sm rounded-lg transition-colors" onclick="confirmarDesdoble('Furgoneta 01 (4821-LXB)')">
+<span class="material-symbols-outlined text-lg">call_split</span>
+<span>Desdoblar en técnicos (1+1)</span>
+</button>
+<button class="w-full py-space-xs px-space-sm bg-primary hover:bg-primary-container text-on-primary font-headline-sm text-headline-sm rounded-lg transition-colors text-center" onclick="asignarRutaModal('4821-LXB', 'Equipo Alfa')">
+          Gestionar Carga Furgoneta
+        </button>
+</div>
+</div>
+<!-- EQUIPO 2: Furgoneta 02 -->
+<div class="bg-surface-container-lowest rounded-xl p-space-md shadow-sm flex flex-col justify-between transition-all hover:shadow-md">
+<div class="flex flex-col gap-space-md">
+<!-- Top Rail Header -->
+<div class="flex items-start justify-between">
+<div class="flex items-center gap-space-sm">
+<div class="w-10 h-10 rounded-xl bg-surface-container-high flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-2xl">local_shipping</span>
+</div>
+<div class="flex flex-col">
+<span class="font-label-sm text-label-sm text-secondary uppercase font-semibold">Equipo Bravo · Flota 02</span>
+<span class="font-headline-md text-headline-md text-on-surface">9014-MKZ</span>
+</div>
+</div>
+<span class="bg-secondary-fixed text-on-secondary-fixed px-space-sm py-0.5 rounded-full font-label-sm text-label-sm uppercase flex items-center gap-1">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+            En Depot (Carga)
+          </span>
+</div>
+<!-- Personal Asignado -->
+<div class="bg-surface-container-low rounded-lg p-space-sm flex flex-col gap-2">
+<span class="font-label-sm text-label-sm text-secondary uppercase">Personal Operativo (2 Técnicos)</span>
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<div class="w-7 h-7 rounded-full bg-primary-fixed text-on-primary-fixed flex items-center justify-center font-label-sm font-bold">JS</div>
+<div class="flex flex-col">
+<span class="font-headline-sm text-headline-sm text-on-surface leading-tight">Javier Santos</span>
+<span class="font-label-sm text-label-sm text-secondary">Instalador Especialista VE</span>
+</div>
+</div>
+<span class="material-symbols-outlined text-tertiary text-lg">verified</span>
+</div>
+<div class="flex items-center justify-between pt-1">
+<div class="flex items-center gap-2">
+<div class="w-7 h-7 rounded-full bg-secondary-fixed text-on-secondary-fixed flex items-center justify-center font-label-sm font-bold">MP</div>
+<div class="flex flex-col">
+<span class="font-headline-sm text-headline-sm text-on-surface leading-tight">Marcos Peña</span>
+<span class="font-label-sm text-label-sm text-secondary">Técnico Electricista</span>
+</div>
+</div>
+<span class="material-symbols-outlined text-tertiary text-lg">verified</span>
+</div>
+</div>
+<!-- Stock en Furgoneta -->
+<div class="flex flex-col gap-space-xs">
+<div class="flex items-center justify-between">
+<span class="font-label-sm text-label-sm text-secondary uppercase">Material en Preparación</span>
+<span class="font-label-sm text-label-sm text-error font-bold">Pendiente Firma</span>
+</div>
+<div class="bg-surface-container-low rounded-lg p-space-sm flex items-center gap-space-sm">
+<span class="material-symbols-outlined text-secondary text-2xl">pending_actions</span>
+<div class="flex flex-col">
+<span class="font-body-md text-body-md text-on-surface font-semibold">2 Wallbox Copper SB + Cuadros AC</span>
+<span class="font-label-sm text-label-sm text-secondary">Asignado por IA · En rampa de carga #02</span>
+</div>
+</div>
+</div>
+<!-- Albarán Reciente -->
+<div class="bg-surface-container-high/40 rounded-lg p-space-sm flex items-center justify-between text-body-sm">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-secondary text-lg">history_edu</span>
+<div class="flex flex-col">
+<span class="font-label-sm text-label-sm text-secondary">Última Entrega Registrada</span>
+<span class="font-headline-sm text-headline-sm text-on-surface">Ayer · 17:45h (#ENT-2024-0409)</span>
+</div>
+</div>
+<button class="text-primary hover:text-primary-container p-1 rounded" onclick="verAlbaranModal('ENT-2024-0409', 'Javier Santos', 'Furgoneta 02 (9014-MKZ)', '2x Ingeteam Fusion Street, Kit Protecciones Hager')">
+<span class="material-symbols-outlined text-xl">visibility</span>
+</button>
+</div>
+</div>
+<!-- Footer Actions -->
+<div class="pt-space-md mt-space-md flex flex-col gap-space-xs">
+<button class="w-full flex items-center justify-center gap-2 py-space-xs px-space-sm bg-surface-container-high hover:bg-surface-container-highest text-on-surface-variant font-headline-sm text-headline-sm rounded-lg transition-colors" onclick="confirmarDesdoble('Furgoneta 02 (9014-MKZ)')">
+<span class="material-symbols-outlined text-lg">call_split</span>
+<span>Desdoblar en técnicos (1+1)</span>
+</button>
+<button class="w-full py-space-xs px-space-sm bg-primary hover:bg-primary-container text-on-primary font-headline-sm text-headline-sm rounded-lg transition-colors text-center flex items-center justify-center gap-2 shadow-sm" onclick="asignarRutaModal('9014-MKZ', 'Equipo Bravo')">
+<span class="material-symbols-outlined text-lg">assignment_turned_in</span>
+<span>Asignar material para ruta de hoy</span>
+</button>
+</div>
+</div>
+<!-- EQUIPO 3: Furgoneta 03 -->
+<div class="bg-surface-container-lowest rounded-xl p-space-md shadow-sm flex flex-col justify-between transition-all hover:shadow-md">
+<div class="flex flex-col gap-space-md">
+<!-- Top Rail Header -->
+<div class="flex items-start justify-between">
+<div class="flex items-center gap-space-sm">
+<div class="w-10 h-10 rounded-xl bg-surface-container-high flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-2xl">directions_car</span>
+</div>
+<div class="flex flex-col">
+<span class="font-label-sm text-label-sm text-secondary uppercase font-semibold">Equipo Gamma · Flota 03</span>
+<span class="font-headline-md text-headline-md text-on-surface">3381-NZT</span>
+</div>
+</div>
+<span class="bg-tertiary-fixed text-on-tertiary-fixed px-space-sm py-0.5 rounded-full font-label-sm text-label-sm uppercase flex items-center gap-1">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary animate-pulse"></span>
+            En Ruta
+          </span>
+</div>
+<!-- Personal Asignado -->
+<div class="bg-surface-container-low rounded-lg p-space-sm flex flex-col gap-2">
+<span class="font-label-sm text-label-sm text-secondary uppercase">Personal Operativo (2 Técnicos)</span>
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<div class="w-7 h-7 rounded-full bg-primary-fixed text-on-primary-fixed flex items-center justify-center font-label-sm font-bold">EG</div>
+<div class="flex flex-col">
+<span class="font-headline-sm text-headline-sm text-on-surface leading-tight">Elena Gómez</span>
+<span class="font-label-sm text-label-sm text-secondary">Oficial 1ª Electricidad</span>
+</div>
+</div>
+<span class="material-symbols-outlined text-tertiary text-lg">verified</span>
+</div>
+<div class="flex items-center justify-between pt-1">
+<div class="flex items-center gap-2">
+<div class="w-7 h-7 rounded-full bg-secondary-fixed text-on-secondary-fixed flex items-center justify-center font-label-sm font-bold">RM</div>
+<div class="flex flex-col">
+<span class="font-headline-sm text-headline-sm text-on-surface leading-tight">Roberto Marín</span>
+<span class="font-label-sm text-label-sm text-secondary">Instalador Técnico</span>
+</div>
+</div>
+<span class="material-symbols-outlined text-tertiary text-lg">verified</span>
+</div>
+</div>
+<!-- Stock en Furgoneta -->
+<div class="flex flex-col gap-space-xs">
+<div class="flex items-center justify-between">
+<span class="font-label-sm text-label-sm text-secondary uppercase">Stock a Bordo Verificado</span>
+<span class="font-label-sm text-label-sm text-primary font-bold">Conciliado</span>
+</div>
+<div class="grid grid-cols-3 gap-2">
+<div class="bg-surface-container-high/60 p-2 rounded-lg text-center flex flex-col items-center">
+<span class="material-symbols-outlined text-primary text-base">ev_charger</span>
+<span class="font-headline-sm text-headline-sm text-on-surface">1 ud</span>
+<span class="font-label-sm text-label-sm text-secondary truncate w-full">DC 50kW Super</span>
+</div>
+<div class="bg-surface-container-high/60 p-2 rounded-lg text-center flex flex-col items-center">
+<span class="material-symbols-outlined text-primary text-base">straighten</span>
+<span class="font-headline-sm text-headline-sm text-on-surface">80m</span>
+<span class="font-label-sm text-label-sm text-secondary truncate w-full">Tubo Corrugado</span>
+</div>
+<div class="bg-surface-container-high/60 p-2 rounded-lg text-center flex flex-col items-center">
+<span class="material-symbols-outlined text-primary text-base">settings_input_component</span>
+<span class="font-headline-sm text-headline-sm text-on-surface">4 uds</span>
+<span class="font-label-sm text-label-sm text-secondary truncate w-full">Tornillería Anclaje</span>
+</div>
+</div>
+</div>
+<!-- Albarán Reciente -->
+<div class="bg-surface-container-high/40 rounded-lg p-space-sm flex items-center justify-between text-body-sm">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-tertiary text-lg">draw</span>
+<div class="flex flex-col">
+<span class="font-label-sm text-label-sm text-secondary">Última Entrega Firmada</span>
+<span class="font-headline-sm text-headline-sm text-on-surface">Hoy · 07:50h (#ENT-2024-0410)</span>
+</div>
+</div>
+<button class="text-primary hover:text-primary-container p-1 rounded" onclick="verAlbaranModal('ENT-2024-0410', 'Elena Gómez', 'Furgoneta 03 (3381-NZT)', '1x Estación DC 50kW Circontrol Raption, Tubos de canalización subterránea')">
+<span class="material-symbols-outlined text-xl">visibility</span>
+</button>
+</div>
+</div>
+<!-- Footer Actions -->
+<div class="pt-space-md mt-space-md flex flex-col gap-space-xs">
+<button class="w-full flex items-center justify-center gap-2 py-space-xs px-space-sm bg-surface-container-high hover:bg-surface-container-highest text-on-surface-variant font-headline-sm text-headline-sm rounded-lg transition-colors" onclick="confirmarDesdoble('Furgoneta 03 (3381-NZT)')">
+<span class="material-symbols-outlined text-lg">call_split</span>
+<span>Desdoblar en técnicos (1+1)</span>
+</button>
+<button class="w-full py-space-xs px-space-sm bg-primary hover:bg-primary-container text-on-primary font-headline-sm text-headline-sm rounded-lg transition-colors text-center" onclick="asignarRutaModal('3381-NZT', 'Equipo Gamma')">
+          Gestionar Carga Furgoneta
+        </button>
+</div>
+</div>
+</div>
+<!-- CONTENEDOR 2: VISTA DESGLOSE INDIVIDUAL TÉCNICOS (Ocultable) -->
+<div class="hidden grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-space-lg" id="view-tecnicos">
+<!-- Técnico 1 -->
+<div class="bg-surface-container-lowest rounded-xl p-space-md shadow-sm flex flex-col justify-between">
+<div class="flex flex-col gap-space-sm">
+<div class="flex items-center gap-space-sm">
+<div class="w-12 h-12 rounded-xl bg-primary-fixed text-primary flex items-center justify-center font-headline-md font-bold">
+            CM
+          </div>
+<div class="flex flex-col">
+<span class="font-headline-md text-headline-md text-on-surface">Carlos Mendoza</span>
+<span class="font-label-sm text-label-sm text-secondary">Oficial 1ª · ID: TEC-8821</span>
+</div>
+</div>
+<div class="flex flex-col gap-1 mt-2">
+<span class="font-label-sm text-label-sm text-secondary uppercase">Certificaciones Activas</span>
+<div class="flex flex-wrap gap-1">
+<span class="bg-surface-container-high text-on-surface font-label-sm text-label-sm px-2 py-0.5 rounded-full flex items-center gap-1">
+<span class="material-symbols-outlined text-xs text-tertiary">check_circle</span> Inst. Autorizado BT
+            </span>
+<span class="bg-surface-container-high text-on-surface font-label-sm text-label-sm px-2 py-0.5 rounded-full flex items-center gap-1">
+<span class="material-symbols-outlined text-xs text-tertiary">check_circle</span> Puntos Recarga VE (ITC-BT-52)
+            </span>
+<span class="bg-surface-container-high text-on-surface font-label-sm text-label-sm px-2 py-0.5 rounded-full flex items-center gap-1">
+<span class="material-symbols-outlined text-xs text-tertiary">check_circle</span> PRL Trabajos en Altura
+            </span>
+</div>
+</div>
+<div class="bg-surface-container-low rounded-lg p-2 mt-2">
+<div class="flex items-center justify-between text-body-sm">
+<span class="text-secondary font-label-sm">Asignación Actual:</span>
+<span class="font-headline-sm text-headline-sm text-primary">Furgoneta 01 (Líder)</span>
+</div>
+<div class="flex items-center justify-between text-body-sm mt-1">
+<span class="text-secondary font-label-sm">Albaranes Firmados:</span>
+<span class="font-headline-sm text-headline-sm text-on-surface">42 este mes</span>
+</div>
+</div>
+</div>
+<button class="mt-space-md w-full py-space-xs bg-surface-container-high hover:bg-surface-container-highest text-on-surface font-headline-sm text-headline-sm rounded-lg transition-colors flex items-center justify-center gap-1" onclick="verHistorialTecnico('Carlos Mendoza')">
+<span class="material-symbols-outlined text-base">history</span>
+<span>Ver Historial de Firmas</span>
+</button>
+</div>
+<!-- Técnico 2 -->
+<div class="bg-surface-container-lowest rounded-xl p-space-md shadow-sm flex flex-col justify-between">
+<div class="flex flex-col gap-space-sm">
+<div class="flex items-center gap-space-sm">
+<div class="w-12 h-12 rounded-xl bg-secondary-fixed text-on-secondary-fixed flex items-center justify-center font-headline-md font-bold">
+            DR
+          </div>
+<div class="flex flex-col">
+<span class="font-headline-md text-headline-md text-on-surface">David Ruiz</span>
+<span class="font-label-sm text-label-sm text-secondary">Técnico Apoyo · ID: TEC-9102</span>
+</div>
+</div>
+<div class="flex flex-col gap-1 mt-2">
+<span class="font-label-sm text-label-sm text-secondary uppercase">Certificaciones Activas</span>
+<div class="flex flex-wrap gap-1">
+<span class="bg-surface-container-high text-on-surface font-label-sm text-label-sm px-2 py-0.5 rounded-full flex items-center gap-1">
+<span class="material-symbols-outlined text-xs text-tertiary">check_circle</span> PRL Trabajos en Altura
+            </span>
+<span class="bg-surface-container-high text-on-surface font-label-sm text-label-sm px-2 py-0.5 rounded-full flex items-center gap-1">
+<span class="material-symbols-outlined text-xs text-tertiary">check_circle</span> PRL Riesgo Eléctrico
+            </span>
+</div>
+</div>
+<div class="bg-surface-container-low rounded-lg p-2 mt-2">
+<div class="flex items-center justify-between text-body-sm">
+<span class="text-secondary font-label-sm">Asignación Actual:</span>
+<span class="font-headline-sm text-headline-sm text-primary">Furgoneta 01 (Apoyo)</span>
+</div>
+<div class="flex items-center justify-between text-body-sm mt-1">
+<span class="text-secondary font-label-sm">Albaranes Firmados:</span>
+<span class="font-headline-sm text-headline-sm text-on-surface">19 este mes</span>
+</div>
+</div>
+</div>
+<button class="mt-space-md w-full py-space-xs bg-surface-container-high hover:bg-surface-container-highest text-on-surface font-headline-sm text-headline-sm rounded-lg transition-colors flex items-center justify-center gap-1" onclick="verHistorialTecnico('David Ruiz')">
+<span class="material-symbols-outlined text-base">history</span>
+<span>Ver Historial de Firmas</span>
+</button>
+</div>
+<!-- Técnico 3 -->
+<div class="bg-surface-container-lowest rounded-xl p-space-md shadow-sm flex flex-col justify-between">
+<div class="flex flex-col gap-space-sm">
+<div class="flex items-center gap-space-sm">
+<div class="w-12 h-12 rounded-xl bg-primary-fixed text-primary flex items-center justify-center font-headline-md font-bold">
+            JS
+          </div>
+<div class="flex flex-col">
+<span class="font-headline-md text-headline-md text-on-surface">Javier Santos</span>
+<span class="font-label-sm text-label-sm text-secondary">Especialista VE · ID: TEC-7411</span>
+</div>
+</div>
+<div class="flex flex-col gap-1 mt-2">
+<span class="font-label-sm text-label-sm text-secondary uppercase">Certificaciones Activas</span>
+<div class="flex flex-wrap gap-1">
+<span class="bg-surface-container-high text-on-surface font-label-sm text-label-sm px-2 py-0.5 rounded-full flex items-center gap-1">
+<span class="material-symbols-outlined text-xs text-tertiary">check_circle</span> Inst. Autorizado BT
+            </span>
+<span class="bg-surface-container-high text-on-surface font-label-sm text-label-sm px-2 py-0.5 rounded-full flex items-center gap-1">
+<span class="material-symbols-outlined text-xs text-tertiary">check_circle</span> Estaciones DC Alta Potencia
+            </span>
+</div>
+</div>
+<div class="bg-surface-container-low rounded-lg p-2 mt-2">
+<div class="flex items-center justify-between text-body-sm">
+<span class="text-secondary font-label-sm">Asignación Actual:</span>
+<span class="font-headline-sm text-headline-sm text-primary">Furgoneta 02 (Líder)</span>
+</div>
+<div class="flex items-center justify-between text-body-sm mt-1">
+<span class="text-secondary font-label-sm">Albaranes Firmados:</span>
+<span class="font-headline-sm text-headline-sm text-on-surface">36 este mes</span>
+</div>
+</div>
+</div>
+<button class="mt-space-md w-full py-space-xs bg-surface-container-high hover:bg-surface-container-highest text-on-surface font-headline-sm text-headline-sm rounded-lg transition-colors flex items-center justify-center gap-1" onclick="verHistorialTecnico('Javier Santos')">
+<span class="material-symbols-outlined text-base">history</span>
+<span>Ver Historial de Firmas</span>
+</button>
+</div>
+<!-- Técnico 4 -->
+<div class="bg-surface-container-lowest rounded-xl p-space-md shadow-sm flex flex-col justify-between">
+<div class="flex flex-col gap-space-sm">
+<div class="flex items-center gap-space-sm">
+<div class="w-12 h-12 rounded-xl bg-secondary-fixed text-on-secondary-fixed flex items-center justify-center font-headline-md font-bold">
+            MP
+          </div>
+<div class="flex flex-col">
+<span class="font-headline-md text-headline-md text-on-surface">Marcos Peña</span>
+<span class="font-label-sm text-label-sm text-secondary">Instalador · ID: TEC-6204</span>
+</div>
+</div>
+<div class="flex flex-col gap-1 mt-2">
+<span class="font-label-sm text-label-sm text-secondary uppercase">Certificaciones Activas</span>
+<div class="flex flex-wrap gap-1">
+<span class="bg-surface-container-high text-on-surface font-label-sm text-label-sm px-2 py-0.5 rounded-full flex items-center gap-1">
+<span class="material-symbols-outlined text-xs text-tertiary">check_circle</span> Cuadros y Protecciones DC
+            </span>
+<span class="bg-surface-container-high text-on-surface font-label-sm text-label-sm px-2 py-0.5 rounded-full flex items-center gap-1">
+<span class="material-symbols-outlined text-xs text-tertiary">check_circle</span> PRL Plataformas Elevadoras
+            </span>
+</div>
+</div>
+<div class="bg-surface-container-low rounded-lg p-2 mt-2">
+<div class="flex items-center justify-between text-body-sm">
+<span class="text-secondary font-label-sm">Asignación Actual:</span>
+<span class="font-headline-sm text-headline-sm text-primary">Furgoneta 02 (Técnico)</span>
+</div>
+<div class="flex items-center justify-between text-body-sm mt-1">
+<span class="text-secondary font-label-sm">Albaranes Firmados:</span>
+<span class="font-headline-sm text-headline-sm text-on-surface">28 este mes</span>
+</div>
+</div>
+</div>
+<button class="mt-space-md w-full py-space-xs bg-surface-container-high hover:bg-surface-container-highest text-on-surface font-headline-sm text-headline-sm rounded-lg transition-colors flex items-center justify-center gap-1" onclick="verHistorialTecnico('Marcos Peña')">
+<span class="material-symbols-outlined text-base">history</span>
+<span>Ver Historial de Firmas</span>
+</button>
+</div>
+<!-- Técnico 5 -->
+<div class="bg-surface-container-lowest rounded-xl p-space-md shadow-sm flex flex-col justify-between">
+<div class="flex flex-col gap-space-sm">
+<div class="flex items-center gap-space-sm">
+<div class="w-12 h-12 rounded-xl bg-primary-fixed text-primary flex items-center justify-center font-headline-md font-bold">
+            EG
+          </div>
+<div class="flex flex-col">
+<span class="font-headline-md text-headline-md text-on-surface">Elena Gómez</span>
+<span class="font-label-sm text-label-sm text-secondary">Oficial 1ª · ID: TEC-5531</span>
+</div>
+</div>
+<div class="flex flex-col gap-1 mt-2">
+<span class="font-label-sm text-label-sm text-secondary uppercase">Certificaciones Activas</span>
+<div class="flex flex-wrap gap-1">
+<span class="bg-surface-container-high text-on-surface font-label-sm text-label-sm px-2 py-0.5 rounded-full flex items-center gap-1">
+<span class="material-symbols-outlined text-xs text-tertiary">check_circle</span> Inst. Autorizado BT
+            </span>
+<span class="bg-surface-container-high text-on-surface font-label-sm text-label-sm px-2 py-0.5 rounded-full flex items-center gap-1">
+<span class="material-symbols-outlined text-xs text-tertiary">check_circle</span> Hubs de Carga Rápida
+            </span>
+<span class="bg-surface-container-high text-on-surface font-label-sm text-label-sm px-2 py-0.5 rounded-full flex items-center gap-1">
+<span class="material-symbols-outlined text-xs text-tertiary">check_circle</span> PRL Espacios Confinados
+            </span>
+</div>
+</div>
+<div class="bg-surface-container-low rounded-lg p-2 mt-2">
+<div class="flex items-center justify-between text-body-sm">
+<span class="text-secondary font-label-sm">Asignación Actual:</span>
+<span class="font-headline-sm text-headline-sm text-primary">Furgoneta 03 (Líder)</span>
+</div>
+<div class="flex items-center justify-between text-body-sm mt-1">
+<span class="text-secondary font-label-sm">Albaranes Firmados:</span>
+<span class="font-headline-sm text-headline-sm text-on-surface">51 este mes</span>
+</div>
+</div>
+</div>
+<button class="mt-space-md w-full py-space-xs bg-surface-container-high hover:bg-surface-container-highest text-on-surface font-headline-sm text-headline-sm rounded-lg transition-colors flex items-center justify-center gap-1" onclick="verHistorialTecnico('Elena Gómez')">
+<span class="material-symbols-outlined text-base">history</span>
+<span>Ver Historial de Firmas</span>
+</button>
+</div>
+<!-- Técnico 6 -->
+<div class="bg-surface-container-lowest rounded-xl p-space-md shadow-sm flex flex-col justify-between">
+<div class="flex flex-col gap-space-sm">
+<div class="flex items-center gap-space-sm">
+<div class="w-12 h-12 rounded-xl bg-secondary-fixed text-on-secondary-fixed flex items-center justify-center font-headline-md font-bold">
+            RM
+          </div>
+<div class="flex flex-col">
+<span class="font-headline-md text-headline-md text-on-surface">Roberto Marín</span>
+<span class="font-label-sm text-label-sm text-secondary">Técnico Electricista · ID: TEC-4990</span>
+</div>
+</div>
+<div class="flex flex-col gap-1 mt-2">
+<span class="font-label-sm text-label-sm text-secondary uppercase">Certificaciones Activas</span>
+<div class="flex flex-wrap gap-1">
+<span class="bg-surface-container-high text-on-surface font-label-sm text-label-sm px-2 py-0.5 rounded-full flex items-center gap-1">
+<span class="material-symbols-outlined text-xs text-tertiary">check_circle</span> PRL Trabajos en Altura
+            </span>
+<span class="bg-surface-container-high text-on-surface font-label-sm text-label-sm px-2 py-0.5 rounded-full flex items-center gap-1">
+<span class="material-symbols-outlined text-xs text-tertiary">check_circle</span> Cableado Estructurado
+            </span>
+</div>
+</div>
+<div class="bg-surface-container-low rounded-lg p-2 mt-2">
+<div class="flex items-center justify-between text-body-sm">
+<span class="text-secondary font-label-sm">Asignación Actual:</span>
+<span class="font-headline-sm text-headline-sm text-primary">Furgoneta 03 (Apoyo)</span>
+</div>
+<div class="flex items-center justify-between text-body-sm mt-1">
+<span class="text-secondary font-label-sm">Albaranes Firmados:</span>
+<span class="font-headline-sm text-headline-sm text-on-surface">31 este mes</span>
+</div>
+</div>
+</div>
+<button class="mt-space-md w-full py-space-xs bg-surface-container-high hover:bg-surface-container-highest text-on-surface font-headline-sm text-headline-sm rounded-lg transition-colors flex items-center justify-center gap-1" onclick="verHistorialTecnico('Roberto Marín')">
+<span class="material-symbols-outlined text-base">history</span>
+<span>Ver Historial de Firmas</span>
+</button>
+</div>
+</div>
+<!-- SECCIÓN 4: REGISTRO DE ENTREGAS & FIRMAS DIGITALES -->
+<div class="bg-surface-container-lowest rounded-xl p-space-md shadow-sm flex flex-col gap-space-md">
+<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-space-sm">
+<div class="flex items-center gap-space-sm">
+<div class="p-2 bg-tertiary-fixed text-on-tertiary-fixed rounded-lg">
+<span class="material-symbols-outlined text-2xl">verified_user</span>
+</div>
+<div class="flex flex-col">
+<h2 class="font-headline-md text-headline-md text-on-surface">Auditoría de Entregas &amp; Firmas Digitales</h2>
+<span class="font-label-sm text-label-sm text-secondary">Custodia de material entregado desde almacén central con firma biométrica y hash SHA-256</span>
+</div>
+</div>
+<div class="flex items-center gap-2">
+<button class="flex items-center gap-1 px-space-sm py-1 bg-surface-container-low hover:bg-surface-container text-on-surface font-label-md text-label-md rounded-lg transition-colors">
+<span class="material-symbols-outlined text-base">filter_list</span>
+<span>Filtrar</span>
+</button>
+<button class="flex items-center gap-1 px-space-sm py-1 bg-surface-container-low hover:bg-surface-container text-on-surface font-label-md text-label-md rounded-lg transition-colors">
+<span class="material-symbols-outlined text-base">download</span>
+<span>Exportar CSV</span>
+</button>
+</div>
+</div>
+<!-- Tabla de Registros -->
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface-container-low text-secondary font-label-sm text-label-sm uppercase tracking-wider">
+<th class="py-space-sm px-space-md rounded-l-lg">Referencia / Fecha</th>
+<th class="py-space-sm px-space-md">Equipo / Vehículo</th>
+<th class="py-space-sm px-space-md">Técnico Receptor</th>
+<th class="py-space-sm px-space-md">Resumen de Material</th>
+<th class="py-space-sm px-space-md">Firma Digital Capturada</th>
+<th class="py-space-sm px-space-md text-right rounded-r-lg">Comprobante</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-surface-container text-body-sm font-body-sm text-on-surface">
+<!-- Fila 1 -->
+<tr class="hover:bg-surface-container-low/60 transition-colors">
+<td class="py-space-sm px-space-md">
+<div class="flex flex-col">
+<span class="font-label-md text-label-md text-primary font-bold">#ENT-2024-0412</span>
+<span class="font-label-sm text-label-sm text-secondary">Hoy · 08:30:14</span>
+</div>
+</td>
+<td class="py-space-sm px-space-md">
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-secondary text-base">directions_car</span>
+<span class="font-semibold">Furgoneta 01</span>
+<span class="font-label-sm text-label-sm text-secondary">(4821-LXB)</span>
+</div>
+</td>
+<td class="py-space-sm px-space-md">
+<div class="flex items-center gap-2">
+<div class="w-6 h-6 rounded-full bg-primary-fixed text-primary text-xs flex items-center justify-center font-bold">CM</div>
+<span>Carlos Mendoza</span>
+</div>
+</td>
+<td class="py-space-sm px-space-md">
+<span class="truncate block max-w-xs" title="3x Cargador Policharger Pro 22kW, 150m Cable 5G6, 1x Maletín Hilti TE-60">
+                3x Cargadores VE, 150m cable, Kit Hilti
+              </span>
+</td>
+<td class="py-space-sm px-space-md">
+<!-- Preview SVG Firma Digital -->
+<div class="flex items-center gap-2">
+<div class="w-24 h-8 bg-surface-container rounded border-0 flex items-center justify-center px-1 overflow-hidden" title="Hash: a8f9...31c2">
+<svg class="w-full h-full text-primary" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2" viewbox="0 0 100 35">
+<path d="M5 25 Q 15 5, 28 20 T 45 10 T 60 28 Q 75 12, 95 18"></path>
+</svg>
+</div>
+<span class="font-label-sm text-label-sm text-tertiary flex items-center gap-0.5">
+<span class="material-symbols-outlined text-xs">done_all</span> Verificada
+                </span>
+</div>
+</td>
+<td class="py-space-sm px-space-md text-right">
+<button class="inline-flex items-center gap-1 text-primary hover:text-primary-container font-label-md text-label-md py-1 px-2 rounded-md hover:bg-surface-container transition-colors" onclick="verAlbaranModal('ENT-2024-0412', 'Carlos Mendoza', 'Furgoneta 01 (4821-LXB)', '3x Cargador Policharger Pro 22kW, 150m Cable 5G6, 1x Maletín Hilti TE-60')">
+<span class="material-symbols-outlined text-base">picture_as_pdf</span>
+<span>PDF Firmado</span>
+</button>
+</td>
+</tr>
+<!-- Fila 2 -->
+<tr class="hover:bg-surface-container-low/60 transition-colors">
+<td class="py-space-sm px-space-md">
+<div class="flex flex-col">
+<span class="font-label-md text-label-md text-primary font-bold">#ENT-2024-0410</span>
+<span class="font-label-sm text-label-sm text-secondary">Hoy · 07:50:22</span>
+</div>
+</td>
+<td class="py-space-sm px-space-md">
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-secondary text-base">directions_car</span>
+<span class="font-semibold">Furgoneta 03</span>
+<span class="font-label-sm text-label-sm text-secondary">(3381-NZT)</span>
+</div>
+</td>
+<td class="py-space-sm px-space-md">
+<div class="flex items-center gap-2">
+<div class="w-6 h-6 rounded-full bg-secondary-fixed text-on-secondary text-xs flex items-center justify-center font-bold">EG</div>
+<span>Elena Gómez</span>
+</div>
+</td>
+<td class="py-space-sm px-space-md">
+<span class="truncate block max-w-xs" title="1x Circontrol Raption 50kW, 80m Tubo Corrugado 63mm, Anclajes Suelo">
+                1x Cargador DC 50kW, 80m Tubo corrugado
+              </span>
+</td>
+<td class="py-space-sm px-space-md">
+<div class="flex items-center gap-2">
+<div class="w-24 h-8 bg-surface-container rounded border-0 flex items-center justify-center px-1 overflow-hidden" title="Hash: c4b1...09ef">
+<svg class="w-full h-full text-primary" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2" viewbox="0 0 100 35">
+<path d="M8 20 C 20 2, 25 32, 40 18 S 65 30, 80 15 L 92 25"></path>
+</svg>
+</div>
+<span class="font-label-sm text-label-sm text-tertiary flex items-center gap-0.5">
+<span class="material-symbols-outlined text-xs">done_all</span> Verificada
+                </span>
+</div>
+</td>
+<td class="py-space-sm px-space-md text-right">
+<button class="inline-flex items-center gap-1 text-primary hover:text-primary-container font-label-md text-label-md py-1 px-2 rounded-md hover:bg-surface-container transition-colors" onclick="verAlbaranModal('ENT-2024-0410', 'Elena Gómez', 'Furgoneta 03 (3381-NZT)', '1x Circontrol Raption 50kW, 80m Tubo Corrugado 63mm, Anclajes Suelo')">
+<span class="material-symbols-outlined text-base">picture_as_pdf</span>
+<span>PDF Firmado</span>
+</button>
+</td>
+</tr>
+<!-- Fila 3 -->
+<tr class="hover:bg-surface-container-low/60 transition-colors">
+<td class="py-space-sm px-space-md">
+<div class="flex flex-col">
+<span class="font-label-md text-label-md text-primary font-bold">#ENT-2024-0409</span>
+<span class="font-label-sm text-label-sm text-secondary">Ayer · 17:45:50</span>
+</div>
+</td>
+<td class="py-space-sm px-space-md">
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-secondary text-base">directions_car</span>
+<span class="font-semibold">Furgoneta 02</span>
+<span class="font-label-sm text-label-sm text-secondary">(9014-MKZ)</span>
+</div>
+</td>
+<td class="py-space-sm px-space-md">
+<div class="flex items-center gap-2">
+<div class="w-6 h-6 rounded-full bg-secondary-fixed text-on-secondary text-xs flex items-center justify-center font-bold">JS</div>
+<span>Javier Santos</span>
+</div>
+</td>
+<td class="py-space-sm px-space-md">
+<span class="truncate block max-w-xs" title="2x Wallbox Pulsar Plus, Protecciones Sobretensiones Schneider">
+                2x Ingeteam Fusion Street + Cuadros AC
+              </span>
+</td>
+<td class="py-space-sm px-space-md">
+<div class="flex items-center gap-2">
+<div class="w-24 h-8 bg-surface-container rounded border-0 flex items-center justify-center px-1 overflow-hidden" title="Hash: 5e77...bb12">
+<svg class="w-full h-full text-primary" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2" viewbox="0 0 100 35">
+<path d="M10 22 C 30 25, 35 5, 55 20 S 75 10, 90 22"></path>
+</svg>
+</div>
+<span class="font-label-sm text-label-sm text-tertiary flex items-center gap-0.5">
+<span class="material-symbols-outlined text-xs">done_all</span> Verificada
+                </span>
+</div>
+</td>
+<td class="py-space-sm px-space-md text-right">
+<button class="inline-flex items-center gap-1 text-primary hover:text-primary-container font-label-md text-label-md py-1 px-2 rounded-md hover:bg-surface-container transition-colors" onclick="verAlbaranModal('ENT-2024-0409', 'Javier Santos', 'Furgoneta 02 (9014-MKZ)', '2x Ingeteam Fusion Street, Protecciones Schneider')">
+<span class="material-symbols-outlined text-base">picture_as_pdf</span>
+<span>PDF Firmado</span>
+</button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<!-- MODAL 1: PREVIEW DE ALBARÁN & FIRMA DIGITAL -->
+<div class="fixed inset-0 z-50 flex items-center justify-center bg-inverse-surface/40 backdrop-blur-sm hidden p-space-md" id="modal-albaran">
+<div class="bg-surface-container-lowest rounded-xl max-w-2xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+<!-- Header Modal -->
+<div class="p-space-md bg-surface-container-low flex items-center justify-between">
+<div class="flex items-center gap-space-sm">
+<span class="material-symbols-outlined text-primary text-2xl">description</span>
+<div class="flex flex-col">
+<span class="font-headline-sm text-headline-sm text-on-surface" id="modal-alb-id">Albarán #ENT-2024-0412</span>
+<span class="font-label-sm text-label-sm text-secondary">Documento Legal Electrónico de Salida</span>
+</div>
+</div>
+<button class="p-1 rounded-lg hover:bg-surface-container text-secondary" onclick="document.getElementById('modal-albaran').classList.add('hidden')">
+<span class="material-symbols-outlined">close</span>
+</button>
+</div>
+<!-- Contenido Albarán Simulado -->
+<div class="p-space-md overflow-y-auto flex flex-col gap-space-md">
+<div class="flex justify-between items-center p-space-sm bg-surface-container-high/40 rounded-lg">
+<div>
+<span class="font-label-sm text-label-sm text-secondary uppercase">Receptor Autorizado:</span>
+<p class="font-headline-sm text-headline-sm text-on-surface font-semibold" id="modal-alb-tecnico">Carlos Mendoza</p>
+</div>
+<div class="text-right">
+<span class="font-label-sm text-label-sm text-secondary uppercase">Destino / Móvil:</span>
+<p class="font-headline-sm text-headline-sm text-primary font-semibold" id="modal-alb-vehiculo">Furgoneta 01 (4821-LXB)</p>
+</div>
+</div>
+<div class="flex flex-col gap-1">
+<span class="font-label-sm text-label-sm text-secondary uppercase font-semibold">Ítems Entregados desde Central</span>
+<div class="p-space-sm bg-surface-container-low rounded-lg font-body-md text-body-md text-on-surface" id="modal-alb-material">
+<!-- Rellenado dinámicamente -->
+</div>
+</div>
+<!-- Firma Digital Biométrica -->
+<div class="flex flex-col gap-2 p-space-sm bg-surface-container-low rounded-lg">
+<div class="flex justify-between items-center">
+<span class="font-label-sm text-label-sm text-secondary uppercase font-semibold">Firma Táctil Capturada en App Móvil</span>
+<span class="font-label-sm text-label-sm text-tertiary font-mono">HASH: 9e3b44f80a87c12</span>
+</div>
+<div class="w-full h-24 bg-surface-container-lowest rounded-lg flex items-center justify-center relative p-2">
+<svg class="w-3/4 h-full text-primary" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2.5" viewbox="0 0 200 60">
+<path d="M10 40 Q 30 10, 50 35 T 85 20 T 115 50 Q 150 15, 185 30"></path>
+</svg>
+<span class="absolute bottom-1 right-2 font-label-sm text-label-sm text-outline">GPS: 40.4168° N, 3.7038° W (Depot Gate 1)</span>
+</div>
+</div>
+</div>
+<!-- Footer Modal -->
+<div class="p-space-md bg-surface-container-low flex justify-end gap-space-sm">
+<button class="px-space-md py-space-xs bg-surface-container-high hover:bg-surface-container-highest text-on-surface rounded-lg font-headline-sm text-headline-sm transition-colors" onclick="document.getElementById('modal-albaran').classList.add('hidden')">
+          Cerrar
+        </button>
+<button class="px-space-md py-space-xs bg-primary hover:bg-primary-container text-on-primary rounded-lg font-headline-sm text-headline-sm transition-colors flex items-center gap-1" onclick="alert('Descargando archivo PDF firmado y sellado criptográficamente...')">
+<span class="material-symbols-outlined text-lg">download</span>
+<span>Descargar PDF</span>
+</button>
+</div>
+</div>
+</div>
+<!-- MODAL 2: ASIGNACIÓN DE MATERIAL RUTA DE HOY -->
+<div class="fixed inset-0 z-50 flex items-center justify-center bg-inverse-surface/40 backdrop-blur-sm hidden p-space-md" id="modal-asignar">
+<div class="bg-surface-container-lowest rounded-xl max-w-xl w-full shadow-2xl overflow-hidden flex flex-col">
+<div class="p-space-md bg-surface-container-low flex items-center justify-between">
+<div class="flex items-center gap-space-sm">
+<span class="material-symbols-outlined text-primary text-2xl">assignment_add</span>
+<div class="flex flex-col">
+<span class="font-headline-sm text-headline-sm text-on-surface">Asignar Stock a Vehículo</span>
+<span class="font-label-sm text-label-sm text-secondary" id="modal-asig-subtitle">Equipo Bravo · 9014-MKZ</span>
+</div>
+</div>
+<button class="p-1 rounded-lg hover:bg-surface-container text-secondary" onclick="document.getElementById('modal-asignar').classList.add('hidden')">
+<span class="material-symbols-outlined">close</span>
+</button>
+</div>
+<div class="p-space-md flex flex-col gap-space-md">
+<p class="font-body-md text-body-md text-secondary">
+          Seleccione el lote o paquete de cargadores VE del inventario del Depot Central para transferir la custodia a esta dotación:
+        </p>
+<div class="flex flex-col gap-space-xs">
+<label class="font-label-sm text-label-sm text-secondary uppercase font-semibold">Cargador / Hardware VE:</label>
+<select class="w-full bg-surface-container-low text-on-surface p-space-sm rounded-lg font-body-md focus:outline-none focus:ring-2 focus:ring-primary">
+<option>2x Wallbox Pulsar Plus 22kW (Lote #WB-8812)</option>
+<option>1x Circontrol Raption 50kW DC (Lote #CIR-3301)</option>
+<option>3x Policharger Pro Trifásico (Lote #POL-4199)</option>
+</select>
+</div>
+<div class="flex flex-col gap-space-xs">
+<label class="font-label-sm text-label-sm text-secondary uppercase font-semibold">Bobina de Cable Eléctrico:</label>
+<select class="w-full bg-surface-container-low text-on-surface p-space-sm rounded-lg font-body-md focus:outline-none focus:ring-2 focus:ring-primary">
+<option>100m - RV-K 5G6mm² Libre de Halógenos</option>
+<option>150m - RV-K 5G10mm² Alta Intensidad</option>
+<option>Sin cable adicional requerido</option>
+</select>
+</div>
+<div class="flex items-center gap-2 p-space-sm bg-primary-fixed/40 rounded-lg">
+<span class="material-symbols-outlined text-primary text-xl">phonelink_ring</span>
+<span class="font-body-sm text-body-sm text-on-surface">Se notificará de inmediato a la aplicación móvil del técnico para su firma biométrica en rampa.</span>
+</div>
+</div>
+<div class="p-space-md bg-surface-container-low flex justify-end gap-space-sm">
+<button class="px-space-md py-space-xs bg-surface-container-high hover:bg-surface-container-highest text-on-surface rounded-lg font-headline-sm text-headline-sm transition-colors" onclick="document.getElementById('modal-asignar').classList.add('hidden')">
+          Cancelar
+        </button>
+<button class="px-space-md py-space-xs bg-primary hover:bg-primary-container text-on-primary rounded-lg font-headline-sm text-headline-sm transition-colors" onclick="ejecutarAsignacion()">
+          Generar Albarán y Despachar
+        </button>
+</div>
+</div>
+</div>
+<!-- MODAL 3: CREAR NUEVO EQUIPO / AÑADIR TÉCNICO -->
+<div class="fixed inset-0 z-50 flex items-center justify-center bg-inverse-surface/40 backdrop-blur-sm hidden p-space-md" id="modal-nuevo-equipo">
+<div class="bg-surface-container-lowest rounded-xl max-w-lg w-full shadow-2xl overflow-hidden flex flex-col">
+<div class="p-space-md bg-surface-container-low flex items-center justify-between">
+<div class="flex items-center gap-space-sm">
+<span class="material-symbols-outlined text-primary text-2xl">group_add</span>
+<div class="flex flex-col">
+<span class="font-headline-sm text-headline-sm text-on-surface">Alta de Equipo / Técnico</span>
+<span class="font-label-sm text-label-sm text-secondary">Escalabilidad de Flota VoltStock</span>
+</div>
+</div>
+<button class="p-1 rounded-lg hover:bg-surface-container text-secondary" onclick="document.getElementById('modal-nuevo-equipo').classList.add('hidden')">
+<span class="material-symbols-outlined">close</span>
+</button>
+</div>
+<div class="p-space-md flex flex-col gap-space-md">
+<div class="flex flex-col gap-1">
+<label class="font-label-sm text-label-sm text-secondary uppercase font-semibold">Tipo de Despliegue:</label>
+<div class="grid grid-cols-2 gap-2">
+<button class="p-2 rounded-lg bg-primary-fixed text-primary font-headline-sm text-headline-sm text-center" type="button">
+              Pareja (2 Técnicos)
+            </button>
+<button class="p-2 rounded-lg bg-surface-container-high text-secondary hover:text-on-surface font-headline-sm text-headline-sm text-center" type="button">
+              Individual (1 Técnico)
+            </button>
+</div>
+</div>
+<div class="flex flex-col gap-1">
+<label class="font-label-sm text-label-sm text-secondary uppercase font-semibold">Identificador de Vehículo / Matrícula:</label>
+<input class="bg-surface-container-low p-2 rounded-lg text-on-surface font-body-md focus:outline-none focus:ring-2 focus:ring-primary" placeholder="Ej: Furgoneta 04 - 6712-PXZ" type="text"/>
+</div>
+<div class="flex flex-col gap-1">
+<label class="font-label-sm text-label-sm text-secondary uppercase font-semibold">Técnico Principal (Oficial):</label>
+<input class="bg-surface-container-low p-2 rounded-lg text-on-surface font-body-md focus:outline-none focus:ring-2 focus:ring-primary" placeholder="Nombre completo del operario certificado" type="text"/>
+</div>
+</div>
+<div class="p-space-md bg-surface-container-low flex justify-end gap-space-sm">
+<button class="px-space-md py-space-xs bg-surface-container-high hover:bg-surface-container-highest text-on-surface rounded-lg font-headline-sm text-headline-sm transition-colors" onclick="document.getElementById('modal-nuevo-equipo').classList.add('hidden')">
+          Cancelar
+        </button>
+<button class="px-space-md py-space-xs bg-primary hover:bg-primary-container text-on-primary rounded-lg font-headline-sm text-headline-sm transition-colors" onclick="alert('Equipo registrado correctamente. Se ha habilitado la terminal en VoltStock.'); document.getElementById('modal-nuevo-equipo').classList.add('hidden');">
+          Guardar Equipo
+        </button>
+</div>
+</div>
+</div>
+</div>
+<script>
+  // Control de Switch entre vista de Equipos y Técnicos Individuales
+  function switchView(tipo) {
+    const viewEquipos = document.getElementById('view-equipos');
+    const viewTecnicos = document.getElementById('view-tecnicos');
+    const btnEquipos = document.getElementById('tab-equipos-btn');
+    const btnTecnicos = document.getElementById('tab-tecnicos-btn');
+
+    if (tipo === 'equipos') {
+      viewEquipos.classList.remove('hidden');
+      viewTecnicos.classList.add('hidden');
+      viewTecnicos.classList.remove('grid');
+
+      btnEquipos.classList.add('bg-surface-container-lowest', 'text-primary', 'shadow-sm');
+      btnEquipos.classList.remove('text-secondary');
+
+      btnTecnicos.classList.remove('bg-surface-container-lowest', 'text-primary', 'shadow-sm');
+      btnTecnicos.classList.add('text-secondary');
+    } else {
+      viewEquipos.classList.add('hidden');
+      viewTecnicos.classList.remove('hidden');
+      viewTecnicos.classList.add('grid');
+
+      btnTecnicos.classList.add('bg-surface-container-lowest', 'text-primary', 'shadow-sm');
+      btnTecnicos.classList.remove('text-secondary');
+
+      btnEquipos.classList.remove('bg-surface-container-lowest', 'text-primary', 'shadow-sm');
+      btnEquipos.classList.add('text-secondary');
+    }
+  }
+
+  // Desdoble de Equipo (Scalability trigger)
+  function confirmarDesdoble(vehiculo) {
+    const confirmar = confirm(`¿Confirmar desdoble operativo de ${vehiculo}?\n\nLa cuadrilla pasará a operar en 2 unidades de trabajo independientes (1 técnico por furgoneta al asignar una nueva unidad de flota).`);
+    if (confirmar) {
+      alert(`Configuración actualizada: El personal de ${vehiculo} queda registrado para asignación individual.`);
+    }
+  }
+
+  // Modal de Ver Albarán y Firma
+  function verAlbaranModal(id, tecnico, vehiculo, material) {
+    document.getElementById('modal-alb-id').innerText = `Albarán ${id}`;
+    document.getElementById('modal-alb-tecnico').innerText = tecnico;
+    document.getElementById('modal-alb-vehiculo').innerText = vehiculo;
+    document.getElementById('modal-alb-material').innerText = material;
+    document.getElementById('modal-albaran').classList.remove('hidden');
+  }
+
+  // Modal Asignar Ruta
+  function asignarRutaModal(matricula, nombreEquipo) {
+    document.getElementById('modal-asig-subtitle').innerText = `${nombreEquipo} · Matrícula ${matricula}`;
+    document.getElementById('modal-asignar').classList.remove('hidden');
+  }
+
+  function ejecutarAsignacion() {
+    alert('Material asignado con éxito. Se ha enviado la solicitud de firma digital al smartphone del técnico líder.');
+    document.getElementById('modal-asignar').classList.add('hidden');
+  }
+
+  // Ver Historial individual
+  function verHistorialTecnico(nombre) {
+    alert(`Mostrando histórico completo de 2024 para el instalador ${nombre}:\n- 100% de firmas biométricas validadas.\n- Cero incidencias en conciliación de inventario.`);
+  }
+</script></main></div></body></html>
