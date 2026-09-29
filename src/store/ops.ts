@@ -271,7 +271,7 @@ export const OPS: Defs = {
       if (S.rol !== 'admin') throw new Error('Solo el administrador puede cambiar la propiedad');
       const p = find(S, a.sku); if (!p) throw new Error('Producto no encontrado');
       if (a.propiedad === 'custodia' && !a.propietario) throw new Error('Indica de quién es el material');
-      p.propiedad = a.propiedad; p.propietario = a.propiedad === 'custodia' ? a.propietario : undefined; if (a.propiedad === 'custodia') p.price = 0;
+      p.propiedad = a.propiedad; p.propietario = a.propiedad === 'custodia' ? a.propietario : undefined; if (a.propiedad === 'custodia') p.price = null;
     },
     rpc: a => ['cambiar_propiedad', { p_sku: a.sku, p_propiedad: a.propiedad, p_propietario: a.propietario ?? null }],
     desc: (_S, a) => `Propiedad de ${a.sku}`,
@@ -348,7 +348,7 @@ export const OPS: Defs = {
           applyMovement(S, { sku: l.sku, type: 'salida', qty: l.qty, reason: 'Entrega a equipo', ref: (e.numero || 'Entrega') + (e.obra ? ' · ' + e.obra : ''), serials: l.serials, equipo: e.equipo, entrega: e.id });
           const p = find(S, l.sku);
           if (p && (p.cat === 'ropa' || p.cat === 'epis')) S.herramientas.push({ id: (p.cat === 'epis' ? 'E' : 'R') + nuevoId().slice(0, 6).toUpperCase(), clase: p.cat === 'epis' ? 'epi' : 'ropa', nombre: p.modelo || p.name,
-            marca: p.supplier, serie: '', talla: p.talla, cantidad: Math.ceil(l.qty), valor: p.price, estado: 'operativa', equipo: e.equipo, tecnico: e.receptor,
+            marca: p.supplier, serie: '', talla: p.talla, cantidad: Math.ceil(l.qty), valor: p.price ?? 0, estado: 'operativa', equipo: e.equipo, tecnico: e.receptor,
             historial: [{ id: nuevoId(), ts: Date.now(), tipo: 'alta', nota: `Entregada en ${e.numero || 'entrega'}`, operator: S.operator }] });
         }
       } catch (err) { const c = JSON.parse(copia); S.products = c.products; S.herramientas = c.herramientas; S.movements = c.movements; throw err; }

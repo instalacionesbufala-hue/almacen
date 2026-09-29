@@ -58,7 +58,7 @@ function Ficha({ sku }: { sku: string }) {
     <SheetHead title={p.name} sub={`${CATS[p.cat].label} · ${p.supplier}`} />
     <div className="p-5 flex flex-col gap-4">
       <div className="flex items-center gap-3"><Tile p={p} size="w-16 h-16" />
-        <div className="flex-1"><div className={`text-headline-lg font-bold ${status(p) === 'red' ? 'text-error' : ''}`}>{qtyTxt(p, p.stock)}</div><div className="text-body-sm text-secondary">Mínimo {qtyTxt(p, p.min)}{p.propiedad === 'custodia' ? ' · sin precio (no es material propio)' : perm.verCostes ? ` · ${eur(p.price)}/${UNIT[p.unit]} · valor ${eur(p.stock * p.price)}` : ''}</div>
+        <div className="flex-1"><div className={`text-headline-lg font-bold ${status(p) === 'red' ? 'text-error' : ''}`}>{qtyTxt(p, p.stock)}</div><div className="text-body-sm text-secondary">Mínimo {qtyTxt(p, p.min)}{p.propiedad === 'custodia' ? ' · sin precio (no es material propio)' : perm.verCostes ? ` · ${eur(p.price)}/${UNIT[p.unit]} · valor ${eur(p.stock * (p.price ?? 0))}` : ''}</div>
           <div className="flex gap-1 mt-1"><TagCustodia p={p} nombre={E.propietarios.find(o => o.id === p.propietario)?.nombre} />{p.borrador && <Tag c="bg-amber-100 text-amber-800">Borrador: falta completarla</Tag>}</div></div>
         <Pill p={p} /></div>
       <div className="grid grid-cols-2 gap-2 text-body-sm">{datos.map(([k, v]) => <div key={k} className="bg-surface-container-low rounded-lg p-2.5"><div className={LBL}>{k}</div><div className="font-medium break-words">{v}</div></div>)}</div>
@@ -180,7 +180,7 @@ function FormProducto({ sku, preset, onCreado }: { sku?: string; preset: Partial
     if (Object.values(n).some(v => !(v >= 0))) return toast('Revisa los números: no pueden ser negativos.', 'err');
     if (f.cat === 'cargadores' && !f.serialized) return toast('Los cargadores llevan siempre n.º de serie.', 'err');
     const custodia = f.propiedad === 'custodia';
-    const obj = { sku: code, name, cat: f.cat, unit: f.unit, pack: n.pack, packLabel: f.packLabel, min: n.min, loc, supplier: f.supplier.trim(), price: custodia ? 0 : n.price, ean: f.ean.trim() || undefined, supplierRef: f.supplierRef.trim() || undefined, serialized: f.serialized,
+    const obj = { sku: code, name, cat: f.cat, unit: f.unit, pack: n.pack, packLabel: f.packLabel, min: n.min, loc, supplier: f.supplier.trim(), price: custodia ? null : n.price, ean: f.ean.trim() || undefined, supplierRef: f.supplierRef.trim() || undefined, serialized: f.serialized,
       objetivo: f.objetivo.trim() === '' ? undefined : toNum(f.objetivo), proveedorHabitual: f.proveedorHabitual.trim() || undefined, modelo: f.modelo.trim() || undefined, talla: f.talla.trim() || undefined,
       propiedad: f.propiedad, propietario: custodia ? f.propietario : undefined };
     if (!ejecutar({ op: 'producto', args: { producto: { ...obj, stock: p?.stock ?? 0 }, nuevo: !p, stockInicial: p ? 0 : n.stock } })) return;

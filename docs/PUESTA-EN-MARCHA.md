@@ -122,6 +122,11 @@ Son tres pequeños programas que se ejecutan en Supabase, donde las claves no es
   npx supabase functions deploy leer-albaran
   ```
   Cada comando termina con *Deployed Functions*. Compruébalo en Supabase → **Edge Functions**: deben aparecer las tres.
+- [ ] 6.2. Di a las funciones desde qué web se les puede llamar (así ninguna otra página puede usarlas con tu sesión). Es la dirección de la app del paso 5, **sin la ruta final**:
+  ```bash
+  npx supabase secrets set ORIGEN_APP=https://instalacionesbufala-hue.github.io
+  ```
+  Si algún día publicas la app en otro dominio, añádelo separado por comas (`ORIGEN_APP=https://instalacionesbufala-hue.github.io,https://almacen.tudominio.es`). `localhost` siempre está permitido para desarrollo.
 
 ## 7. Activar la lectura de albaranes con IA (Gemini)
 
@@ -263,6 +268,7 @@ Si los seis pasos salen bien, la app está en marcha.
 | "Correo o contraseña incorrectos" siendo correctos | En Supabase → Authentication → Users, el usuario debe estar confirmado (paso 3.1, *Auto Confirm User*). |
 | "Tu usuario no tiene acceso" | Falta el paso 3.2 (la fila en `perfiles`). |
 | "Dar de alta un usuario" da error | La función `usuarios` no está desplegada (paso 6). |
+| En la consola del navegador sale *blocked by CORS policy* | Falta el secreto `ORIGEN_APP` o no coincide con la dirección de la app (paso 6.2). |
 | Los albaranes siguen en modo simulado | Falta `VITE_ALBARANES_URL` o no has repetido el paso 5.2. |
 | "La lectura con IA no está configurada" | Falta el secreto `GEMINI_API_KEY` (paso 7.2). |
 | Los avisos se quedan en "pendiente" en el Registro de envíos | Faltan los pasos 8.0 (clave de la tarea y Vault) o la clave del canal. El error concreto sale en el registro. |

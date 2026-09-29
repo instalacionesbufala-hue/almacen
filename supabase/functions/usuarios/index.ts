@@ -3,14 +3,13 @@
 // la clave de servicio, que Supabase inyecta en el servidor y nunca llega al navegador.
 // El rol y la activación se cambian con la función SQL actualizar_perfil (probada en supabase/tests/e004.test.ts).
 import { createClient } from 'jsr:@supabase/supabase-js@2';
-import { CORS, json, validarAlta, validarClave } from '../_compartido/validar.ts';
+import { conCors, json, validarAlta, validarBloqueo, validarClave } from '../_compartido/validar.ts';
 
 const URL = Deno.env.get('SUPABASE_URL')!;
 const ANON = Deno.env.get('SUPABASE_ANON_KEY')!;
 const SERVICIO = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
+Deno.serve(conCors(async (req) => {
   if (req.method !== 'POST') return json({ error: 'Método no permitido' }, 405);
 
   // 1) ¿Quién llama? Se comprueba con su propia sesión y la función SQL es_admin()
@@ -44,10 +43,16 @@ Deno.serve(async (req) => {
 
   if (cuerpo.accion === 'bloqueo') {
     // al desactivar un perfil también se cierra su acceso en Auth (además de que RLS ya no le deja ver nada)
+    // E-010: la misma regla que actualizar_perfil, comprobada otra vez aquí porque ban_duration no pasa por SQL
+    const { data: yo } = await comoUsuario.auth.getUser();
+    const { data: admins, error: e3 } = await admin.from('perfiles').select('id').eq('rol', 'admin').eq('activo', true);
+    if (e3) return json({ error: e3.message }, 500);
+    const err = validarBloqueo({ llamante: yo.user?.id || '', objetivo: String(cuerpo.id || ''), activar: cuerpo.activo === 'true', adminsActivos: (admins || []).map(a => a.id) });
+    if (err) return json({ error: err }, 400);
     const { error } = await admin.auth.admin.updateUserById(String(cuerpo.id), { ban_duration: cuerpo.activo === 'true' ? 'none' : '876000h' });
     if (error) return json({ error: error.message }, 400);
     return json({ ok: true });
   }
 
   return json({ error: 'Acción desconocida' }, 400);
-});
+}));

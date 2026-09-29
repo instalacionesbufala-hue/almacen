@@ -1,7 +1,8 @@
 /* Formatos y utilidades de texto (sin dependencias del navegador) */
 
 export const norm = (s: unknown) => String(s ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
-export const eur = (n: number) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: n >= 1000 ? 0 : 2 }).format(n || 0);
+/** Sin precio (custodia) se muestra un guion, nunca "0,00 €" */
+export const eur = (n: number | null | undefined) => n == null ? "—" : new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: n >= 1000 ? 0 : 2 }).format(n || 0);
 export const num = (n: number) => new Intl.NumberFormat('es-ES', { maximumFractionDigits: 2 }).format(n || 0);
 export const parseSN = (t: unknown) => String(t ?? '').split(/[\s,;]+/).map(s => s.trim()).filter(Boolean);
 /** Acepta coma decimal */

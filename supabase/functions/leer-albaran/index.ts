@@ -4,7 +4,7 @@
 // Nada entra en stock desde aquí: la app enseña la propuesta y el usuario confirma.
 // Aviso (revisión del chat): en el nivel gratuito, Google puede usar el contenido enviado para mejorar sus productos.
 import { createClient } from 'jsr:@supabase/supabase-js@2';
-import { CORS, json } from '../_compartido/validar.ts';
+import { conCors, json } from '../_compartido/validar.ts';
 import { construirPrompt, ESQUEMA_RESPUESTA, normalizarRespuesta, type ItemCatalogo } from '../_compartido/albaran.ts';
 
 const URL = Deno.env.get('SUPABASE_URL')!;
@@ -19,8 +19,7 @@ function base64(buf: ArrayBuffer): string {
   return btoa(s);
 }
 
-Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
+Deno.serve(conCors(async (req) => {
   if (req.method !== 'POST') return json({ error: 'Método no permitido' }, 405);
   if (!CLAVE) return json({ error: 'La lectura con IA no está configurada (falta GEMINI_API_KEY)' }, 503);
 
@@ -58,4 +57,4 @@ Deno.serve(async (req) => {
   } catch {
     return json({ error: 'No se ha podido interpretar la respuesta de la IA' }, 502);
   }
-});
+}));

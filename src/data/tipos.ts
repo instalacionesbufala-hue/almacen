@@ -21,8 +21,8 @@ export interface Producto {
   /** Pasillo-Estantería-Nivel, p. ej. P01-E02-N1 */
   loc: string;
   supplier: string;
-  /** Coste neto por unidad base (m o ud) */
-  price: number;
+  /** Coste neto por unidad base (m o ud). null en custodia (E-008/E-010): nunca se muestra "0,00 €" */
+  price: number | null;
   serialized?: boolean;
   serials?: string[];
   /** Alta rápida desde el escáner (rol almacén): el administrador debe completarla */

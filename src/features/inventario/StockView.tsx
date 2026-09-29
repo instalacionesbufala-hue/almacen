@@ -57,7 +57,7 @@ function StockDesk() {
   const E = useAlmacen(), u = useUI(), perm = usePermisos();
   const lista = searchProducts(E, u.q, u), PER = 8, pages = Math.max(1, Math.ceil(lista.length / PER)), page = Math.min(u.page, pages);
   const pag = lista.slice((page - 1) * PER, page * PER);
-  const catProds = E.products.filter(p => p.cat === u.catTab).sort((a, b) => ORD[status(a)] - ORD[status(b)] || b.stock * b.price - a.stock * a.price).slice(0, 3);
+  const catProds = E.products.filter(p => p.cat === u.catTab).sort((a, b) => ORD[status(a)] - ORD[status(b)] || valorProducto(b) - valorProducto(a)).slice(0, 3);
   const ultAlb = E.albaranes[0], ultEnt = [...E.entregas].sort((a, b) => b.ts - a.ts)[0];
   const ais = aisles(E), semana = Math.ceil((Date.now() - new Date(new Date().getFullYear(), 0, 1).getTime()) / 6048e5), pasAud = ais[semana % ais.length] || 'P01';
   const sel = 'font-mono text-label-md !w-auto';
@@ -281,7 +281,7 @@ function CardMob({ p, pedido }: { p: Producto; pedido: boolean }) {
 function VanView() {
   const E = useAlmacen(), u = useUI(), eq = E.equipos.find(e => e.id === u.almacen);
   if (!eq) { setTimeout(() => setUI({ almacen: 'central' })); return null; }
-  const vs = vanStock(E, eq.id), val = vs.reduce((a, x) => { const p = find(E, x.sku); return a + (p && !esCustodia(p) ? x.qty * p.price : 0); }, 0), { verCostes } = usePermisos();
+  const vs = vanStock(E, eq.id), val = vs.reduce((a, x) => { const p = find(E, x.sku); return a + (p && !esCustodia(p) ? x.qty * (p.price ?? 0) : 0); }, 0), { verCostes } = usePermisos();
   return (
     <div className="px-4 lg:px-gutter py-4 lg:py-space-lg flex flex-col gap-space-md max-w-5xl">
       <div className="flex flex-wrap items-end justify-between gap-3">

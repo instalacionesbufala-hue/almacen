@@ -172,7 +172,7 @@ Los **cargadores VE** y los **cuadros de protecciones** los entrega Esmove y que
 - Hay pruebas de que el aviso de reposición de custodia va al borrador de Esmove y no al de proveedores.
 - Hay pruebas de que el informe no contiene ningún importe.
 
-### E-010 · Ajustes de la revisión del chat · PENDIENTE
+### E-010 · Ajustes de la revisión del chat · HECHO
 1. **Precio de custodia `null` en la app:** en `src/store/nube/mapeo.ts` el precio llega como `precio.get(p.sku) ?? 0`. Para artículos en custodia debe ser `null` (tipo `price: number | null`), de modo que ninguna pantalla, CSV ni PDF pueda mostrar "0,00 €". Añadir una prueba.
 2. **Bloqueo en Auth:** en `supabase/functions/usuarios`, la acción `bloqueo` debe rechazar que el administrador se bloquee a sí mismo o bloquee al último administrador activo. Es la misma regla que `actualizar_perfil`, repetida antes de llamar a `ban_duration`. Añadir una prueba en `_compartido`.
 3. **CORS:** en `_compartido/validar.ts`, cambiar `Access-Control-Allow-Origin: *` por el origen de la app, con la variable `ORIGEN_APP` (el dominio de GitHub Pages) más `localhost` en desarrollo. Documentarlo en la guía, en el paso 6.
@@ -467,3 +467,26 @@ Cubren también el formato de cantidades, las respuestas envueltas en ```json y 
 **Decisión:** migraciones y funciones con la CLI (`npx supabase`) en lugar de pegar SQL en el panel. Las funciones comparten código (`_compartido/`) y el editor web no lo admite. Además, así se usan los mismos archivos probados. La guía indica qué pasos exigen las contraseñas del usuario, para que Claude Code pueda ejecutar el resto sin verlas.
 
 **Sin verificar aquí:** la guía no se ha podido recorrer contra un proyecto real porque no tengo acceso a las cuentas del usuario. Los nombres de variables, secretos, funciones y botones están comprobados contra el código.
+
+### 29/09/2026 · E-010 · HECHO
+**1. Precio de custodia `null`**
+- `Producto.price` es ahora `number | null`. `mapeo.ts` devuelve `null` para la custodia aunque exista una fila de coste.
+- También pasan a `null` el catálogo de demostración, `cambiarPropiedad` y la migración del estado local, para quien ya tenía datos guardados.
+- `eur(null)` pinta "—", así que ninguna pantalla puede mostrar "0,00 €". El CSV ya dejaba la celda vacía y el valor del inventario sigue excluyendo la custodia.
+- Pruebas: `src/store/nube/mapeo.test.ts` (nueva) y `contrato.test.ts` (ahora espera `price: null`).
+
+**2. Bloqueo en Auth**
+- La acción `bloqueo` de `usuarios` comprueba `validarBloqueo()` (`_compartido/validar.ts`) antes de `ban_duration`: nadie se bloquea a sí mismo ni al último administrador activo.
+- Como la app llama primero a `actualizar_perfil`, el perfil puede llegar ya desactivado. Por eso la regla cuenta los administradores activos **sin contar al que se bloquea**.
+- Desbloquear siempre se permite.
+- Pruebas en `funciones.test.ts`.
+
+**3. CORS**
+- `validar.ts` ya no envía `*`: `origenPermitido()` acepta los orígenes de `ORIGEN_APP` (admite varios, separados por comas) y `localhost`/`127.0.0.1` con cualquier puerto.
+- A cualquier otro origen no se le envía `Access-Control-Allow-Origin`, y el navegador bloquea la respuesta. Se añade `Vary: Origin`.
+- Las tres funciones se envuelven en `conCors()`, que responde al preflight y pone las cabeceras.
+- pg_cron llama sin navegador, así que no le afecta.
+- Pruebas en `funciones.test.ts`, incluidos orígenes trampa como `github.io.malicioso.es` y `localhost.malicioso.es`.
+- Documentado en la guía: paso 6.2 (`npx supabase secrets set ORIGEN_APP=https://instalacionesbufala-hue.github.io`) y una fila nueva en "Si algo falla".
+
+**Comprobado:** 132 pruebas de la app y 77 de base de datos en verde, `tsc -b` sin errores, `npm run build` correcto y `deno check` de las tres funciones sin errores.

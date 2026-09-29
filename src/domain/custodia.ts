@@ -35,7 +35,7 @@ export function gruposReposicion(S: Estado): GrupoReposicion[] {
     if (a.sku) {
       const p = find(S, a.sku); if (!p) continue;
       g.lineas.push({ sku: p.sku, nombre: p.name, codigo: p.supplierRef || p.ean || '', unidad: UNIT[p.unit], stock: p.stock, minimo: p.min, sugerida: pedidoSugerido(p), estado: a.estado === 'pedido' ? 'pedido' : 'abierto',
-        pedida: a.cantidadPedida, precio: esCustodia(p) || S.rol !== 'admin' ? undefined : p.price });
+        pedida: a.cantidadPedida, precio: esCustodia(p) || S.rol !== 'admin' ? undefined : p.price ?? undefined });
     } else if (a.modeloHerramienta) {
       const modelo = a.modeloHerramienta, m = S.minimosHerramienta.find(x => x.modelo === modelo);
       const libres = S.herramientas.filter(h => h.clase === 'herramienta' && h.modelo === modelo && h.estado === 'operativa' && !h.equipo && !h.tecnico).length;

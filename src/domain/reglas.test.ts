@@ -147,7 +147,7 @@ describe('utilidades', () => {
 
 describe('custodia de Esmove (E-008)', () => {
   it('el valor del inventario no suma el material en custodia', () => {
-    const propio = S.products.filter(p => !esCustodia(p)).reduce((a, p) => a + p.stock * p.price, 0);
+    const propio = S.products.filter(p => !esCustodia(p)).reduce((a, p) => a + p.stock * (p.price ?? 0), 0);
     expect(invValue(S)).toBeCloseTo(propio);
     const wbx = find(S, 'WBX-PULSAR-22')!; wbx.price = 999; // aunque alguien le pusiera precio, no cuenta
     expect(invValue(S)).toBeCloseTo(propio);

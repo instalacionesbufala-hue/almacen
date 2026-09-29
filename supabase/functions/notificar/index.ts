@@ -4,7 +4,7 @@
 // Secretos (Supabase → Edge Functions → Secrets): RESEND_API_KEY, TELEGRAM_BOT_TOKEN, VAPID_PUBLICA, VAPID_PRIVADA, VAPID_CONTACTO, CLAVE_CRON.
 import { createClient, type SupabaseClient } from 'jsr:@supabase/supabase-js@2';
 import webpush from 'npm:web-push@3.6.7';
-import { CORS, json } from '../_compartido/validar.ts';
+import { conCors, json } from '../_compartido/validar.ts';
 import { construirInforme, informeCsv, informeHtml, periodoAnterior, type DatosInforme } from '../_compartido/informe.ts';
 
 const URL = Deno.env.get('SUPABASE_URL')!;
@@ -14,8 +14,7 @@ const env = (k: string) => Deno.env.get(k) || '';
 
 type Envio = { id: string; canal: 'correo' | 'push' | 'telegram'; tipo: string; asunto: string; cuerpo: string; destinatarios: string[]; adjunto_csv: string | null; reintentos: number };
 
-Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
+Deno.serve(conCors(async (req) => {
   let cuerpo: Record<string, unknown> = {};
   try { cuerpo = await req.json(); } catch { /* sin cuerpo */ }
   const db = createClient(URL, SERVICIO, { auth: { persistSession: false } });
@@ -34,7 +33,7 @@ Deno.serve(async (req) => {
   } catch (e) {
     return json({ error: (e as Error).message }, 500);
   }
-});
+}));
 
 async function procesar(db: SupabaseClient) {
   const { data: config } = await db.from('config_avisos').select('*').eq('id', 1).single();
