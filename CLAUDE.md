@@ -18,7 +18,11 @@ Este repositorio es el canal entre Claude (chat, arquitecto) y Claude Code (impl
 
 ## Estado actual
 - `prototipo/index.html`: el prototipo original (un solo archivo). Se guarda solo como referencia para recuperar lógica; su diseño no se usa.
-- La app nueva con el diseño de Stitch está en desarrollo. La tecnología (seguir sin frameworks o pasar a React, encargo E-001) está **pendiente de que el usuario decida**.
+- `prototipo/stitch-vanilla/`: primera versión con el diseño de Stitch en JS sin frameworks (referencia).
+- **App actual: React + Vite + TypeScript + Tailwind** (decisión del usuario, E-001 hecho). Vive en `src/` y se publica en GitHub Pages con `.github/workflows/pages.yml`. Comprobar siempre con `npm test`, `npx tsc -b` y `npm run build`.
+- Capas: `src/data` (tipos y demo) → `src/domain` (reglas puras con pruebas) → `src/store` (estado; hoy localStorage, mañana Supabase) → `src/features` (pantallas) → `src/ui` (componentes Stitch). Las reglas nuevas van en `src/domain` con su prueba.
+- **IA de albaranes: Gemini con capa gratuita** (decisión del usuario). La clave va solo en el servidor (función de Supabase). El código debe permitir cambiar de proveedor (p. ej. a Claude) sin rehacer la app.
+- **Backend: Supabase, plan gratuito** (500 MB de base de datos, 50.000 usuarios activos al mes, 500.000 llamadas a funciones al mes; se pausa tras 1 semana sin uso y no incluye copias automáticas).
 
 ## Modelo de datos
 - **Producto:** sku, ean?, supplierRef?, name, cat (cables | tubos | fijaciones | aparamenta | cargadores | fontaneria), unit (m | ud), pack/packLabel (formato de compra), stock, min, loc (`Pxx-Exx-Nx`), supplier, price (€ neto por unidad base), serialized, serials[].
@@ -29,6 +33,7 @@ Este repositorio es el canal entre Claude (chat, arquitecto) y Claude Code (impl
 - **Entrega:** id (`ENT-AAAA-NNNN`), ts, equipo, receptor, dni, lineas[{sku, qty, serials[]}], firma (imagen), hash (SHA-256 del contenido y la firma), operator. Descuenta stock del almacén con movimientos de salida "Entrega a equipo".
 - **Stock a bordo de una furgoneta:** se calcula, no se guarda: lo entregado menos lo devuelto (entradas "Devolución de obra" con ese equipo).
 - **Pedido de reposición:** sku → {ts, qty sugerida}. Se borra solo cuando una entrada devuelve el stock al mínimo.
+- **Dotación** (tipo `Herramienta` en `src/data/tipos.ts`): herramientas, EPIs y ropa de trabajo. id, clase (herramienta | epi | ropa), nombre, marca, serie/lote, talla?, cantidad, caduca? (EPIs, AAAA-MM-DD), valor, estado (operativa | deteriorada | rota | perdida | baja), equipo?, tecnico?, historial[] de incidencias (alta, asignación, deterioro, rotura, pérdida, reparación, reposición, baja) con operario, fecha, nota y coste. Reglas en `src/domain/herramientas.ts`: una pérdida solo se resuelve reponiendo; la reposición cambia n.º de serie y caducidad y guarda la serie retirada; la baja libera la asignación; aviso de EPIs vencidos o que vencen en 30 días.
 
 (Decisión del usuario: todo lo que aparece en Stitch entra en el modelo y en las tablas del backend.)
 
@@ -39,7 +44,7 @@ Este repositorio es el canal entre Claude (chat, arquitecto) y Claude Code (impl
 - Los cargadores VE se mueven siempre con número de serie, y un número de serie no puede estar duplicado.
 - QR de los cargadores: `BUF:<SKU>|SN:<serie>`.
 - La lectura de albaranes propone líneas y las empareja por código (también por prefijo, porque Saltoki añade sufijos) o por descripción. Nunca ingresa stock sin aprobación humana.
-- Proveedor principal: Saltoki (Alcobendas y Móstoles). Sus códigos de artículo son los SKU.
+- Proveedores: Saltoki (Alcobendas y Móstoles) es uno de ellos, pero **hay más** (decisión del usuario). El SKU es un código propio de la referencia; el código de cada proveedor va en `supplierRef` y el emparejado de albaranes debe funcionar con cualquier proveedor (código, EAN, prefijo o descripción).
 
 - Catálogo de ejemplo: las referencias actuales son **de demostración** (algunas no son de Saltoki). Las reales se darán de alta más adelante, **con la cámara** (código desconocido → "Crear referencia con este código") **y a mano** (formulario "Añadir referencia").
 
@@ -49,6 +54,6 @@ Este repositorio es el canal entre Claude (chat, arquitecto) y Claude Code (impl
 - Paleta azul de Stitch (primario `#0037b0`), fondo `#f8f9ff`, tarjetas blancas. Iconos Material Symbols.
 - Escritorio: barra lateral (Stock general, Albaranes y recepción IA, Equipos y técnicos, Entregas y firmas, Configuración) y cabecera con buscador, selector de almacén, "Nuevo albarán IA", avisos y operario.
 - Móvil: barra inferior con Inventario, **Escanear** (botón central destacado), Entrega y Cuadrillas.
-- Botones de al menos 48 px. El tamaño de las acciones de operario (56 px como en Stitch o 64–72 px) lo está decidiendo el usuario.
+- Botones de al menos 48 px; **acciones de operario a 56 px, como en Stitch** (decisión del usuario).
 - Solo modo claro, como en Stitch.
 - Textos en español.

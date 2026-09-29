@@ -1,0 +1,75 @@
+/* Almacén Búfala · estilos que Tailwind no cubre */
+html, body { margin: 0; padding: 0; }
+body { overscroll-behavior-y: none; -webkit-tap-highlight-color: transparent; }
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 3px solid #1d4ed8; outline-offset: 2px; }
+.mono { font-family: "JetBrains Mono", ui-monospace, monospace; }
+
+.material-symbols-outlined {
+  font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+  font-size: 22px; line-height: 1; vertical-align: middle; user-select: none;
+  display: inline-block; width: 1em; overflow: hidden;
+}
+.ms-fill { font-variation-settings: "FILL" 1, "wght" 500, "GRAD" 0, "opsz" 24; }
+.ms-16 { font-size: 16px; } .ms-18 { font-size: 18px; } .ms-20 { font-size: 20px; }
+.ms-28 { font-size: 28px; } .ms-32 { font-size: 32px; } .ms-40 { font-size: 40px; }
+
+.no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.safe-top { padding-top: env(safe-area-inset-top, 0px); }
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
+
+/* Cámara del escáner */
+.cam { position: relative; overflow: hidden; background: #0b1c30; }
+.cam video, .cam .cam-fondo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.cam .cam-fondo { background:
+  radial-gradient(ellipse at 30% 40%, rgba(96,238,177,.10), transparent 55%),
+  repeating-linear-gradient(90deg, rgba(255,255,255,.035) 0 2px, transparent 2px 38px),
+  linear-gradient(160deg, #213145, #0b1c30); }
+.cam .esq { position: absolute; width: 40px; height: 40px; border: 4px solid #4edea3; }
+.cam .esq.tl { top: 22%; left: 12%; border-right: 0; border-bottom: 0; border-top-left-radius: 12px; }
+.cam .esq.tr { top: 22%; right: 12%; border-left: 0; border-bottom: 0; border-top-right-radius: 12px; }
+.cam .esq.bl { bottom: 18%; left: 12%; border-right: 0; border-top: 0; border-bottom-left-radius: 12px; }
+.cam .esq.br { bottom: 18%; right: 12%; border-left: 0; border-top: 0; border-bottom-right-radius: 12px; }
+.cam .laser { position: absolute; left: 14%; right: 14%; height: 2px; top: 24%;
+  background: linear-gradient(90deg, transparent, #6ffbbe, transparent); box-shadow: 0 0 12px #6ffbbe;
+  animation: laser 2.2s ease-in-out infinite; }
+@keyframes laser { 0%,100% { top: 24%; } 50% { top: 80%; } }
+
+/* Firma */
+.firma { touch-action: none; cursor: crosshair; background-image: linear-gradient(transparent calc(100% - 38px), #c4c5d7 calc(100% - 38px), #c4c5d7 calc(100% - 37px), transparent calc(100% - 37px)); }
+
+/* Modal y hoja inferior */
+#modal .velo { position: absolute; inset: 0; background: rgba(11,28,48,.45); animation: fade .15s ease-out; }
+#modal .hoja { position: absolute; left: 0; right: 0; bottom: 0; max-height: 92vh; overflow-y: auto;
+  background: #fff; border-radius: 24px 24px 0 0; animation: subir .2s ease-out; padding-bottom: env(safe-area-inset-bottom, 0px); }
+@media (min-width: 1024px) {
+  #modal .hoja { left: 50%; top: 50%; bottom: auto; transform: translate(-50%, -50%); width: min(640px, 92vw);
+    max-height: 88vh; border-radius: 16px; animation: fade .15s ease-out; }
+  #modal .hoja.ancha { width: min(900px, 94vw); }
+}
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes subir { from { transform: translateY(40px); opacity: .4; } to { transform: none; opacity: 1; } }
+
+.toast { animation: subir .2s ease-out; }
+.pulso { animation: pulso 1.6s ease-in-out infinite; }
+@keyframes pulso { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+.girar { animation: girar 1s linear infinite; }
+@keyframes girar { to { transform: rotate(360deg); } }
+
+/* Papel del albarán (vista documento fuente) */
+.papel { background: #fff; box-shadow: 0 1px 2px rgba(11,28,48,.08), 0 8px 24px rgba(11,28,48,.08); }
+.marca-ia { outline: 2px solid #1d4ed8; outline-offset: 2px; border-radius: 6px; position: relative; }
+.marca-ia.nuevo { outline-color: #d97706; background: #fffbeb; }
+
+/* Tablas */
+.tabla th { font-family: "JetBrains Mono", monospace; font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: #565e74; font-weight: 500; text-align: left; }
+.tabla td, .tabla th { padding: 12px 14px; vertical-align: middle; }
+.tabla tbody tr { border-top: 1px solid #e5eeff; }
+.tabla tbody tr:hover { background: #f8f9ff; }
+
+@media print {
+  body * { visibility: hidden; }
+  #impresion, #impresion * { visibility: visible; }
+  #impresion { position: absolute; inset: 0; }
+}

@@ -1,0 +1,61 @@
+/* Configuración y auditoría: operario, semáforo, IA, integridad y copias de seguridad */
+import { useRef, type ReactNode } from 'react';
+import { MARCA } from '../../data/catalogo';
+import { hashEntrega } from '../../domain/hash';
+import { hoyISO } from '../../domain/formato';
+import { descargar } from '../../domain/csv';
+import { exportarCopia, reemplazar, restaurarDemo, tamañoGuardado, useAlmacen } from '../../store/almacen';
+import { setUI } from '../../store/ui';
+import { toast } from '../../ui/toast';
+import { Avatar, BTN_BASE, BTN_P, BTN_S, CARD, Icon } from '../../ui/base';
+import { abrirPerfil } from '../inventario/hojas';
+import { exportarMovimientosCsv, exportarStockCsv } from '../inventario/StockView';
+import { iaReal, URL_IA } from '../albaranes/lector';
+
+const Bloque = ({ icon, t, children }: { icon: string; t: string; children: ReactNode }) =>
+  <section className={`${CARD} p-4 lg:p-space-md flex flex-col gap-3`}><h2 className="text-headline-sm font-semibold flex items-center gap-2"><Icon n={icon} className="text-primary" />{t}</h2>{children}</section>;
+
+export default function ConfigView() {
+  const E = useAlmacen(), archivo = useRef<HTMLInputElement>(null);
+  const verificar = async () => { let ok = 0; const bad: string[] = []; for (const x of E.entregas) (await hashEntrega(x)) === x.hash ? ok++ : bad.push(x.id); bad.length ? toast(`${bad.length} entrega(s) no coinciden con su huella: ${bad.join(', ')}.`, 'err', 8000) : toast(`Las ${ok} entregas coinciden con su huella SHA-256.`, 'ok'); };
+  const importar = async (f?: File) => {
+    if (!f) return;
+    try { const s = JSON.parse(await f.text()); if (!s || !Array.isArray(s.products)) throw new Error(); reemplazar(s); toast('Copia importada.', 'ok'); }
+    catch { toast('Ese archivo no es una copia válida de la app.', 'err'); }
+  };
+  const reset = async () => {
+    if (!confirm('¿Restaurar los datos de prueba? Se perderán los cambios hechos en este navegador (exporta una copia antes si los necesitas).')) return;
+    await restaurarDemo(); setUI({ almacen: 'central' }); toast('Datos de prueba restaurados.', 'ok');
+  };
+  return (
+    <div className="px-4 lg:px-gutter py-4 lg:py-space-lg flex flex-col gap-4 max-w-5xl">
+      <div><span className="font-mono text-label-sm uppercase tracking-wider text-secondary">Sistema</span><h1 className="text-headline-lg-mobile lg:text-headline-lg font-bold">Configuración &amp; auditoría</h1></div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <Bloque icon="person" t="Operario activo"><p className="text-body-sm text-secondary">Cada entrada, salida, merma e incidencia queda a su nombre.</p>
+          <button onClick={abrirPerfil} className="flex items-center gap-3 bg-surface-container-low rounded-xl p-3 text-left"><Avatar n={E.operator} /><span className="flex-1 font-semibold">{E.operator}</span><span className="text-primary text-body-sm">Cambiar</span></button></Bloque>
+        <Bloque icon="traffic" t="Semáforo de stock">
+          <ul className="text-body-sm flex flex-col gap-2">
+            <li className="flex gap-2"><span className="w-3 h-3 mt-1 rounded-full bg-error shrink-0" /><span><b>Rojo</b>: stock por debajo del mínimo (p. ej. tacos &lt; 100 ud, cargadores &lt; 2 ud). Salta un aviso al instante.</span></li>
+            <li className="flex gap-2"><span className="w-3 h-3 mt-1 rounded-full bg-amber-400 shrink-0" /><span><b>Amarillo</b>: por debajo de 1,5 × el mínimo.</span></li>
+            <li className="flex gap-2"><span className="w-3 h-3 mt-1 rounded-full bg-tertiary-container shrink-0" /><span><b>Verde</b>: nivel correcto.</span></li></ul>
+          <p className="text-body-sm text-secondary">El mínimo se edita en la ficha de cada referencia.</p></Bloque>
+        <Bloque icon="auto_awesome" t="Lectura de albaranes con IA">
+          <p className="text-body-sm">Estado: <b>{iaReal() ? 'IA conectada' : 'modo simulado'}</b>{iaReal() && <span className="font-mono text-label-sm text-secondary break-all"> · {URL_IA}</span>}</p>
+          <p className="text-body-sm text-secondary">La lectura real usa Gemini (capa gratuita) desde una función del servidor, para que la clave nunca esté en el navegador. Mientras no esté configurada, se usan albaranes de ejemplo.</p></Bloque>
+        <Bloque icon="fact_check" t="Integridad de entregas">
+          <p className="text-body-sm text-secondary">Cada entrega firmada guarda una huella SHA-256 de su contenido y de la firma. Si alguien la modifica, la huella deja de coincidir.</p>
+          <button onClick={verificar} className={`${BTN_S} h-12`}><Icon n="verified" className="ico-20" />Verificar {E.entregas.length} entregas</button></Bloque>
+        <Bloque icon="database" t="Datos y copias de seguridad">
+          <p className="text-body-sm text-secondary">De momento los datos viven en este navegador ({(tamañoGuardado() / 1024).toFixed(0)} KB). Haz copias a menudo: si se borran los datos del navegador, se pierden. Con el backend (E-002) pasarán a la nube.</p>
+          <div className="grid grid-cols-2 gap-2">
+            <button onClick={() => descargar(`almacen-copia-${hoyISO()}.json`, exportarCopia(), 'application/json')} className={`${BTN_P} h-12`}><Icon n="download" className="ico-20" />Exportar copia</button>
+            <button onClick={() => archivo.current?.click()} className={`${BTN_S} h-12`}><Icon n="upload" className="ico-20" />Importar copia</button>
+            <button onClick={() => exportarStockCsv(E)} className={`${BTN_S} h-12`}><Icon n="table" className="ico-20" />Stock CSV</button>
+            <button onClick={() => exportarMovimientosCsv(E)} className={`${BTN_S} h-12`}><Icon n="swap_vert" className="ico-20" />Movimientos CSV</button></div>
+          <input ref={archivo} type="file" accept="application/json,.json" className="hidden" onChange={e => { importar(e.target.files?.[0]); e.target.value = ''; }} />
+          <button onClick={reset} className={`${BTN_BASE} h-12 text-error bg-error-container/50 hover:bg-error-container`}><Icon n="restart_alt" className="ico-20" />Restaurar datos de prueba</button></Bloque>
+        <Bloque icon="info" t="Acerca de"><p className="text-body-sm text-secondary">{MARCA.nombre} · control de stock, entregas y dotación para material eléctrico, fontanería y movilidad eléctrica. {E.products.length} referencias · {E.movements.length} movimientos · {E.entregas.length} entregas · {E.herramientas.length} fichas de dotación.</p></Bloque>
+      </div>
+    </div>
+  );
+}
