@@ -172,9 +172,58 @@ Los **cargadores VE** y los **cuadros de protecciones** los entrega Esmove y que
 - Hay pruebas de que el aviso de reposición de custodia va al borrador de Esmove y no al de proveedores.
 - Hay pruebas de que el informe no contiene ningún importe.
 
+### E-010 · Ajustes de la revisión del chat · PENDIENTE
+1. **Precio de custodia `null` en la app:** en `src/store/nube/mapeo.ts` el precio llega como `precio.get(p.sku) ?? 0`. Para artículos en custodia debe ser `null` (tipo `price: number | null`), de modo que ninguna pantalla, CSV ni PDF pueda mostrar "0,00 €". Añadir una prueba.
+2. **Bloqueo en Auth:** en `supabase/functions/usuarios`, la acción `bloqueo` debe rechazar que el administrador se bloquee a sí mismo o bloquee al último administrador activo. Es la misma regla que `actualizar_perfil`, repetida antes de llamar a `ban_duration`. Añadir una prueba en `_compartido`.
+3. **CORS:** en `_compartido/validar.ts`, cambiar `Access-Control-Allow-Origin: *` por el origen de la app, con la variable `ORIGEN_APP` (el dominio de GitHub Pages) más `localhost` en desarrollo. Documentarlo en la guía, en el paso 6.
+
+### E-009 · Fotos de los artículos · PENDIENTE
+Cada artículo muestra su foto (material, cargadores, cuadros, ropa, EPIs y herramientas), para que el operario confirme de un vistazo que coge lo correcto.
+
+**1. Dónde se ve**
+- **Inventario:** miniatura en la lista.
+- **Ficha:** foto grande, que se amplía al tocarla.
+- **Escáner:** foto grande en el resultado, para confirmar que el código leído es el del artículo que tiene en la mano.
+- **Otras pantallas:** cesta de entrega, pantalla de firma, plantillas, revisión de albaranes y avisos de reposición.
+- **Sin foto:** se muestra el icono de su categoría.
+
+**2. Almacenamiento (el repositorio es público)**
+- **Dónde:** bucket privado `fotos-articulos` en Supabase Storage.
+- **Acceso:** leen los usuarios con sesión iniciada, mediante URL firmadas.
+- **Nunca en el repositorio:** ni en `src/data` ni en la web publicada. Muchas fotos son de Saltoki o de fabricantes y no deben quedar públicas. Los datos de demostración usan solo el icono de categoría.
+- **Campos del artículo:** `foto` (ruta), `foto_mini` y `foto_origen` (Saltoki | Esmove | fabricante | propia).
+- **Una foto por modelo:** las variantes de talla comparten la foto del modelo.
+
+**3. Cómo se añaden**
+- **Desde la ficha:** hacer foto con la cámara, elegir archivo o pegar imagen.
+- **Compresión en el móvil:** antes de subirla se reduce a WebP de 1.000 px como máximo (unos 100 KB) y se genera una miniatura de 200 px. Si no hay cobertura, se sube después.
+- **Permisos:** el personal de almacén puede poner foto a un artículo que no tiene; sustituir o borrar una foto es solo del administrador. Así cualquiera puede hacerle una foto a un cuadro de Esmove con su pegatina.
+- **Importación por lote (solo administrador):** se sueltan muchos archivos a la vez. Cada archivo se empareja por su nombre con el SKU, el `supplierRef` o el EAN (por ejemplo `6040615306.webp`). Antes de confirmar se ve una vista previa de las asignaciones, marcando las que no casan y las que sustituirían una foto existente.
+
+**4. Fotos de Saltoki**
+Las imágenes de Saltoki Online tienen nombres internos que no corresponden con el código del artículo, así que no se pueden enlazar ni adivinar. Cuando el importador esté listo, el chat recorrerá el catálogo real en Saltoki Online con la sesión del usuario. Para cada código de Saltoki, buscará la foto y la dejará en un archivo con nombre `<código>.webp`, listo para la importación por lote. Code no tiene que conectarse a Saltoki.
+
+**5. Hecho cuando**
+- Hay pruebas del emparejado por nombre de archivo (SKU, ref. proveedor, EAN, mayúsculas y extensiones).
+- Hay pruebas de los permisos: almacén no puede sustituir una foto existente.
+- Las miniaturas cargan rápido en una lista de 200 artículos por datos móviles.
+- La foto se muestra también en el justificante PDF de entrega de E-007 (miniatura por línea) y en el informe de custodia para Esmove.
+
 ---
 
 ## Revisión del chat
+
+### 29/09/2026 · Revisión de E-002 a E-008
+Verificado desde el chat sobre `052e1cd`:
+- `npm ci`, **125 pruebas en verde** (12 ficheros), `tsc -b` sin errores y `npm run build` correcto.
+- No hay claves en el repositorio.
+- `GEMINI_API_KEY` solo en el servidor, y `leer-albaran` exige sesión activa.
+- Los cuadros no llevan serie y los cargadores sí.
+- La guía `docs/PUESTA-EN-MARCHA.md` es completa y recoge el aviso de privacidad del nivel gratuito de Gemini.
+
+**Pendiente:** E-010 (tres ajustes menores que no llegaron a tiempo) y E-009 (fotos).
+
+Orden: **E-010 → E-009**.
 
 ### 29/09/2026 · Revisión de E-001
 Verificado desde el chat sobre el commit `8a57184`: `npm ci`, 31 pruebas en verde, `tsc -b` sin errores y `npm run build` correcto. Tampoco hay datos sensibles en el repositorio: se buscaron NIF, n.º de cliente y teléfonos de los albaranes reales, sin resultados.
