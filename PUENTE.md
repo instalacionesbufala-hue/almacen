@@ -130,6 +130,47 @@ Objetivo: no añadir material a mano en cada entrega. Se elige una plantilla, se
 - Hay pruebas de: plantilla con tallas resueltas, modo kit (solo la diferencia), reserva y su caducidad, y confirmación atómica.
 - Una entrega de 15 líneas se prepara en menos de un minuto y se firma en un solo paso.
 
+### E-008 · Material en custodia de Esmove · PENDIENTE
+Los **cargadores VE** y los **cuadros de protecciones** los entrega Esmove y quedan en nuestro almacén **en custodia**. No son nuestros y no tenemos su precio. Aun así hay que controlar su stock, para saber si hay unidades cuando se necesitan y para pedir la reposición a Esmove.
+
+**1. Modelo de datos**
+- **Propiedad del artículo:** `propiedad` (propia | custodia) y `propietario_id`. Se crea una tabla `propietarios` (nombre, contacto, correos de reposición e informes), con Esmove como primer registro, preparada por si mañana hay otro depositante.
+- **Precio opcional:** en custodia el precio es `null`, y en ningún sitio se inventa ni se exige.
+- **Nueva categoría** `cuadros` (cuadros de protecciones), además de `cargadores`.
+- **N.º de serie obligatorio** en cargadores y en cuadros de protecciones (confirmado por el usuario): toda entrada, salida, devolución o incidencia de estos artículos va con su número de serie, igual que los cargadores hoy.
+- **Datos de demostración:** los cargadores pasan a custodia de Esmove sin precio y se añaden un par de cuadros de ejemplo.
+
+**2. Valoración y panel**
+- El **valor del inventario solo suma material propio**. El material en custodia no aparece en euros en ningún informe ni exportación.
+- **Indicador aparte:** "En custodia de Esmove", con unidades por referencia y cuántas están en rojo o amarillo.
+- **Etiqueta visible** "Custodia Esmove" en listas, fichas, escáner y entregas.
+- **Filtro** por propiedad (propio | custodia) en el inventario.
+
+**3. Mínimos y reposición (amplía E-006)**
+- **Mínimos:** mismo semáforo y mismos avisos que el resto.
+- **Destino del aviso:** el borrador de reposición se agrupa **por propietario, no por proveedor**, y es una **solicitud de reposición a Esmove** (referencias, cantidades y stock actual), sin importes.
+- **Envío a Esmove:** dos modos configurables en Configuración → Avisos. Por defecto, "el administrador revisa y envía con un toque". El otro modo, "automático al correo de Esmove", queda desactivado por defecto. El administrador recibe siempre el aviso por sus canales.
+
+**4. Entradas y salidas**
+- **Entradas:** se registran como "Recepción en custodia" desde el albarán de Esmove, que no lleva precios. La lectura con IA (E-003) no debe exigir precios en estas líneas.
+- **Salidas:** exigen **obra o instalación de destino** y el n.º de serie cuando lo haya, porque Esmove querrá saber dónde está cada equipo. La salida es "Instalado en obra" o "Entrega a equipo"; si vuelve sin instalar, es "Devolución".
+- **Daños y pérdidas:** se registran como incidencia de custodia y generan aviso a Esmove. No cuentan como coste propio.
+
+**5. Informe para Esmove**
+- **Contenido:** stock actual por referencia, entradas recibidas, salidas por obra con n.º de serie y fecha, incidencias y diferencias de recuento. Todo sin precios, con periodo configurable (mensual por defecto).
+- **Formato:** PDF y CSV. Se puede enviar por correo al contacto de Esmove, desde el panel o programado (reutiliza E-006).
+- **Recuento de custodia:** cuando Esmove venga a verificar, se genera un acta con lo contado y la firma de su representante, reutilizando la firma de las entregas.
+
+**6. Permisos (amplía E-004)**
+- **Almacén:** registra entradas y salidas de custodia.
+- **Solo administrador:** cambia la propiedad de un artículo, edita el propietario y sus correos, y envía informes y solicitudes a Esmove.
+
+**7. Hecho cuando**
+- Hay pruebas de que el valor del inventario excluye la custodia.
+- Hay pruebas de que una salida de custodia sin obra se rechaza.
+- Hay pruebas de que el aviso de reposición de custodia va al borrador de Esmove y no al de proveedores.
+- Hay pruebas de que el informe no contiene ningún importe.
+
 ---
 
 ## Revisión del chat
@@ -144,7 +185,7 @@ Estructura y reglas correctas. Observaciones para los siguientes encargos, ya re
 4. **Repositorio y web públicos:** con Supabase, la clave `anon` va en la app, cosa que es normal. La seguridad depende por completo de que RLS esté bien hecho.
 5. **E-003 con Gemini gratuito:** según los términos de Google, en el nivel gratuito el contenido enviado puede usarse para mejorar sus productos, y los albaranes llevan precios y direcciones de obra. Indícalo en la guía para que el usuario decida si lo acepta o activa la facturación.
 
-Orden de trabajo: E-002 → E-004 → E-006 → E-007 → E-003 → E-005. E-006 y E-007 se apoyan en el backend y los roles, así que van después.
+Orden de trabajo: E-002 → E-004 → E-006 + E-008 → E-007 → E-003 → E-005. E-006 y E-007 se apoyan en el backend y los roles, así que van después. **E-008 afecta al modelo de datos:** los campos `propiedad`, `propietario_id`, la tabla `propietarios`, el precio opcional y la categoría `cuadros` deben entrar ya en las migraciones de E-002, aunque la interfaz de custodia se haga junto con E-006.
 
 ---
 
