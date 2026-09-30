@@ -521,6 +521,27 @@ El diálogo de movimientos solo ofrece Entrada, Salida, A vehículo, Devolución
 **Hecho cuando**
 - Hay pruebas de: ajuste negativo y positivo del administrador, rechazo para el rol almacén, motivo obligatorio, sin efecto en mermas ni consumos, y el aviso de código ya ingresado por albarán.
 
+### E-019 · Inventario completo en una sola lista, sin páginas · PENDIENTE
+**Petición del usuario:** ver la **lista de materiales completa**, no por páginas. Hoy el inventario (Stock General) muestra unas 8 referencias por página ("Página 1 de 5").
+
+**Qué hacer**
+- **Una sola lista:** quitar la paginación del inventario y mostrar **todas las referencias** que cumplen los filtros, con desplazamiento vertical normal.
+- **Cabecera fija:** la cabecera de la tabla queda **fija** al desplazarse.
+- **Contador:** arriba se ve "Mostrando N de M referencias".
+- **Filtros, buscador y orden:** siguen igual (categoría, estado, propiedad, ubicación). Se añade **ordenar por columna** con un toque en la cabecera: código, descripción, stock y estado.
+- **Agrupar por categoría (opcional):** un interruptor que muestra la lista agrupada por categoría, con el nombre de cada una como separador y su número de referencias.
+- **Rendimiento:** con 40 referencias no hace falta nada especial. Si algún día pasa de 300, usar virtualización (solo se pintan las filas visibles) sin cambiar el aspecto. Las miniaturas se siguen cargando al hacerse visibles (`loading="lazy"`).
+- **Móvil:**
+  - misma lista continua, en tarjetas, sin páginas;
+  - botón flotante **"Subir"** cuando se ha bajado mucho;
+  - los botones de cada fila mantienen su tamaño de 56 px.
+- **Imprimir o exportar:** **"Exportar CSV"** exporta la lista completa con los filtros aplicados, y hay un botón **"Imprimir lista"** con una vista limpia: código, descripción, categoría, stock en almacén, stock por vehículo y mínimo, **sin fotos**.
+- **Mismo criterio en las demás listas largas** que hoy tienen páginas (movimientos, entregas, cierres): lista continua con "Cargar más" al final cuando haya muchas (por ejemplo, de 100 en 100), para no traer el historial entero de golpe.
+
+**Hecho cuando**
+- Hay pruebas de: todas las referencias visibles sin paginación, filtros y orden aplicados sobre la lista completa, y CSV con la lista filtrada completa.
+- En el móvil se recorren las 40 referencias desplazando, sin tocar ningún botón de página.
+
 ---
 
 ## Revisión del chat
@@ -539,8 +560,9 @@ En la app real:
 - 1 Trydan con Schuko traspasado a Búfala 1.
 - 18 equivalencias en borrador y ninguna en rojo; **faltan por confirmar**.
 - **Stock duplicado** en la tapa final y el ángulo exterior (se explica en E-018).
+- **E-019 (nuevo, a petición del usuario):** inventario completo en una sola lista, sin páginas.
 
-**Orden: E-018.**
+**Orden: E-018 → E-019.**
 
 ### 30/09/2026 · Chat: publicación fallida arreglada y salidas por equipo
 - **Publicación:** el fallo de `f43f1dc` lo causó el chat. La prueba del catálogo real esperaba 40 artículos, y al quitar la cinta blanca quedan 39. Se ha corregido en `16e0271` (257 pruebas en verde y publicación correcta). A partir de ahora el chat ejecuta las pruebas antes de subir cambios en `datos/`.
