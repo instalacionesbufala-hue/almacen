@@ -43,7 +43,7 @@ export default function CustodiaView() {
       <section className={`${CARD} overflow-x-auto`}><table className="tabla w-full min-w-[720px]">
         <thead className="bg-surface-container-low"><tr><th>Referencia</th><th>Código modelo</th><th>Almacén</th><th>En vehículos</th><th>Mínimo</th><th>Estado</th><th>Dónde está</th></tr></thead>
         <tbody>{prods.length ? prods.map(p => <tr key={p.sku} onClick={() => abrirFicha(p.sku)} className="cursor-pointer">
-          <td><div className="font-medium">{p.name}</div><div className="font-mono text-label-sm text-secondary">{p.sku}</div></td>
+          <td><div className="font-medium">{p.name}</div><div className="font-mono text-label-sm text-secondary whitespace-nowrap">{p.sku}</div></td>
           <td className="font-mono text-label-md">{p.supplierRef || '—'}</td>
           <td className="font-semibold whitespace-nowrap">{qtyTxt(p, p.stock)}</td><td className="whitespace-nowrap text-violet-800">{qtyTxt(p, Math.round((stockTotal(E, p) - p.stock) * 1000) / 1000)}</td><td className="font-mono">{num(p.min)}</td><td><Pill p={p} /></td>
           <td className="text-body-sm"><Ubicaciones p={p} /></td></tr>) : <tr><td colSpan={7}><Vacio>No hay material en custodia de este propietario.</Vacio></td></tr>}</tbody></table></section>
