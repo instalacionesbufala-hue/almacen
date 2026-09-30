@@ -4,7 +4,7 @@
    Todas las escrituras pasan por ejecutar(op): validación inmediata en local y, en nube, envío a la función SQL. */
 import type { Estado, Producto } from '../data/tipos';
 import { fresh } from '../data/semilla';
-import { CONFIG_AVISOS_DEFECTO, OFICINA, SEED_PRODUCTS } from '../data/catalogo';
+import { CONFIG_AVISOS_DEFECTO, OFICINA, SEED_PRODUCTS, CATEGORIAS_INICIALES, fijarCategorias } from '../data/catalogo';
 import { find, qtyTxt, status, type MovInput } from '../domain/reglas';
 import { hashEntrega } from '../domain/hash';
 import { crearStore } from './crear';
@@ -17,7 +17,7 @@ import { toast } from '../ui/toast';
 const LS = modoNube ? 'almacen-bufala-nube-cache-v1' : 'almacen-bufala-v5';
 const LS_OLD = 'almacen-bufala-v2';
 
-export const vacio = (): Estado => ({ v: 3, products: [], movements: [], albaranes: [], equipos: [], tecnicos: [], entregas: [], herramientas: [], propietarios: [], pendientes: [], perfiles: [], rol: 'almacen', avisos: [], minimosHerramienta: [], configAvisos: { ...CONFIG_AVISOS_DEFECTO }, envios: [], actas: [], vehiculos: [], asignaciones: [], aBordo: [], configApp: { modoDemo: false, kitFijacion: 'A' }, portalEnlaces: [], copias: [], cierres: [], lineasCierre: [], equivalencias: [], kits: {}, integraciones: [],
+export const vacio = (): Estado => ({ v: 3, products: [], movements: [], albaranes: [], equipos: [], tecnicos: [], entregas: [], herramientas: [], propietarios: [], pendientes: [], perfiles: [], rol: 'almacen', avisos: [], minimosHerramienta: [], configAvisos: { ...CONFIG_AVISOS_DEFECTO }, envios: [], actas: [], vehiculos: [], asignaciones: [], aBordo: [], configApp: { modoDemo: false, kitFijacion: 'A' }, categorias: CATEGORIAS_INICIALES.map(c => ({ ...c })), propuestas: [], portalEnlaces: [], copias: [], cierres: [], lineasCierre: [], equivalencias: [], kits: {}, integraciones: [],
   operator: '', pedidos: {}, cesta: { equipo: '', receptor: null, lineas: [], obra: '', paso: 1 }, seq: { ent: 0 } });
 
 function migrate(s: Partial<Estado>): Estado {
@@ -48,6 +48,9 @@ function load(): Estado {
 }
 
 export const almacen = crearStore<Estado>(load());
+// E-016: el registro de categorías sigue siempre a las del estado
+fijarCategorias(almacen.get().categorias);
+almacen.subscribe(() => fijarCategorias(almacen.get().categorias));
 export const useAlmacen = almacen.use;
 export const S = () => almacen.get();
 export let ultimoGuardado = Date.now();

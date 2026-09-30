@@ -1,6 +1,6 @@
 /* Estado inicial de demostración (movimientos, entregas y albaranes de ejemplo) */
 import type { Albaran, Asignacion, Entrega, Estado, Herramienta, Movimiento, StockVehiculo, TipoMov } from './tipos';
-import { CONFIG_AVISOS_DEFECTO, FIRMAS_DEMO, OFICINA, SEED_EQUIPOS, SEED_PRODUCTS, SEED_PROPIETARIOS, SEED_TECNICOS, SEED_VEHICULOS } from './catalogo';
+import { CONFIG_AVISOS_DEFECTO, FIRMAS_DEMO, OFICINA, SEED_EQUIPOS, SEED_PRODUCTS, SEED_PROPIETARIOS, SEED_TECNICOS, SEED_VEHICULOS, CATEGORIAS_INICIALES } from './catalogo';
 
 const clone = <T,>(o: T): T => JSON.parse(JSON.stringify(o));
 
@@ -28,7 +28,6 @@ export function seedMovements(): Movimiento[] {
     M(seedTs(2, 11, 0), '6201020032', 'salida', 120, 'Obra / instalación', 'C/ Eros 10', 'Luis Martín'),
     M(seedTs(3, 9, 15), '7501013532', 'entrada', 2, 'Compra a proveedor', 'Alb. 2.790.456', OFICINA),
     M(seedTs(4, 13, 30), '6040615316', 'entrada', 305, 'Compra a proveedor', 'Alb. 2.795.060', OFICINA),
-    M(seedTs(5, 10, 10), 'BF-FON-MC16', 'salida', 60, 'Obra / instalación', 'Reforma baño C/ Zubeldia 8', 'Jorge Ruiz'),
     M(seedTs(6, 18, 0), '5301012054', 'merma', 1, 'Pérdida o extravío', 'Recuento semanal', 'Andrea Pardo'),
   ];
 }
@@ -90,7 +89,7 @@ export function fresh(): Estado {
   return {
     v: 3, products: clone(SEED_PRODUCTS), movements: seedMovements(), albaranes: seedAlbaranes(),
     equipos: clone(SEED_EQUIPOS), tecnicos: clone(SEED_TECNICOS), entregas: seedEntregas(), herramientas: seedHerramientas(), propietarios: clone(SEED_PROPIETARIOS), pendientes: [], perfiles: [], rol: 'admin', avisos: [], minimosHerramienta: [{ modelo: 'Makita DDF484', minimo: 1, proveedor: 'Saltoki Alcobendas' }], configAvisos: clone(CONFIG_AVISOS_DEFECTO), envios: [], actas: [],
-    vehiculos: clone(SEED_VEHICULOS), asignaciones: seedAsignaciones(), aBordo: seedABordo(), configApp: { modoDemo: true, kitFijacion: 'A' }, portalEnlaces: [], copias: [], cierres: [], lineasCierre: [], equivalencias: [], kits: {}, integraciones: [],
+    vehiculos: clone(SEED_VEHICULOS), asignaciones: seedAsignaciones(), aBordo: seedABordo(), configApp: { modoDemo: true, kitFijacion: 'A' }, categorias: clone(CATEGORIAS_INICIALES), propuestas: [], portalEnlaces: [], copias: [], cierres: [], lineasCierre: [], equivalencias: [], kits: {}, integraciones: [],
     operator: OFICINA, pedidos: {}, cesta: { equipo: 'F01', receptor: 'T1', lineas: [], obra: '', paso: 1 }, seq: { ent: 412 },
   };
 }

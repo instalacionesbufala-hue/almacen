@@ -407,7 +407,7 @@ Hoy hay 3 equipos (Búfala 1, 2 y 3), cada uno con 2 técnicos y 1 furgoneta. **
 - Hay pruebas de: detección de duplicado por código, borrador para el rol almacén, propuesta de la IA con unidad y contenido, alta sin IA, y foto guardada como foto del artículo.
 - En el móvil, un alta completa lleva menos de un minuto.
 
-### E-016 · Correcciones tras la primera carga real · PENDIENTE
+### E-016 · Correcciones tras la primera carga real · HECHO
 **Qué ha visto el chat en la app real (30/09).** El usuario no importó el CSV: dio de alta el stock **leyendo los 5 albaranes con la IA**, y eso ha dejado estos fallos.
 
 **1. Emparejado de albaranes: un código distinto nunca es el mismo artículo (bug)**
@@ -1249,3 +1249,90 @@ Cubren también el formato de cantidades, las respuestas envueltas en ```json y 
 - Añadir `version` al reenviar un cierre corregido, para que el almacén aplique la diferencia.
 - Añadir un campo para el medidor V2C, si se instala.
 - Usar identificadores estables si se añaden partidas: la tabla de equivalencias se amplía sin tocar código.
+
+### 30/09/2026 · E-016 · HECHO
+**1. Emparejado de albaranes** (`_compartido/albaran.ts`)
+- Si la línea trae un código que no está en el catálogo, sale como **"Artículo nuevo"** (`how = 'nuevo'`). Nunca se empareja por descripción con otro artículo de código distinto. La descripción solo se usa en líneas **sin código**.
+- El SKU que propone la IA solo se acepta si coincide con el código de la línea (exacto o con sufijo).
+- El prompt dice que el proveedor es el **emisor**, nunca Búfala, y que no asigne un código desconocido a otro artículo.
+- **En la revisión:** las líneas nuevas salen en amarillo con **Crear artículo nuevo** (con ese código) o se reasignan a mano en el desplegable.
+- **Prueba** con los dos casos reales del 3.322.577: la moldura y el ángulo interior salen como artículos nuevos aunque la IA proponga la tapa final y el ángulo exterior.
+
+**2. Artículos creados desde un albarán** (`_compartido/clasificar.ts`)
+- `detectarUnidad`: ML, cables, tubos y molduras → m; `BOTE n`, `BOLSA n`, `PACK n`, `SOBRE n` y `CAJA n` con su contenido; `KOMMDATA BOLSA 25` → sobre de 25; un cargador con cable sigue siendo ud.
+- `categoriaSugerida` (lee la tabla de categorías) y `normalizarProveedor`: Saltoki único con la delegación aparte; Búfala nunca es proveedor.
+- Se aplican al pulsar **Crear artículo nuevo**, y todo se puede corregir en el formulario.
+- El albarán guarda `proveedor` + `delegacion` (columna nueva).
+- **Prueba:** las 39 líneas del catálogo real dan exactamente su unidad, contenido y categoría.
+- **Migración:** las fichas "Saltoki …" pasan a proveedor **Saltoki** (la delegación anterior queda como proveedor habitual para los pedidos). Las 3 con "BUFALA TECH" quedan sin proveedor hasta el paso 15.3.
+
+**3. Importar catálogo → "Actualizar fichas existentes"**
+- Casilla con vista previa campo a campo (nombre, categoría, proveedor, unidad y contenido). Avisa si el artículo tiene stock en vehículos y cambia el contenido.
+- `importar_catalogo(filas, actualizar)`. **El stock no se toca ni se convierte.**
+- Ajuste: el inventario de apertura solo entra en artículos **sin stock ni movimientos**, así una importación nunca duplica lo que ya entró por albarán.
+- **CSV:** apliqué la categoría Consumibles a bolsas, bridas y cinta, y el proveedor "Saltoki", para que "Actualizar" no deshaga las decisiones.
+
+**4. Reasignar línea** (Albaranes → pulsa un albarán del historial → detalle)
+- `reasignar_linea_albaran` (solo administrador): ajuste **−A** que corrige la entrada original y ajuste **+B** enlazado al anterior, con referencia al albarán.
+- Admite parte de la cantidad; no pasa de lo que queda por reasignar ni de lo que queda en el almacén. El reintento de la cola no repite nada. La entrada original no se toca.
+
+**5. Otros**
+- Las equivalencias cuyo artículo no existe salen en **rojo** ("NO EXISTE en el catálogo"), y también los kits con artículos inexistentes.
+- Las miniaturas y la foto grande van sobre **gris muy claro** para que se vean las piezas blancas o transparentes.
+
+**6. Categorías configurables**
+- **Tabla `categorias`** con id, nombre, icono, color (paleta fija de 10), orden y activa, y FK desde `productos`.
+- **Categorías iniciales:** Cargadores VE, Cuadros de protecciones, Cables, Tubos y canalización (id `tubos`), Fijaciones, Aparamenta, Consumibles, EPIs, Ropa de trabajo y Herramientas.
+- **Fontanería desaparece** de los datos, los filtros, la demostración (fuera sus 3 artículos de ejemplo), los textos y los prompts de la IA.
+- La migración pasa a Consumibles las bolsas de basura, bridas y cinta.
+- **Configuración → Categorías:** crear, renombrar, icono y color, subir y bajar, desactivar (con artículos, pide a qué categoría moverlos) y volver a activar.
+- La app usa un registro que sigue a la tabla (`catDe`, `categoriasActivas`); una categoría desconocida nunca rompe una pantalla.
+- La heurística de importación y `leer-articulo` usan las categorías activas de la tabla.
+
+**7. Editar artículos**
+- **Editar:** añade **notas** y el **código (SKU)** editable.
+- **Decisión:** cambiar el SKU se hace como **ficha nueva + fusión de la antigua** (`cambiar_codigo_producto`), no reescribiendo el código.
+  - Las entregas firmadas llevan su huella SHA-256 sobre el código de cada línea. Reescribirlo rompería la verificación, y el historial es inalterable.
+  - Así las huellas siguen cuadrando (hay prueba), el historial muestra el código con el que se hizo y buscar el código antiguo lleva al nuevo.
+- **Fusionar A en B** (`fusionar_productos`):
+  - el stock del almacén pasa convertido por el contenido (rechaza si no cuadra el formato) y el de los vehículos, tal cual;
+  - ajustes enlazados; A queda **archivado** (`archivado` y `fusionado_en`);
+  - un trigger impide mover un archivado; la app lo oculta de las listas pero lo sigue mostrando en el historial.
+- **Auditoría:** `guardar_producto` guarda en `auditoria` el antes y el después de cada campo cambiado.
+- **Almacén:** **Proponer un cambio** (`propuestas_ficha`). En la bandeja del administrador sale "Cambios de ficha propuestos" con las diferencias, para revisar y aplicar o descartar.
+
+**8. Equivalencias en la app** (`features/cierres/Reglas.tsx`)
+- **Editor:** condiciones por filas (campo con sugerencias, "es igual a" o "contiene", valores con `|` y `&`); artículos con **buscador con foto** y cantidad; "sin dar de alta" (p. ej. el clavo); fórmula; kit; orden; estimada; nota.
+- **Acciones:** **Duplicar** (como borrador) y **Borrar** (solo borradores; una confirmada se desactiva).
+- **Historial:** editar una regla confirmada guarda la versión anterior (`equivalencias_historial`, visible en la regla).
+- **Probar:** aplica las reglas a un cierre de ejemplo (editable) o a uno recibido (sus datos se piden al servidor) y enseña qué descontaría, **sin aplicar nada**; opcionalmente incluye las reglas en borrador.
+- **Recalcular cierres desde…:** traduce con las reglas confirmadas y aplica solo la diferencia (`recalcular_cierre_admin` → "Corrección de cierre"). Conserva las líneas resueltas a mano.
+- **Kits A, B y C:** con el mismo editor de artículos.
+
+**Migración** `20261008000100_e016_correcciones.sql` (aplicada en producción). Comprobado con una consulta de solo lectura: 10 categorías, 3 artículos en Consumibles, 33 con proveedor Saltoki y 3 sin proveedor (los de "BUFALA TECH").
+
+**Desplegado:** `leer-albaran` (emparejado y prompt nuevos) y `leer-articulo` (categorías de la tabla).
+
+**Pruebas:** 281 en verde (`npm test`).
+- `supabase/tests/e016.test.ts` (10): categorías; albarán con delegación; **reasignación** (A baja, B sube, la entrada original y dos ajustes enlazados, reintento, límites); auditoría campo a campo; fusión con vehículos, archivado y formato que no cuadra; cambio de código con la huella de la entrega intacta; importar con y sin "Actualizar"; propuestas; historial y borrado de reglas.
+- `supabase/tests/clasificar.test.ts` (4): las 39 líneas reales y los casos que fallaron en la primera carga.
+- `supabase/tests/albaran.test.ts` (+3): los dos casos reales del 3.322.577.
+- `src/domain/fichas.test.ts` (7): la misma lógica en local.
+- `tsc -b` sin errores, `npm run build` correcto y `deno check` de las seis funciones sin errores.
+
+**Probado en el navegador (demostración):**
+- albarán de ejemplo con una línea "Artículo nuevo" y proveedor "Saltoki" · delegación "Alcobendas";
+- historial → detalle → **Reasignar línea** (−40 / +40 enlazados);
+- Configuración → Categorías (las 10 nuevas);
+- cargar la propuesta de equivalencias (artículos que no existen en rojo);
+- editor de regla con condiciones por filas y artículos con foto.
+
+**Para el usuario (guía, paso 15), en este orden para no duplicar stock:**
+1. Crear a mano, con stock 0, la moldura `6222106082` (metros) y el ángulo interior `6222110054`.
+2. En el albarán **3.322.577**, **Reasignar línea**: tapa final +20 → moldura; ángulo exterior +10 → ángulo interior.
+3. **Importar catálogo** con **Actualizar fichas existentes**: corrige las 19 unidades y el resto de campos, y crea la cinta negra con 20 ud.
+4. Revisar las categorías y las equivalencias en rojo, y **confirmar las equivalencias**.
+
+Comprobado en producción: la cinta blanca (9900101044) no existe, así que no hay nada que retirar. La tapa final (30) y el ángulo exterior (20) tienen otras entradas legítimas; por eso se reasigna solo la línea de ese albarán.
+
+**Sin verificar aquí:** esos pasos sobre los datos reales (los hace el usuario) y una lectura real de albarán con el emparejado nuevo.

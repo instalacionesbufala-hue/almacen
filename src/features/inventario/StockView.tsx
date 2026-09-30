@@ -1,6 +1,6 @@
 /* Stock general: panel de escritorio, inventario móvil y stock a bordo de un vehículo (E-013: sin precios ni estanterías) */
 import type { Estado, Producto } from '../../data/tipos';
-import { CATS, MARCA, UNIT } from '../../data/catalogo';
+import { MARCA, UNIT, catDe, categoriasActivas, idsCategoriasActivas } from '../../data/catalogo';
 import { contenidoTxt, critical, esCustodia, find, nombreVehiculo, ORD, qtyTxt, searchProducts, status, stockDeVehiculo, stockTotal } from '../../domain/reglas';
 import { esHoy, fechaHora, hace, hoyISO, initials, num, redondea } from '../../domain/formato';
 import { descargarCsv } from '../../domain/csv';
@@ -17,7 +17,7 @@ import { abrirAltaCamara } from '../altaCamara/AltaCamara';
 
 export function exportarStockCsv(E: Estado = S()) {
   descargarCsv(`stock-${hoyISO()}.csv`, [['SKU', 'Nombre', 'Categoría', 'Propiedad', 'Almacén', 'En vehículos', 'Total', 'Unidad', 'Contenido', 'Mínimo almacén', 'Estado', 'Proveedor', 'Código proveedor', 'EAN'],
-    ...E.products.map(p => { const t = stockTotal(E, p); return [p.sku, p.name, CATS[p.cat].label, esCustodia(p) ? `Custodia ${E.propietarios.find(o => o.id === p.propietario)?.nombre || ''}` : 'Propio',
+    ...E.products.map(p => { const t = stockTotal(E, p); return [p.sku, p.name, catDe(p.cat).label, esCustodia(p) ? `Custodia ${E.propietarios.find(o => o.id === p.propietario)?.nombre || ''}` : 'Propio',
       p.stock, redondea(t - p.stock), t, UNIT[p.unit], p.contenido || 1, p.minimoDefinido === false ? '' : p.min, ST[status(p)].t, p.supplier, p.supplierRef || '', p.ean || '']; })]);
 }
 export function exportarMovimientosCsv(E: Estado = S()) {
@@ -60,7 +60,7 @@ function StockDesk() {
   const catProds = E.products.filter(p => p.cat === u.catTab).sort((a, b) => ORD[status(a)] - ORD[status(b)] || a.name.localeCompare(b.name)).slice(0, 3);
   const ultAlb = E.albaranes[0], ultEnt = [...E.entregas].sort((a, b) => b.ts - a.ts)[0];
   // recuento cíclico semanal: una categoría cada semana (ya no hay pasillos)
-  const cats = Object.keys(CATS).filter(k => E.products.some(p => p.cat === k)), semana = Math.ceil((Date.now() - new Date(new Date().getFullYear(), 0, 1).getTime()) / 6048e5), catAud = cats[semana % Math.max(1, cats.length)] || 'all';
+  const cats = idsCategoriasActivas().filter(k => E.products.some(p => p.cat === k)), semana = Math.ceil((Date.now() - new Date(new Date().getFullYear(), 0, 1).getTime()) / 6048e5), catAud = cats[semana % Math.max(1, cats.length)] || 'all';
   const sel = 'font-mono text-label-md !w-auto';
   return (
     <div className="px-gutter py-space-lg flex flex-col gap-space-lg max-w-[1600px]">
@@ -86,7 +86,7 @@ function StockDesk() {
             <div className="flex flex-col 2xl:flex-row 2xl:items-center justify-between gap-space-sm">
               <div><h2 className="text-headline-md font-semibold">Categorías estratégicas</h2><p className="text-body-sm text-secondary">Lo más urgente de cada familia: primero lo que está en rojo.</p></div>
               <div className="inline-flex bg-surface-container-low p-1 rounded-lg overflow-x-auto no-scrollbar max-w-full">
-                {Object.entries(CATS).map(([k, c]) => <button key={k} onClick={() => setUI({ catTab: k })} className={`px-3 py-1.5 rounded-md whitespace-nowrap text-body-md font-semibold transition-all ${u.catTab === k ? 'bg-surface-container-lowest text-primary shadow-sm' : 'text-on-surface-variant hover:text-on-surface'}`}>{c.label}</button>)}
+                {categoriasActivas().map(([k, c]) => <button key={k} onClick={() => setUI({ catTab: k })} className={`px-3 py-1.5 rounded-md whitespace-nowrap text-body-md font-semibold transition-all ${u.catTab === k ? 'bg-surface-container-lowest text-primary shadow-sm' : 'text-on-surface-variant hover:text-on-surface'}`}>{c.label}</button>)}
               </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-space-md">
@@ -107,7 +107,7 @@ function StockDesk() {
             <div className="p-space-md flex flex-wrap items-center gap-space-sm">
               <div className="relative flex-1 min-w-[220px]"><Icon n="search" className="absolute left-3 top-1/2 -translate-y-1/2 text-outline ico-20" />
                 <input value={u.q} onChange={e => setUI({ q: e.target.value, page: 1 })} type="search" placeholder="Filtrar por nombre, SKU, código o proveedor…" className={`${INP} pl-10`} /></div>
-              <select value={u.cat} onChange={e => setUI({ cat: e.target.value, page: 1 })} className={`${INP} ${sel}`} aria-label="Categoría"><option value="all">Categoría: todas</option>{Object.entries(CATS).map(([k, c]) => <option key={k} value={k}>{c.label}</option>)}</select>
+              <select value={u.cat} onChange={e => setUI({ cat: e.target.value, page: 1 })} className={`${INP} ${sel}`} aria-label="Categoría"><option value="all">Categoría: todas</option>{categoriasActivas().map(([k, c]) => <option key={k} value={k}>{c.label}</option>)}</select>
               <select value={u.est} onChange={e => setUI({ est: e.target.value, page: 1 })} className={`${INP} ${sel}`} aria-label="Estado"><option value="all">Estado: todos</option>{(['red', 'amber', 'green'] as const).map(s => <option key={s} value={s}>{ST[s].t}</option>)}</select>
               <select value={u.prop} onChange={e => setUI({ prop: e.target.value, page: 1 })} className={`${INP} ${sel}`} aria-label="Propiedad"><option value="all">Propiedad: todo</option><option value="propia">Material propio</option><option value="custodia">En custodia</option></select>
               <select value={u.ubi} onChange={e => setUI({ ubi: e.target.value, page: 1 })} className={`${INP} ${sel}`} aria-label="Ubicación"><option value="all">Ubicación: todas</option><option value="almacen">Almacén</option>{E.vehiculos.map(v => <option key={v.id} value={v.id}>{nombreVehiculo(E, v.id)}</option>)}</select>
@@ -148,7 +148,7 @@ function StockDesk() {
           </section>
           <Barras E={E} />
           <section className="bg-primary-fixed/50 rounded-xl p-space-md flex items-center justify-between gap-space-md">
-            <div><h3 className="text-headline-sm font-semibold">Recuento cíclico semanal</h3><p className="text-body-sm text-secondary">{CATS[catAud as keyof typeof CATS]?.label || 'Almacén'} · {E.products.filter(p => p.cat === catAud).length} referencias a recontar</p></div>
+            <div><h3 className="text-headline-sm font-semibold">Recuento cíclico semanal</h3><p className="text-body-sm text-secondary">{catDe(catAud).label || 'Almacén'} · {E.products.filter(p => p.cat === catAud).length} referencias a recontar</p></div>
             <button onClick={() => abrirConteo(catAud)} className={`${BTN_S} px-3 py-2 text-body-sm`}>Iniciar conteo</button>
           </section>
         </div>
@@ -164,7 +164,7 @@ function FilaStock({ p, pedido }: { p: Producto; pedido: boolean }) {
   return (
     <tr className={r ? 'bg-error-container/20' : ''}>
       <td><div className="flex items-center gap-2"><Icon n={r ? 'warning' : 'qr_code_2'} className={`${r ? 'text-error' : 'text-secondary'} ico-20`} /><div><div className={`font-mono text-label-md ${r ? 'text-error' : ''} break-all`}>{p.sku}</div>{p.ean && <div className="font-mono text-label-sm text-secondary">EAN {p.ean}</div>}</div></div></td>
-      <td className="max-w-[340px]"><button onClick={() => abrirFicha(p.sku)} className="text-left flex items-center gap-3"><Tile p={p} size="w-11 h-11" /><div><div className="font-semibold hover:text-primary">{p.name}</div><div className="text-body-sm text-secondary">{CATS[p.cat].label} · {p.supplier}{contenidoTxt(p) ? ` · ${contenidoTxt(p)}` : ''}</div></div></button><div className="flex flex-wrap gap-1 mt-1"><TagCustodia p={p} />{p.borrador && <Tag c="bg-amber-100 text-amber-800">Borrador</Tag>}{pedido && <Tag c="bg-amber-100 text-amber-800">Pedido en curso</Tag>}</div></td>
+      <td className="max-w-[340px]"><button onClick={() => abrirFicha(p.sku)} className="text-left flex items-center gap-3"><Tile p={p} size="w-11 h-11" /><div><div className="font-semibold hover:text-primary">{p.name}</div><div className="text-body-sm text-secondary">{catDe(p.cat).label} · {p.supplier}{contenidoTxt(p) ? ` · ${contenidoTxt(p)}` : ''}</div></div></button><div className="flex flex-wrap gap-1 mt-1"><TagCustodia p={p} />{p.borrador && <Tag c="bg-amber-100 text-amber-800">Borrador</Tag>}{pedido && <Tag c="bg-amber-100 text-amber-800">Pedido en curso</Tag>}</div></td>
       <td className="max-w-[260px]"><Ubicaciones p={p} /></td>
       <td><div className={`text-headline-sm font-bold ${r ? 'text-error' : ''}`}>{qtyTxt(p, p.stock)}</div><div className={`font-mono text-label-sm ${r ? 'text-error' : 'text-secondary'}`}>Mín: {p.minimoDefinido === false ? 'sin definir' : num(p.min)}</div></td>
       <td><Pill p={p} /></td>
@@ -178,7 +178,7 @@ function FilaStock({ p, pedido }: { p: Producto; pedido: boolean }) {
 }
 
 function Barras({ E }: { E: Estado }) {
-  const rows = Object.entries(CATS).map(([k, c]) => { const ps = E.products.filter(p => p.cat === k); return { k, c, n: ps.length, r: ps.filter(p => status(p) === 'red').length, a: ps.filter(p => status(p) === 'amber').length, g: ps.filter(p => status(p) === 'green').length }; }).filter(x => x.n);
+  const rows = categoriasActivas().map(([k, c]) => { const ps = E.products.filter(p => p.cat === k); return { k, c, n: ps.length, r: ps.filter(p => status(p) === 'red').length, a: ps.filter(p => status(p) === 'amber').length, g: ps.filter(p => status(p) === 'green').length }; }).filter(x => x.n);
   const max = Math.max(1, ...rows.map(r => r.n));
   return (
     <section className={`${CARD} p-space-md`}>
@@ -221,7 +221,7 @@ function StockMob() {
         <label className="col-span-2 flex flex-col gap-1"><span className={LBL}>Propiedad</span><select value={u.prop} onChange={e => setUI({ prop: e.target.value })} className={`${INP} h-12`}><option value="all">Todo</option><option value="propia">Material propio</option><option value="custodia">En custodia de Esmove</option></select></label>
         <button onClick={limpiarFiltros} className={`col-span-2 ${BTN_T} h-11`}>Quitar filtros</button>
       </div>}
-      <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-4 px-4 pb-1">{chip('all', 'Todos', E.products.length)}{Object.entries(CATS).map(([k, c]) => chip(k, c.label, E.products.filter(p => p.cat === k).length))}</div>
+      <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-4 px-4 pb-1">{chip('all', 'Todos', E.products.length)}{categoriasActivas().map(([k, c]) => chip(k, c.label, E.products.filter(p => p.cat === k).length))}</div>
       {(hayFiltro || u.q) && <div className="flex items-center justify-between font-mono text-label-sm text-secondary"><span>{lista.length} resultado{lista.length === 1 ? '' : 's'}{u.est !== 'all' && ` · ${ST[u.est as 'red'].t}`}{u.ubi !== 'all' && ` · ${u.ubi === 'almacen' ? 'Almacén' : nombreVehiculo(E, u.ubi)}`}</span><button onClick={limpiarFiltros} className="text-primary">Limpiar</button></div>}
       <div className="flex flex-col gap-4">{lista.length ? lista.map(p => <CardMob key={p.sku} p={p} pedido={!!E.pedidos[p.sku]} />)
         : <div className="text-center text-secondary py-12">Nada coincide con “{u.q}”.<br /><button onClick={limpiarFiltros} className="text-primary font-semibold mt-2">Ver todo</button></div>}</div>
@@ -238,7 +238,7 @@ function CardMob({ p, pedido }: { p: Producto; pedido: boolean }) {
           <div className="flex justify-between items-start gap-2"><span className={`font-mono text-label-sm ${r ? 'text-error' : 'text-secondary'} truncate`}>SKU: {p.sku}</span><Pill p={p} short /></div>
           <h3 className="text-[17px] font-semibold leading-snug line-clamp-2 mt-0.5">{p.name}</h3>
           {(esCustodia(p) || p.borrador) && <div className="flex gap-1 mt-1"><TagCustodia p={p} />{p.borrador && <Tag c="bg-amber-100 text-amber-800">Borrador</Tag>}</div>}
-          <div className="text-body-sm text-secondary mt-1 truncate">{contenidoTxt(p) || p.packLabel || CATS[p.cat].label}</div>
+          <div className="text-body-sm text-secondary mt-1 truncate">{contenidoTxt(p) || p.packLabel || catDe(p.cat).label}</div>
         </div>
       </button>
       {r && <div className="flex items-center gap-3 bg-error-container/50 rounded-xl p-3"><Icon n="warning" className="text-error" />

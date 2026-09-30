@@ -2,11 +2,12 @@
    E-013: sin precios, sin números de serie y sin pasillo/estantería. El material está en el ALMACÉN (Producto.stock, en formatos)
    o a bordo de un VEHÍCULO (Estado.aBordo, en unidades de contenido). Entregar a un equipo es un traspaso almacén → vehículo. */
 import type { Estado, LineaEntrega, Movimiento, Producto, Semaforo, TipoMov, Unidad } from '../data/tipos';
-import { CATS, UNIT } from '../data/catalogo';
+import { UNIT, catDe } from '../data/catalogo';
 import { norm, num, redondea, uid } from './formato';
 import { emparejar, type ItemCatalogo } from '../../supabase/functions/_compartido/albaran';
 
-export const find = (S: Estado, sku: string) => S.products.find(p => p.sku === sku);
+/** Busca también entre los archivados (E-016: fusionados en otro), para que el historial siga mostrando su nombre */
+export const find = (S: Estado, sku: string) => S.products.find(p => p.sku === sku) ?? S.archivados?.find(p => p.sku === sku);
 
 /** Semáforo del ALMACÉN (los avisos de mínimo miran solo el almacén): rojo si stock < min, amarillo si < 1,5 × min */
 export function status(p: Pick<Producto, 'stock' | 'min'>): Semaforo {
@@ -88,6 +89,7 @@ export function applyMovement(S: Estado, i: MovInput, ahora = Date.now()): MovRe
   const p = find(S, i.sku); if (!p) throw new Error('Producto no encontrado');
   const qty = Number(i.qty), type = i.type, ref = i.ref || '';
   comprobarBasico(p, type, qty, i.reason);
+  if (p.fusionadoEn && !i.reason.startsWith('Fusión')) throw new Error(`${p.sku} está archivado (fusionado en ${p.fusionadoEn}): usa ese artículo`);
   const entera = type !== 'consumo' && (!i.vehiculo || type === 'traspaso' || type === 'devolucion');
   if (entera && formatoEntero(p) && qty !== Math.trunc(qty)) throw new Error(`En el almacén ${p.name} se mueve por ${UNIT[p.unit]} entero: indica un número sin decimales`);
   if ((type === 'traspaso' || type === 'devolucion' || type === 'consumo') && !i.vehiculo) throw new Error('Indica el vehículo');
@@ -137,7 +139,7 @@ export function searchProducts(S: Estado, q: string, f: { cat?: string; est?: st
     if (ubi === 'almacen' && !(p.stock > 0)) return false;
     if (ubi !== 'all' && ubi !== 'almacen' && !(unidadesABordo(S, ubi, p.sku) !== 0)) return false;
     if (!toks.length) return true;
-    const hay = norm([p.name, p.sku, p.ean, p.supplierRef, CATS[p.cat]?.label, p.supplier, p.modelo, p.talla ? 'talla ' + p.talla : ''].join(' '));
+    const hay = norm([p.name, p.sku, p.ean, p.supplierRef, catDe(p.cat).label, p.supplier, p.modelo, p.talla ? 'talla ' + p.talla : ''].join(' '));
     return toks.every(t => hay.includes(t) || (t.endsWith('s') && hay.includes(t.slice(0, -1))));
   }).sort((a, b) => ORD[status(a)] - ORD[status(b)] || a.name.localeCompare(b.name));
 }
@@ -158,7 +160,11 @@ export function resolveCode(S: Estado, raw: string): { p: Producto } | null {
   const u = (x?: string) => String(x || '').toUpperCase().replace(/\s/g, '');
   const qr = /^BUF:([^|]+)/i.exec(t), code = qr ? qr[1].trim() : t;
   const p = S.products.find(x => [x.sku, x.ean, x.supplierRef].some(v => v && u(v) === u(code)));
-  return p ? { p } : null;
+  if (p) return { p };
+  // E-016: el código de un artículo fusionado (o de un código cambiado) lleva al que lo sustituye
+  const viejo = S.archivados?.find(x => [x.sku, x.supplierRef].some(v => v && u(v) === u(code)));
+  const nuevo = viejo?.fusionadoEn ? S.products.find(x => x.sku === viejo.fusionadoEn) : undefined;
+  return nuevo ? { p: nuevo } : null;
 }
 
 /** Número visible de una entrega: el del servidor, el local (modo demo) o "pendiente" mientras está en la cola */

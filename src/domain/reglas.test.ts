@@ -143,7 +143,7 @@ describe('emparejado de albaranes (cualquier proveedor)', () => {
     expect(matchLine(S, 'A9F74240', 'lo que sea').sku).toBe('SCH-IC60N-40');
     expect(matchLine(S, '6040615306724', '')).toEqual({ sku: '6040615306', how: 'código (prefijo)' });
     expect(matchLine(S, '', 'Caja 100 tacos nylon SX 8x40').sku).toBe('BF-FIX-SX8');
-    expect(matchLine(S, 'XX-123', 'Bolsa de plástico')).toEqual({ sku: null, how: null });
+    expect(matchLine(S, 'XX-123', 'Bolsa de plástico')).toEqual({ sku: null, how: 'nuevo' });
   });
 });
 

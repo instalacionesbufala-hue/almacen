@@ -333,6 +333,27 @@ Cada cierre que un equipo hace con el wizard (`cierre-esbrain.html`) descuenta d
   - **Vehículos → Recontar**: el almacén cuenta lo que hay a bordo y tú validas las diferencias en tu bandeja.
 - [ ] 14.8. Si el token se filtra, **Revocar** en Integraciones y crea otro (paso 14.3 y 14.4.1).
 
+## 15. Corregir la primera carga (E-016)
+
+La primera carga se hizo leyendo los albaranes con la IA y dejó algunas fichas mal (unidades en `ud`, categorías, proveedor "Búfala" y dos líneas asignadas a otro artículo). Hazlo **en este orden**, para no duplicar stock:
+
+- [ ] 15.1. **Crea a mano, con stock inicial 0**, los dos artículos que faltaban (Inventario → **Añadir referencia**):
+  - `6222106082` · HAG ML MOLDURA 30X12/2,1M 2C ATEHA PVC BLN · Tubos y canalización · **metros**;
+  - `6222110054` · HAG ANGULO INTERIOR ATEHA 30X12MM BLN · Tubos y canalización · unidades.
+- [ ] 15.2. **Reasigna las dos líneas mal leídas** del albarán **3.322.577** (Albaranes → pulsa el albarán en el historial → **Reasignar línea**):
+  - la línea de **6222110056 (tapa final), +20** → pasa a **6222106082 (moldura)**;
+  - la línea de **6222110053 (ángulo exterior), +10** → pasa a **6222110054 (ángulo interior)**.
+  Cada una deja dos ajustes enlazados (−A y +B) con referencia al albarán; el historial no se borra.
+- [ ] 15.3. **Actualiza las fichas con el catálogo corregido**: Configuración → **Importar catálogo (CSV)** → `datos/catalogo-stock-real.csv` → marca **Actualizar fichas existentes**. En la pestaña "Ya existen" verás, campo a campo, lo que cambia (unidad `ud` → `m`, `bote`, `bolsa`…, categoría, proveedor **Saltoki**). **El stock no se toca**: el número ya es el del albarán. Además crea la **cinta aislante negra (9900101045) con 20 ud**. La moldura y el ángulo interior ya tienen movimientos, así que su stock no se duplica.
+- [ ] 15.4. **Revisa** Configuración → **Categorías** (ya sin Fontanería; bolsas, cinta y bridas están en Consumibles) y, en Integraciones y cierres, que ninguna equivalencia salga en rojo ("NO EXISTE en el catálogo"). Después, **confirma las equivalencias**.
+- [ ] 15.5. **Fotos:** las bridas incoloras se ven casi en blanco (la foto de Saltoki es transparente). Sustitúyelas con la cámara desde la ficha, igual que las que faltan (bolsas de basura y el Trydan de Esmove).
+
+**Para el día a día:**
+- **Editar una ficha** (administrador): Ficha → **Editar**. Puedes cambiar también el **código (SKU)**: se crea la ficha con el código nuevo y la antigua queda archivada dentro; el historial y las entregas firmadas conservan el código antiguo, y buscarlo lleva al nuevo. Cada cambio queda en la auditoría (antes y después).
+- **Dos fichas que eran el mismo artículo:** Ficha → **Fusionar en otro artículo**. El stock (también el de los vehículos) pasa con ajustes enlazados, convertido por el formato.
+- **El personal de almacén** no edita fichas: **Proponer un cambio**; te llega a la bandeja para aplicarlo o descartarlo.
+- **Equivalencias:** se editan en la app (condiciones, artículos con buscador y foto, fórmula, kits). **Probar** enseña qué descontaría un cierre sin aplicar nada, y **Recalcular cierres desde…** vuelve a aplicar las reglas actuales a los cierres ya recibidos (solo la diferencia).
+
 ---
 
 ## Si algo falla

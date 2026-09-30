@@ -1,7 +1,7 @@
 /* E-013 · Importación del catálogo real desde CSV (datos/catalogo-stock-real.csv).
    Cabecera: sku;ref_proveedor;nombre;categoria;propiedad;propietario;proveedor;unidad;contenido_unidad;stock_inicial;minimo;albaranes
    La vista previa separa lo nuevo de lo que ya existe y marca los errores (unidad o categoría desconocida…) antes de importar nada. */
-import { CATS, UNIDADES } from '../data/catalogo';
+import { UNIDADES, idsCategoriasActivas } from '../data/catalogo';
 import type { CatId, Estado, Unidad } from '../data/tipos';
 import type { FilaCatalogo } from '../store/ops';
 
@@ -58,7 +58,7 @@ export function parsearCatalogo(texto: string, S: Pick<Estado, 'products' | 'pro
     else if (vistos.has(sku)) errores.push('SKU repetido en el archivo');
     if (!col(v, 'nombre')) errores.push('Falta el nombre');
     if (!UNIDADES.includes(unidad)) errores.push(`Unidad desconocida: ${unidad}`);
-    if (!(categoria in CATS)) errores.push(`Categoría desconocida: ${categoria || '(vacía)'}`);
+    if (!idsCategoriasActivas().includes(categoria)) errores.push(`Categoría desconocida: ${categoria || '(vacía)'}`);
     if (propiedad === 'custodia' && !S.propietarios.some(o => o.id.toUpperCase() === propietario.toUpperCase() || o.nombre.toLowerCase() === propietario.toLowerCase()))
       errores.push(`Propietario desconocido: ${propietario || '(vacío)'}`);
     if (!(contenido > 0)) errores.push('El contenido debe ser mayor que cero');

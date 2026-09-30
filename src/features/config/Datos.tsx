@@ -1,7 +1,9 @@
 /* E-013 · Paso a datos reales (solo administrador): borrar los datos de ejemplo una vez, importar el catálogo (CSV) y completar los mínimos */
 import { useRef, useState } from 'react';
-import { CATS, UNIT } from '../../data/catalogo';
+import { UNIT, catDe } from '../../data/catalogo';
 import { parsearCatalogo, type VistaCatalogo } from '../../domain/catalogoCsv';
+import { diferencias } from '../../domain/fichas';
+import { find } from '../../domain/reglas';
 import { BUCKET_FOTOS } from '../../domain/fotos';
 import { fechaHora } from '../../domain/formato';
 import { ejecutar, useAlmacen } from '../../store/almacen';
@@ -71,15 +73,20 @@ function BorrarDemo() {
 }
 
 function VistaImportar({ vista, nombre }: { vista: VistaCatalogo; nombre: string }) {
+  const E = useAlmacen();
   const [ver, setVer] = useState<'nuevo' | 'existe' | 'error'>(vista.conError ? 'error' : 'nuevo');
+  const [actualizar, setActualizar] = useState(false);
   const validas = vista.filas.filter(f => !f.errores.length);
+  // E-016: qué cambiaría en cada ficha existente (nombre, categoría, proveedor, unidad y contenido); el stock nunca
+  const cambiosDe = (f: VistaCatalogo['filas'][number]) => { const p = find(E, f.fila.sku); return p ? diferencias(p, { name: f.fila.nombre, cat: f.fila.categoria, supplier: f.fila.proveedor || p.supplier, unit: f.fila.unidad, contenido: f.fila.contenido }) : []; };
+  const conCambios = validas.filter(f => f.estado === 'existe' && cambiosDe(f).length).length;
   const lista = vista.filas.filter(f => ver === 'error' ? f.errores.length : !f.errores.length && f.estado === ver);
   const importar = () => {
     if (!validas.length) return;
-    if (ejecutar({ op: 'importarCatalogo', args: { filas: validas.map(f => f.fila) } })) {
+    if (ejecutar({ op: 'importarCatalogo', args: { filas: validas.map(f => f.fila), actualizar } })) {
       closeModal();
       const sinMin = validas.filter(f => f.fila.minimo === null && f.estado === 'nuevo').length;
-      toast(`Catálogo importado: ${vista.nuevos} artículos nuevos${vista.existentes ? `, ${vista.existentes} ya existían (no se tocan)` : ''}.${sinMin ? ` ${sinMin} quedan con el mínimo por completar.` : ''}`, 'ok', 8000);
+      toast(`Catálogo importado: ${vista.nuevos} artículos nuevos${vista.existentes ? `, ${vista.existentes} ya existían (${actualizar ? `${conCambios} fichas actualizadas, sin tocar el stock` : 'no se tocan'})` : ''}.${sinMin ? ` ${sinMin} quedan con el mínimo por completar.` : ''}`, 'ok', 8000);
     }
   };
   const TAB = (k: typeof ver, t: string, n: number, c = '') => <button onClick={() => setVer(k)} className={`h-10 px-3 rounded-lg text-body-sm font-semibold ${ver === k ? 'bg-primary text-on-primary' : `bg-surface-container-low ${c}`}`}>{t} · {n}</button>;
@@ -87,14 +94,18 @@ function VistaImportar({ vista, nombre }: { vista: VistaCatalogo; nombre: string
     <SheetHead title="Importar catálogo" sub={nombre} />
     <div className="p-4 flex flex-col gap-3">
       <div className="flex flex-wrap gap-2">{TAB('nuevo', 'Nuevos', vista.nuevos)}{TAB('existe', 'Ya existen', vista.existentes)}{TAB('error', 'Con errores', vista.conError, vista.conError ? 'text-error' : '')}</div>
-      {ver === 'existe' && <p className="text-body-sm text-secondary">Estos SKU ya están en el catálogo: no se cambian. Si su inventario de apertura (por albaranes) no está registrado, se añade una vez.</p>}
+      {vista.existentes > 0 && <label className="flex items-start gap-2 rounded-xl bg-primary-fixed/30 p-3 text-body-md"><input type="checkbox" checked={actualizar} onChange={e => setActualizar(e.target.checked)} className="w-5 h-5 mt-0.5 accent-primary" />
+        <span><b>Actualizar fichas existentes</b> ({conCambios} con cambios): nombre, categoría, proveedor, unidad y contenido. <b>El stock no se toca ni se convierte</b>: el número ya es el del albarán (3 botes, 400 m).</span></label>}
+      {ver === 'existe' && <p className="text-body-sm text-secondary">Estos SKU ya están en el catálogo. {actualizar ? 'Se aplicarán los cambios que ves en cada fila.' : 'Sin la casilla, no se cambian.'}</p>}
       {ver === 'error' && vista.conError > 0 && <p className="text-body-sm text-error">Estas filas no se importan. Corrige el CSV y vuelve a importarlo (lo ya importado no se duplica).</p>}
       <div className="max-h-[50vh] overflow-auto rounded-lg ring-1 ring-surface-container-high">
         <table className="w-full text-body-sm"><thead className="sticky top-0 bg-surface-container-low"><tr className="text-left">
           <th className="p-2">Artículo</th><th className="p-2">Unidad</th><th className="p-2 text-right">Stock inicial</th><th className="p-2">Mínimo</th></tr></thead>
           <tbody>{lista.map(f => <tr key={f.linea} className="border-t border-surface-container-high align-top">
-            <td className="p-2"><div className="font-medium">{f.fila.nombre || '—'}</div><div className="font-mono text-label-sm text-secondary">{f.fila.sku || '—'} · {CATS[f.fila.categoria]?.label || f.fila.categoria}{f.fila.propiedad === 'custodia' ? ` · custodia ${f.fila.propietario}` : ''}</div>
-              {f.errores.map(e => <div key={e} className="text-error text-label-sm">Línea {f.linea}: {e}</div>)}</td>
+            <td className="p-2"><div className="font-medium">{f.fila.nombre || '—'}</div><div className="font-mono text-label-sm text-secondary">{f.fila.sku || '—'} · {catDe(f.fila.categoria).label}{f.fila.propiedad === 'custodia' ? ` · custodia ${f.fila.propietario}` : ''}</div>
+              {f.errores.map(e => <div key={e} className="text-error text-label-sm">Línea {f.linea}: {e}</div>)}
+              {f.estado === 'existe' && !f.errores.length && cambiosDe(f).map(d => <div key={d.campo} className={`text-label-sm ${actualizar ? 'text-primary' : 'text-secondary'}`}>{d.etiqueta}: <s>{String(d.antes ?? '—')}</s> → <b>{String(d.despues ?? '—')}</b></div>)}
+              {f.estado === 'existe' && actualizar && E.aBordo.some(b => b.sku === f.fila.sku && b.unidades) && cambiosDe(f).some(d => d.campo === 'contenido') && <div className="text-amber-800 text-label-sm">Hay material de este artículo en vehículos: revisa su recuento tras cambiar el contenido.</div>}</td>
             <td className="p-2 whitespace-nowrap">{UNIT[f.fila.unidad] || f.fila.unidad}{f.fila.contenido > 1 ? ` de ${f.fila.contenido}` : ''}</td>
             <td className="p-2 text-right font-mono">{f.fila.stock_inicial}</td>
             <td className="p-2">{f.fila.minimo === null ? <Tag c="bg-amber-100 text-amber-800">por completar</Tag> : f.fila.minimo}</td></tr>)}</tbody></table>

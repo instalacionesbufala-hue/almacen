@@ -1,7 +1,7 @@
 /* E-015 · "Nuevo con la cámara": 1) leer el código (si ya existe, se abre esa ficha) · 2) foto del producto o de su etiqueta, que la IA
    convierte en una ficha propuesta · 3) revisar y guardar (la foto queda como foto del artículo). Sin IA o sin cobertura, se rellena a mano. */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { CATS, UNIDADES, UNIT } from '../../data/catalogo';
+import { UNIDADES, UNIT, categoriasActivas } from '../../data/catalogo';
 import type { Producto, Unidad } from '../../data/tipos';
 import { buscarExistente, formularioInicial, opDeAlta, parecidos, type FormAlta, type PropuestaIA, type TipoAlta } from '../../domain/altaCamara';
 import { uid } from '../../domain/formato';
@@ -164,7 +164,7 @@ function Ficha({ f, setF, admin, fotoUrl, nota, leyendo, releer }: { f: FormAlta
         {inp('marca', 'Marca')}{inp('modelo', 'Modelo')}{inp('serie', 'N.º de serie o lote')}
         <p className="sm:col-span-2 text-body-sm text-secondary">Se crea su ficha de dotación (operativa, sin asignar). La foto no se guarda en la ficha: las herramientas muestran la del catálogo por modelo.</p>
       </> : <>
-        <Campo label="Categoría"><select value={f.cat} onChange={set('cat')} className={`${INP} h-12`}>{Object.entries(CATS).map(([k, c]) => <option key={k} value={k}>{c.label}</option>)}</select></Campo>
+        <Campo label="Categoría"><select value={f.cat} onChange={set('cat')} className={`${INP} h-12`}>{categoriasActivas().map(([k, c]) => <option key={k} value={k}>{c.label}</option>)}</select></Campo>
         <Campo label="Se vende y se entrega por"><select value={f.unit} onChange={e => setF({ ...f, unit: e.target.value as Unidad, contenido: e.target.value === 'm' || e.target.value === 'ud' ? '1' : f.contenido })} className={`${INP} h-12`}>
           {UNIDADES.map(u => <option key={u} value={u}>{u === 'm' ? 'Metros' : u === 'ud' ? 'Unidades' : unidadTxt(u, 2).replace(/^./, c => c.toUpperCase())}</option>)}</select></Campo>
         {conContenido && inp('contenido', `Unidades por ${UNIT[f.unit]}`, { inputMode: 'numeric' })}

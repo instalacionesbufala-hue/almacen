@@ -1,6 +1,6 @@
 /* E-006 · Mínimos y objetivos (solo administrador): uno a uno o en bloque, por ejemplo "todas las fijaciones del pasillo P03" */
 import { useMemo, useState } from 'react';
-import { CATS, UNIT } from '../../data/catalogo';
+import { UNIT, categoriasActivas } from '../../data/catalogo';
 import { pedidoSugerido, searchProducts } from '../../domain/reglas';
 import { num, toNum } from '../../domain/formato';
 import { ejecutar, useAlmacen } from '../../store/almacen';
@@ -33,7 +33,7 @@ function Minimos({ soloSinMinimo }: { soloSinMinimo: boolean }) {
     <div className="p-5 flex flex-col gap-3">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
         <input value={f.q} onChange={e => setF({ ...f, q: e.target.value })} placeholder="Buscar" className={`${INP} h-11`} aria-label="Buscar" />
-        <select value={f.cat} onChange={e => setF({ ...f, cat: e.target.value })} className={`${INP} h-11`} aria-label="Categoría"><option value="all">Todas las categorías</option>{Object.entries(CATS).map(([k, c]) => <option key={k} value={k}>{c.label}</option>)}</select>
+        <select value={f.cat} onChange={e => setF({ ...f, cat: e.target.value })} className={`${INP} h-11`} aria-label="Categoría"><option value="all">Todas las categorías</option>{categoriasActivas().map(([k, c]) => <option key={k} value={k}>{c.label}</option>)}</select>
         <select value={f.ubi} onChange={e => setF({ ...f, ubi: e.target.value })} className={`${INP} h-11`} aria-label="Ubicación"><option value="all">Todo</option><option value="almacen">Con stock en el almacén</option></select>
         <select value={f.prop} onChange={e => setF({ ...f, prop: e.target.value })} className={`${INP} h-11`} aria-label="Propiedad"><option value="all">Propio y custodia</option><option value="propia">Material propio</option><option value="custodia">En custodia</option></select>
         <label className="col-span-2 lg:col-span-4 flex items-center gap-2 text-body-sm"><input type="checkbox" checked={solo} onChange={e => setSolo(e.target.checked)} className="w-5 h-5 accent-primary" />Solo los artículos sin mínimo ({E.products.filter(p => p.minimoDefinido === false).length})</label>

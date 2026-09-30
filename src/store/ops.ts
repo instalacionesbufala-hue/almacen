@@ -2,7 +2,7 @@
    - aplicarse en local (validación previa con src/domain y respuesta inmediata en pantalla), y
    - traducirse a su función SQL del servidor (la fuente de verdad en modo nube).
    En modo nube la operación se guarda en la cola y se reaplica en local hasta que el servidor la confirma. */
-import type { OrigenFoto, Tallas, ConfigAvisos, Propietario, Rol, CatId, EstadoEquipo, Estado, Herramienta, LineaEntrega, Producto, TipoIncidencia, TipoMov, Equivalencia, ArticuloRegla } from '../data/tipos';
+import type { OrigenFoto, Tallas, ConfigAvisos, Propietario, Rol, CatId, EstadoEquipo, Estado, Herramienta, LineaEntrega, Producto, TipoIncidencia, TipoMov, Equivalencia, ArticuloRegla, Categoria } from '../data/tipos';
 import { applyMovement, find, delta, disponibleReal, formatoEntero, vehiculoDeEquipo, unidadesABordo, contenidoDe } from '../domain/reglas';
 import { emailValido, herramientasLibres } from '../domain/entregas';
 import { redondea } from '../domain/formato';
@@ -10,9 +10,11 @@ import { asignarHerramienta, registrarIncidencia } from '../domain/herramientas'
 import { fotoDe, grupoFoto } from '../domain/fotos';
 import { normalizarTelefono } from '../domain/whatsapp';
 import { EQUIVALENCIAS_PROPUESTA, KITS_PROPUESTA, registrarCierreLocal, sincronizarCierreLocal, type Cierre, type LineaTraducida } from '../domain/cierres';
+import { cambiarCodigoLocal, fusionarLocal, reasignarLineaLocal } from '../domain/fichas';
+import { uid } from '../domain/formato';
 
 export interface OpMovimiento { id: string; sku: string; tipo: TipoMov; qty: number; motivo: string; ref: string; series: string[]; equipo?: string; vehiculo?: string }
-export interface OpAlbaran { id: string; cabecera: { numero: string; proveedor: string; cif: string; fecha: string; confianza: number; modo: 'ia' | 'sim' }; lineas: { sku: string; cantidad: number; series: string[] }[] }
+export interface OpAlbaran { id: string; cabecera: { numero: string; proveedor: string; delegacion?: string; cif: string; fecha: string; confianza: number; modo: 'ia' | 'sim' }; lineas: { sku: string; cantidad: number; series: string[] }[] }
 export interface OpProducto { producto: Producto; nuevo: boolean; stockInicial: number }
 /** Fila del CSV del catálogo (E-013), ya interpretada */
 export interface FilaCatalogo { sku: string; ref_proveedor: string; nombre: string; categoria: CatId; propiedad: 'propia' | 'custodia'; propietario: string; proveedor: string; unidad: Producto['unit']; contenido: number; stock_inicial: number; minimo: number | null; albaranes: string }
@@ -30,7 +32,16 @@ export type Op =
   | { op: 'bajaVehiculo'; args: { id: string } }
   | { op: 'mermaVista'; args: { id: string } }
   | { op: 'limpiarDemo'; args: Record<string, never> }
-  | { op: 'importarCatalogo'; args: { filas: FilaCatalogo[] } }
+  | { op: 'importarCatalogo'; args: { filas: FilaCatalogo[]; actualizar?: boolean } }
+  | { op: 'categoria'; args: { cat: Categoria } }
+  | { op: 'desactivarCategoria'; args: { id: string; moverA?: string } }
+  | { op: 'fusionar'; args: { origen: string; destino: string; motivo: string } }
+  | { op: 'cambiarCodigo'; args: { sku: string; nuevo: string } }
+  | { op: 'reasignarLinea'; args: { id: string; movimiento: string; destino: string; cantidad?: number } }
+  | { op: 'proponerCambio'; args: { id: string; sku: string; cambios: Partial<Producto> } }
+  | { op: 'resolverPropuesta'; args: { id: string; aplicada: boolean } }
+  | { op: 'borrarEquivalencia'; args: { id: string } }
+  | { op: 'recalcularCierre'; args: { id: string; lineas: LineaTraducida[] } }
   | { op: 'estadoEquipo'; args: { id: string; estado: EstadoEquipo } }
   | { op: 'retirarEquipo'; args: { id: string; destino?: string } }
   | { op: 'tecnico'; args: { id: string; nombre: string; rol: string; dni: string; equipo?: string; email?: string; codigo?: string; telefono?: string } }
@@ -96,9 +107,9 @@ export const OPS: Defs = {
   albaran: {
     local: (S, a) => {
       const copia = JSON.stringify(S.products);
-      try { for (const l of a.lineas) applyMovement(S, { sku: l.sku, type: 'entrada', qty: l.cantidad, reason: find(S, l.sku)?.propiedad === 'custodia' ? 'Recepción en custodia' : 'Compra a proveedor', ref: `Alb. ${a.cabecera.numero || 's/n'}` }); }
+      try { for (const l of a.lineas) { applyMovement(S, { sku: l.sku, type: 'entrada', qty: l.cantidad, reason: find(S, l.sku)?.propiedad === 'custodia' ? 'Recepción en custodia' : 'Compra a proveedor', ref: `Alb. ${a.cabecera.numero || 's/n'}` }); S.movements[0].albaran = a.id; } }
       catch (e) { S.products = JSON.parse(copia); throw e; }
-      S.albaranes.unshift({ numero: a.cabecera.numero || 's/n', proveedor: a.cabecera.proveedor || 'Proveedor', fecha: a.cabecera.fecha, lineas: a.lineas.length,
+      S.albaranes.unshift({ id: a.id, delegacion: a.cabecera.delegacion || undefined, numero: a.cabecera.numero || 's/n', proveedor: a.cabecera.proveedor || 'Proveedor', fecha: a.cabecera.fecha, lineas: a.lineas.length,
         unidades: a.lineas.reduce((s, l) => s + l.cantidad, 0), ts: Date.now(), operator: S.operator, confianza: a.cabecera.confianza, modo: a.cabecera.modo });
     },
     rpc: a => ['aprobar_albaran', { p_id: a.id, p_cabecera: a.cabecera, p_lineas: a.lineas }],
@@ -122,7 +133,7 @@ export const OPS: Defs = {
     },
     rpc: ({ producto: p, nuevo, stockInicial }) => ['guardar_producto', { p_producto: {
       sku: p.sku, nuevo, ean: p.ean ?? '', ref_proveedor: p.supplierRef ?? '', nombre: p.name, categoria: p.cat, unidad: p.unit, contenido: p.contenido ?? 1,
-      formato_texto: p.packLabel ?? '', minimo: p.minimoDefinido === false ? '' : p.min, proveedor: p.supplier, stock_inicial: stockInicial,
+      formato_texto: p.packLabel ?? '', notas: p.notas ?? '', minimo: p.minimoDefinido === false ? '' : p.min, proveedor: p.supplier, stock_inicial: stockInicial,
       propiedad: p.propiedad || 'propia', propietario_id: p.propiedad === 'custodia' ? p.propietario : null,
       objetivo: p.objetivo ?? '', proveedor_habitual: p.proveedorHabitual ?? '', modelo: p.modelo ?? '', talla: p.talla ?? '' } }],
     desc: (_S, a) => `${a.nuevo ? 'Alta' : 'Edición'} de ${a.producto.sku}`,
@@ -235,6 +246,85 @@ export const OPS: Defs = {
     local: (S, a) => { const p = S.pendientes.find(x => x.id === a.id); if (p && p.estado === 'aplicada') { p.estado = 'vista'; p.resueltoPor = S.operator; } },
     rpc: a => ['marcar_merma_vista', { p_pendiente: a.id }],
     desc: () => 'Merma vista',
+  },
+  /* ---------- E-016 · Categorías, edición de fichas, reasignación de albaranes y propuestas ---------- */
+  categoria: {
+    local: (S, { cat }) => {
+      if (S.rol !== 'admin') throw new Error('Solo el administrador gestiona las categorías');
+      if (!/^[a-z0-9_]{2,30}$/.test(cat.id)) throw new Error('Identificador no válido: letras minúsculas, números o _');
+      if (!cat.nombre.trim()) throw new Error('Indica el nombre de la categoría');
+      const i = S.categorias.findIndex(c => c.id === cat.id);
+      if (i >= 0) S.categorias[i] = { ...cat }; else S.categorias.push({ ...cat });
+      S.categorias.sort((a, b) => a.orden - b.orden);
+    },
+    rpc: ({ cat }) => ['guardar_categoria', { p: cat }],
+    desc: (_S, a) => `Categoría ${a.cat.nombre}`,
+  },
+  desactivarCategoria: {
+    local: (S, a) => {
+      if (S.rol !== 'admin') throw new Error('Solo el administrador gestiona las categorías');
+      const n = S.products.filter(p => p.cat === a.id).length;
+      if (n && (!a.moverA || a.moverA === a.id || !S.categorias.some(c => c.id === a.moverA && c.activa))) throw new Error(`La categoría tiene ${n} artículos: elige otra categoría activa a la que moverlos`);
+      if (n) S.products.forEach(p => { if (p.cat === a.id) p.cat = a.moverA!; });
+      const c = S.categorias.find(x => x.id === a.id); if (c) c.activa = false;
+    },
+    rpc: a => ['desactivar_categoria', { p_id: a.id, p_mover_a: a.moverA ?? null }],
+    desc: (_S, a) => `Desactivar la categoría ${a.id}`,
+  },
+  fusionar: {
+    local: (S, a) => { if (S.rol !== 'admin') throw new Error('Solo el administrador fusiona artículos'); fusionarLocal(S, a.origen, a.destino, a.motivo); },
+    rpc: a => ['fusionar_productos', { p_origen: a.origen, p_destino: a.destino, p_motivo: a.motivo }],
+    desc: (_S, a) => `Fusionar ${a.origen} en ${a.destino}`,
+  },
+  cambiarCodigo: {
+    local: (S, a) => { if (S.rol !== 'admin') throw new Error('Solo el administrador cambia el código'); cambiarCodigoLocal(S, a.sku, a.nuevo); },
+    rpc: a => ['cambiar_codigo_producto', { p_sku: a.sku, p_nuevo: a.nuevo }],
+    desc: (_S, a) => `Cambiar el código ${a.sku} → ${a.nuevo}`,
+  },
+  reasignarLinea: {
+    local: (S, a) => { if (S.rol !== 'admin') throw new Error('Solo el administrador reasigna líneas de albarán'); reasignarLineaLocal(S, a.id, a.movimiento, a.destino, a.cantidad); },
+    rpc: a => ['reasignar_linea_albaran', { p_id: a.id, p_movimiento: a.movimiento, p_destino: a.destino, p_cantidad: a.cantidad ?? null }],
+    desc: (_S, a) => `Reasignar una línea de albarán a ${a.destino}`,
+  },
+  proponerCambio: {
+    local: (S, a) => {
+      if (!find(S, a.sku)) throw new Error('Artículo no encontrado');
+      if (!Object.keys(a.cambios).length) throw new Error('No hay cambios que proponer');
+      if (!S.propuestas.some(p => p.id === a.id)) S.propuestas.unshift({ id: a.id, sku: a.sku, cambios: a.cambios, ts: Date.now(), operator: S.operator, estado: 'pendiente' });
+    },
+    rpc: a => ['proponer_cambio_ficha', { p_id: a.id, p_sku: a.sku, p_cambios: a.cambios }],
+    desc: (_S, a) => `Propuesta de cambio de ${a.sku}`,
+  },
+  resolverPropuesta: {
+    local: (S, a) => { if (S.rol !== 'admin') throw new Error('Solo el administrador'); const p = S.propuestas.find(x => x.id === a.id); if (p && p.estado === 'pendiente') p.estado = a.aplicada ? 'aplicada' : 'descartada'; },
+    rpc: a => ['resolver_propuesta_ficha', { p_id: a.id, p_aplicada: a.aplicada }],
+    desc: () => 'Resolver una propuesta de cambio',
+  },
+  borrarEquivalencia: {
+    local: (S, a) => {
+      if (S.rol !== 'admin') throw new Error('Solo el administrador');
+      if (S.equivalencias.some(r => r.id === a.id && r.confirmada)) throw new Error('Una regla confirmada no se borra: desactívala');
+      S.equivalencias = S.equivalencias.filter(r => r.id !== a.id);
+    },
+    rpc: a => ['borrar_equivalencia', { p_id: a.id }],
+    desc: () => 'Borrar una regla en borrador',
+  },
+  recalcularCierre: {
+    local: (S, a) => {
+      if (S.rol !== 'admin') throw new Error('Solo el administrador');
+      const ci = S.cierres.find(c => c.id === a.id); if (!ci || ci.estado === 'ignorado') return;
+      const resueltos = new Set(S.lineasCierre.filter(l => l.cierre === a.id && l.estado === 'resuelta').map(l => l.campo));
+      S.lineasCierre = S.lineasCierre.filter(l => l.cierre !== a.id || l.estado === 'resuelta');
+      for (const l of a.lineas) {
+        if (l.estado !== 'aplicable' && resueltos.has(l.campo)) continue;
+        const sku = l.sku && find(S, l.sku) && !find(S, l.sku)!.borrador ? l.sku : undefined;
+        S.lineasCierre.push({ id: uid('L'), cierre: a.id, campo: l.campo, formula: l.formula, valor: l.valor, sku, cantidad: l.cantidad, estimada: l.estimada,
+          estado: l.estado === 'aplicable' && sku ? 'aplicada' : l.estado === 'pendiente' ? 'pendiente' : 'sin_equivalencia', nota: l.nota });
+      }
+      sincronizarCierreLocal(S, a.id);
+    },
+    rpc: a => ['recalcular_cierre_admin', { p_cierre: a.id, p_lineas: a.lineas }],
+    desc: () => 'Recalcular un cierre',
   },
   /* ---------- E-012 · Cierres del wizard ---------- */
   equivalencia: {
@@ -363,7 +453,7 @@ export const OPS: Defs = {
       if (S.rol !== 'admin') throw new Error('Solo el administrador puede borrar los datos de ejemplo');
       if (!S.configApp.modoDemo) throw new Error('Los datos de ejemplo ya se borraron');
       Object.assign(S, { products: [], movements: [], albaranes: [], equipos: [], tecnicos: [], entregas: [], herramientas: [], pendientes: [], avisos: [], minimosHerramienta: [],
-        envios: [], actas: [], vehiculos: [], asignaciones: [], aBordo: [], portalEnlaces: [], copias: [], cierres: [], lineasCierre: [], pedidos: {}, cesta: { equipo: '', receptor: null, lineas: [], obra: '', paso: 1 }, seq: { ent: 0 } });
+        envios: [], actas: [], vehiculos: [], asignaciones: [], aBordo: [], portalEnlaces: [], copias: [], cierres: [], lineasCierre: [], propuestas: [], archivados: [], pedidos: {}, cesta: { equipo: '', receptor: null, lineas: [], obra: '', paso: 1 }, seq: { ent: 0 } });
       S.configApp = { modoDemo: false, demoBorrada: Date.now(), demoBorradaPor: S.operator };
     },
     rpc: () => ['limpiar_demostracion', {}],
@@ -377,14 +467,19 @@ export const OPS: Defs = {
         const sku = f.sku.trim().toUpperCase(); if (!sku) throw new Error('Hay una fila sin SKU');
         const prop = f.propiedad === 'custodia' ? S.propietarios.find(o => o.id.toUpperCase() === f.propietario.trim().toUpperCase() || o.nombre.toLowerCase() === f.propietario.trim().toLowerCase())?.id : undefined;
         if (f.propiedad === 'custodia' && !prop) throw new Error(`Propietario desconocido en ${sku}: ${f.propietario}`);
-        if (!find(S, sku)) S.products.push({ sku, supplierRef: f.ref_proveedor || undefined, name: f.nombre.trim(), cat: f.categoria, unit: f.unidad, contenido: f.contenido || 1,
+        const contenido = f.unidad === 'm' || f.unidad === 'ud' ? 1 : f.contenido || 1;
+        const existe = find(S, sku);
+        if (!existe) S.products.push({ sku, supplierRef: f.ref_proveedor || undefined, name: f.nombre.trim(), cat: f.categoria, unit: f.unidad, contenido,
           stock: 0, min: f.minimo ?? 0, minimoDefinido: f.minimo !== null, supplier: f.proveedor, propiedad: prop ? 'custodia' : 'propia', propietario: prop });
+        // E-016: "Actualizar fichas existentes" cambia nombre, categoría, proveedor, unidad y contenido; el stock NO se toca ni se convierte
+        else if (a.actualizar) Object.assign(existe, { name: f.nombre.trim(), cat: f.categoria, supplier: f.proveedor || existe.supplier, unit: f.unidad, contenido, supplierRef: f.ref_proveedor || existe.supplierRef });
         const ref = 'Albaranes ' + (f.albaranes.trim() || 'sin albarán');
-        if (f.stock_inicial > 0 && !S.movements.some(m => m.sku === sku && m.reason === 'Inventario de apertura' && m.ref === ref))
+        // el inventario de apertura solo entra en artículos sin stock ni movimientos (los existentes ya tienen su stock)
+        if (f.stock_inicial > 0 && !S.movements.some(m => m.sku === sku) && find(S, sku)!.stock === 0)
           applyMovement(S, { sku, type: 'entrada', qty: f.stock_inicial, reason: 'Inventario de apertura', ref });
       }
     },
-    rpc: a => ['importar_catalogo', { p_filas: a.filas }],
+    rpc: a => ['importar_catalogo', { p_filas: a.filas, p_actualizar: !!a.actualizar }],
     desc: (_S, a) => `Importar catálogo (${a.filas.length} artículos)`,
   },
   altaDotacion: {

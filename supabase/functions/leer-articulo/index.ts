@@ -5,7 +5,7 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { conCors, json } from '../_compartido/validar.ts';
 import { base64, llamarGemini } from '../_compartido/gemini.ts';
-import { construirPromptArticulo, ESQUEMA_ARTICULO, normalizarArticulo } from '../_compartido/articulo.ts';
+import { CATEGORIAS, construirPromptArticulo, esquemaArticulo, normalizarArticulo } from '../_compartido/articulo.ts';
 
 const URL = Deno.env.get('SUPABASE_URL')!;
 const ANON = Deno.env.get('SUPABASE_ANON_KEY')!;
@@ -29,13 +29,17 @@ Deno.serve(conCors(async (req) => {
   const mime = foto.type || 'application/octet-stream';
   if (!/^image\/(jpeg|png|webp|heic|heif)$/.test(mime)) return json({ error: 'Formato no admitido: haz una foto (JPG, PNG o WebP)' }, 415);
 
+  // E-016: las categorías activas de la tabla (configurables por el administrador)
+  const { data: cats } = await db.from('categorias').select('id').eq('activa', true).order('orden');
+  const categorias = (cats || []).map(c => c.id as string);
+  const lista = categorias.length ? categorias : CATEGORIAS;
   const r = await llamarGemini({
-    clave: CLAVE, modelo: MODELO, reserva: RESERVA, funcion: 'leer-articulo', esquema: ESQUEMA_ARTICULO,
-    partes: [{ inline_data: { mime_type: mime, data: base64(await foto.arrayBuffer()) } }, { text: construirPromptArticulo(codigo) }],
+    clave: CLAVE, modelo: MODELO, reserva: RESERVA, funcion: 'leer-articulo', esquema: esquemaArticulo(lista),
+    partes: [{ inline_data: { mime_type: mime, data: base64(await foto.arrayBuffer()) } }, { text: construirPromptArticulo(codigo, lista) }],
   });
   if (!r.ok) return json({ error: r.error }, r.status);
   try {
-    return json({ ...normalizarArticulo(r.texto), modelo: r.modelo });
+    return json({ ...normalizarArticulo(r.texto, lista), modelo: r.modelo });
   } catch {
     return json({ error: 'No se ha podido interpretar la respuesta de la IA' }, 502);
   }

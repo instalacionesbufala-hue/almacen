@@ -7,15 +7,26 @@ export interface AlbaranLeido { proveedor: string; cif: string; numero: string; 
 
 const norm = (s: unknown) => String(s ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 
-/** Emparejado (cualquier proveedor): código exacto (SKU, EAN, código del proveedor), prefijo (sufijos del proveedor) o descripción */
+/** ¿Ese código es el de este artículo? Igual al SKU, EAN o código del proveedor, o empieza por él (sufijos del proveedor) */
+export function mismoCodigo(p: ItemCatalogo, code: string | undefined): 'código' | 'código (prefijo)' | null {
+  const c = String(code || '').replace(/\s/g, '').toUpperCase();
+  if (!c) return null;
+  const eq = (v?: string) => !!v && v.toUpperCase() === c;
+  if (eq(p.sku) || eq(p.ean) || eq(p.ref)) return 'código';
+  return [p.sku, p.ref].some(v => v && v.length >= 6 && c.startsWith(v.toUpperCase())) ? 'código (prefijo)' : null;
+}
+
+/** Emparejado (cualquier proveedor): código exacto (SKU, EAN, código del proveedor) o prefijo (sufijos del proveedor).
+    E-016: si la línea trae un código que no está en el catálogo, es un ARTÍCULO NUEVO (how = 'nuevo'): nunca se empareja por
+    descripción con otro artículo de código distinto. La descripción solo se usa en las líneas sin código. */
 export function emparejar(cat: ItemCatalogo[], code: string | undefined, desc: string | undefined): { sku: string | null; how: string | null } {
   const c = String(code || '').replace(/\s/g, '').toUpperCase();
   if (c) {
-    const eq = (v?: string) => !!v && v.toUpperCase() === c;
-    const exact = cat.find(p => eq(p.sku) || eq(p.ean) || eq(p.ref));
+    const exact = cat.find(p => mismoCodigo(p, c) === 'código');
     if (exact) return { sku: exact.sku, how: 'código' };
-    const pref = cat.find(p => [p.sku, p.ref].some(v => v && v.length >= 6 && c.startsWith(v.toUpperCase())));
+    const pref = cat.find(p => mismoCodigo(p, c) === 'código (prefijo)');
     if (pref) return { sku: pref.sku, how: 'código (prefijo)' };
+    return { sku: null, how: 'nuevo' };
   }
   const tk = (s: unknown) => norm(s).replace(/[(),.×x²]/g, ' ').split(/\s+/).filter(t => t.length >= 2);
   const dt = new Set(tk(desc));
@@ -31,7 +42,9 @@ export function emparejar(cat: ItemCatalogo[], code: string | undefined, desc: s
 /** Instrucciones para el modelo de visión. Sin precios: el almacén no los necesita y el material en custodia no los lleva. */
 export function construirPrompt(cat: ItemCatalogo[]): string {
   const lista = cat.map(p => `${p.sku}${p.ref ? ' / ' + p.ref : ''}${p.ean ? ' / ' + p.ean : ''} | ${p.nombre} | ${p.unidad}${p.contenido && p.contenido > 1 ? ' de ' + p.contenido : ''}${p.custodia ? ' | custodia' : ''}`).join('\n');
-  return `El documento es un albarán de entrega de un proveedor de material eléctrico, fontanería o movilidad eléctrica para un almacén en España.
+  return `El documento es un albarán de entrega de un proveedor de material eléctrico y de puntos de recarga de vehículo eléctrico para un almacén en España.
+"proveedor" es el EMISOR del albarán (quien vende y envía, p. ej. Saltoki), NUNCA el cliente o destinatario (Búfala Tech).
+Si el código de una línea no está en el catálogo, deja "sku" en null: no lo asignes a otro artículo aunque la descripción se parezca.
 Extrae cada línea de material recibido. Ignora bolsas, portes y embalajes salvo que estén en el catálogo.
 Para cada línea devuelve: el código tal como aparece, la descripción, la cantidad EN LA UNIDAD DEL CATÁLOGO y el SKU del catálogo que corresponde (o null si no hay).
 La unidad del catálogo es como se guarda el stock: metros para cables y tubos (un rollo de 100 m son 100); unidades sueltas si pone "ud"; y si pone bote, sobre, bolsa, pack o caja "de N", la cantidad va en esos formatos (1000 tacos de una referencia "caja de 100" son 10 cajas). Si conviertes, explícalo en "nota".
@@ -68,10 +81,12 @@ const numero = (v: unknown): number => {
 /** Limpia la respuesta del modelo y empareja cada línea con el catálogo (el SKU propuesto por el modelo solo vale si existe) */
 export function normalizarRespuesta(raw: unknown, cat: ItemCatalogo[]): AlbaranLeido {
   const r = (typeof raw === 'string' ? JSON.parse(raw.replace(/^```(?:json)?|```$/g, '').trim()) : raw) as Record<string, unknown>;
-  const skus = new Set(cat.map(p => p.sku));
   const lineas = (Array.isArray(r?.lineas) ? r.lineas : []).map((l: Record<string, unknown>): LineaLeida => {
     const codigo = String(l.codigo ?? '').trim(), descripcion = String(l.descripcion ?? '').trim();
-    const propuesto = typeof l.sku === 'string' && skus.has(l.sku.toUpperCase()) ? l.sku.toUpperCase() : null;
+    // el SKU que propone el modelo solo vale si existe y, si la línea trae código, si es el de ese artículo (E-016)
+    const skuIA = typeof l.sku === 'string' ? l.sku.toUpperCase() : '';
+    const cand = skuIA ? cat.find(p => p.sku === skuIA) : undefined;
+    const propuesto = cand && (!codigo || mismoCodigo(cand, codigo)) ? cand.sku : null;
     const m = propuesto ? { sku: propuesto, how: 'IA' } : emparejar(cat, codigo, descripcion);
     const conf = Math.max(0, Math.min(1, numero(l.confianza) || 0.8));
     return {

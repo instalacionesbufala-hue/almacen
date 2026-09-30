@@ -1,6 +1,8 @@
 /* Modelo de datos (ver CLAUDE.md → "Modelo de datos") */
 
-export type CatId = 'cargadores' | 'cuadros' | 'epis' | 'ropa' | 'cables' | 'tubos' | 'fijaciones' | 'aparamenta' | 'fontaneria';
+/** E-016: las categorías son configurables (tabla "categorias"); el id es un texto */
+export type CatId = string;
+export interface Categoria { id: string; nombre: string; icono: string; color: string; orden: number; activa: boolean }
 /** E-013: formato de venta. En el almacén se mueven formatos enteros (salvo metros); el contenido cuenta para los consumos (E-012) */
 export type Unidad = 'm' | 'ud' | 'bote' | 'sobre' | 'bolsa' | 'pack' | 'caja';
 /** 'ajuste' lleva la cantidad con signo (+ suma, − resta) y exige motivo; solo el administrador */
@@ -28,6 +30,9 @@ export interface Producto {
   supplier: string;
   /** Alta rápida desde el escáner (rol almacén): el administrador debe completarla */
   borrador?: boolean;
+  /** E-016: notas libres; archivado = fusionado en otro artículo (fusionadoEn) */
+  notas?: string;
+  fusionadoEn?: string;
   /** E-015: stock que contó el almacén al crear el borrador; entra como "Alta de artículo" cuando el administrador lo aprueba */
   stockPropuesto?: number;
   propuestoPor?: string;
@@ -103,9 +108,15 @@ export interface Movimiento {
   entrega?: string;
   /** E-012: cierre de instalación que lo generó */
   cierre?: string;
+  /** E-016: albarán de una entrada y movimiento que corrige (reasignación, fusión) */
+  albaran?: string;
+  corrige?: string;
 }
 
 export interface Albaran {
+  /** E-016: id (para ver sus líneas y reasignarlas) y delegación del proveedor */
+  id?: string;
+  delegacion?: string;
   numero: string;
   proveedor: string;
   fecha: string;
@@ -155,6 +166,8 @@ export type EstadoCierre = 'aplicado' | 'parcial' | 'discrepancia' | 'fallido' |
 export interface CierreApp {
   id: string; clave: string; version: number; numInst: string; cliente: string; direccion: string; fecha: number; equipoWizard: string;
   equipo?: string; vehiculo?: string; hardware: string; despFallido: boolean; estado: EstadoCierre; origen: 'integracion' | 'historico'; recibido: number;
+  /** datos originales del wizard (en local; en la nube se piden al servidor cuando hacen falta: probar o recalcular) */
+  datos?: Record<string, unknown>;
 }
 export interface LineaCierre {
   id: string; cierre: string; campo: string; formula: string; valor: number; sku?: string; cantidad: number; estimada: boolean;
@@ -166,6 +179,9 @@ export interface Equivalencia {
   articulos: ArticuloRegla[]; kit?: string | null; estimada: boolean; activa: boolean; orden: number; nota?: string; confirmada: boolean;
 }
 export interface Integracion { id: string; nombre: string; creado: number; creadoPor: string; revocado?: number; ultimoUso?: number }
+
+/** E-016: cambio de ficha propuesto por el personal de almacén; lo aplica o descarta el administrador */
+export interface PropuestaFicha { id: string; sku: string; cambios: Partial<Producto>; ts: number; operator: string; estado: 'pendiente' | 'aplicada' | 'descartada' }
 
 /** E-014: enlace personal del portal del técnico. Solo se guarda el hash del token. */
 export interface EnlacePortal { tecnico: string; entrega?: string; creado: number; creadoPor: string; revocado?: number; hash?: string }
@@ -275,6 +291,10 @@ export interface Estado {
   configApp: { modoDemo: boolean; demoBorrada?: number; demoBorradaPor?: string; kitFijacion?: 'A' | 'B' | 'C'; aperturaCierres?: number };
   /** E-012: cierres del wizard, sus líneas traducidas, equivalencias, kits de fijación e integraciones (token del Apps Script) */
   cierres: CierreApp[];
+  /** E-016: categorías configurables, artículos archivados (fusionados en otro) y propuestas de cambio de ficha del almacén */
+  categorias: Categoria[];
+  archivados?: Producto[];
+  propuestas: PropuestaFicha[];
   lineasCierre: LineaCierre[];
   equivalencias: Equivalencia[];
   kits: Record<string, ArticuloRegla[]>;

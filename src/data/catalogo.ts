@@ -1,4 +1,4 @@
-import type { AlbaranIA, CatId, ConfigAvisos, Equipo, Producto, Propietario, Tecnico, TipoMov, Unidad, Vehiculo } from './tipos';
+import type { AlbaranIA, Categoria, ConfigAvisos, Equipo, Producto, Propietario, Tecnico, TipoMov, Unidad, Vehiculo } from './tipos';
 
 /* =========================================================
    Almacén Búfala · datos de prueba y catálogos fijos
@@ -8,18 +8,44 @@ import type { AlbaranIA, CatId, ConfigAvisos, Equipo, Producto, Propietario, Tec
 
 export const MARCA = { nombre: 'Almacén Búfala', sub: 'Intelligent Warehouse', nave: 'Nave Central' };
 
-/* Categorías: unidad base, icono (Material Symbols) y color para gráficos */
-export const CATS: Record<CatId, { label: string; icon: string; color: string; tile: string }> = {
-  cargadores: { label: 'Cargadores VE', icon: 'ev_charger',     color: '#0037b0', tile: 'bg-primary-fixed text-primary' },
-  cuadros:    { label: 'Cuadros de protecciones', icon: 'electrical_services', color: '#7c3aed', tile: 'bg-violet-100 text-violet-800' },
-  epis:       { label: 'EPIs (almacén)', icon: 'health_and_safety', color: '#b45309', tile: 'bg-orange-100 text-orange-800' },
-  ropa:       { label: 'Ropa de trabajo', icon: 'apparel', color: '#475569', tile: 'bg-slate-200 text-slate-700' },
-  cables:     { label: 'Cables',        icon: 'cable',          color: '#b45309', tile: 'bg-amber-100 text-amber-800' },
-  tubos:      { label: 'Tubos',         icon: 'straighten',     color: '#565e74', tile: 'bg-secondary-container text-secondary' },
-  fijaciones: { label: 'Fijaciones',    icon: 'hardware',       color: '#213145', tile: 'bg-surface-container-high text-on-surface' },
-  aparamenta: { label: 'Aparamenta',    icon: 'electric_bolt',  color: '#006a48', tile: 'bg-tertiary-fixed/40 text-tertiary' },
-  fontaneria: { label: 'Fontanería',    icon: 'plumbing',       color: '#0e7490', tile: 'bg-cyan-100 text-cyan-800' },
+/* E-016 · Categorías configurables (tabla "categorias"). Este registro se rellena con las del estado cada vez que cambia
+   (store/almacen.ts): el resto de la app lo consulta con catDe(id) y categoriasActivas(). */
+export const COLORES: Record<string, { nombre: string; hex: string; tile: string }> = {
+  azul: { nombre: 'Azul', hex: '#0037b0', tile: 'bg-primary-fixed text-primary' },
+  violeta: { nombre: 'Violeta', hex: '#7c3aed', tile: 'bg-violet-100 text-violet-800' },
+  ambar: { nombre: 'Ámbar', hex: '#b45309', tile: 'bg-amber-100 text-amber-800' },
+  gris: { nombre: 'Gris', hex: '#565e74', tile: 'bg-secondary-container text-secondary' },
+  pizarra: { nombre: 'Pizarra', hex: '#213145', tile: 'bg-surface-container-high text-on-surface' },
+  verde: { nombre: 'Verde', hex: '#006a48', tile: 'bg-tertiary-fixed/40 text-tertiary' },
+  rosa: { nombre: 'Rosa', hex: '#be185d', tile: 'bg-pink-100 text-pink-800' },
+  naranja: { nombre: 'Naranja', hex: '#c2410c', tile: 'bg-orange-100 text-orange-800' },
+  marron: { nombre: 'Marrón', hex: '#57534e', tile: 'bg-stone-200 text-stone-700' },
+  cian: { nombre: 'Cian', hex: '#0e7490', tile: 'bg-cyan-100 text-cyan-800' },
 };
+export const CATEGORIAS_INICIALES: Categoria[] = [
+  { id: 'cargadores', nombre: 'Cargadores VE', icono: 'ev_charger', color: 'azul', orden: 10, activa: true },
+  { id: 'cuadros', nombre: 'Cuadros de protecciones', icono: 'electrical_services', color: 'violeta', orden: 20, activa: true },
+  { id: 'cables', nombre: 'Cables', icono: 'cable', color: 'ambar', orden: 30, activa: true },
+  { id: 'tubos', nombre: 'Tubos y canalización', icono: 'straighten', color: 'gris', orden: 40, activa: true },
+  { id: 'fijaciones', nombre: 'Fijaciones', icono: 'hardware', color: 'pizarra', orden: 50, activa: true },
+  { id: 'aparamenta', nombre: 'Aparamenta', icono: 'electric_bolt', color: 'verde', orden: 60, activa: true },
+  { id: 'consumibles', nombre: 'Consumibles', icono: 'inventory_2', color: 'rosa', orden: 70, activa: true },
+  { id: 'epis', nombre: 'EPIs', icono: 'health_and_safety', color: 'naranja', orden: 80, activa: true },
+  { id: 'ropa', nombre: 'Ropa de trabajo', icono: 'apparel', color: 'marron', orden: 90, activa: true },
+  { id: 'herramientas', nombre: 'Herramientas', icono: 'construction', color: 'cian', orden: 100, activa: true },
+];
+export interface CatInfo { label: string; icon: string; color: string; tile: string; activa: boolean; orden: number }
+export const CATS: Record<string, CatInfo> = {};
+export function fijarCategorias(lista: Categoria[] | undefined) {
+  if (!lista?.length) return;
+  for (const k of Object.keys(CATS)) delete CATS[k];
+  for (const c of lista) { const col = COLORES[c.color] || COLORES.gris; CATS[c.id] = { label: c.nombre, icon: c.icono || 'category', color: col.hex, tile: col.tile, activa: c.activa, orden: c.orden }; }
+}
+fijarCategorias(CATEGORIAS_INICIALES);
+/** Datos de una categoría (si ya no existe, una genérica: nunca rompe una pantalla) */
+export const catDe = (id: string | undefined): CatInfo => CATS[id || ''] ?? { label: id || 'Sin categoría', icon: 'category', color: COLORES.gris.hex, tile: COLORES.pizarra.tile, activa: false, orden: 999 };
+export const categoriasActivas = (): [string, CatInfo][] => Object.entries(CATS).filter(([, c]) => c.activa).sort((a, b) => a[1].orden - b[1].orden);
+export const idsCategoriasActivas = () => categoriasActivas().map(([k]) => k);
 /** Formato de venta (E-013). En plural, ver unidadTxt() en domain/formato */
 export const UNIT: Record<Unidad, string> = { m: 'm', ud: 'ud', bote: 'bote', sobre: 'sobre', bolsa: 'bolsa', pack: 'pack', caja: 'caja' };
 export const UNIDADES: Unidad[] = ['ud', 'm', 'bote', 'sobre', 'bolsa', 'pack', 'caja'];
@@ -54,9 +80,6 @@ export const SEED_PRODUCTS: Producto[] = [
   { sku: 'BF-TUB-CM20', name: 'Tubo corrugado forrado M-20 gris rollo 100 m', cat: 'tubos', unit: 'm', packLabel: 'rollo 100 m', stock: 600, min: 300, supplier: 'Saltoki Alcobendas' },
   { sku: 'UNX-CAN-60100', name: 'Canaleta aislante Unex 60×100 mm U23X tramo 2 m', cat: 'tubos', unit: 'm', packLabel: 'tramo 2 m', stock: 108, min: 40, supplier: 'Saltoki Móstoles' },
   // Fontanería
-  { sku: 'BF-FON-MC16', name: 'Tubo multicapa PEX-AL-PEX 16×2 rollo 100 m', cat: 'fontaneria', unit: 'm', packLabel: 'rollo 100 m', stock: 260, min: 200, supplier: 'Saltoki Móstoles' },
-  { sku: 'BF-FON-PX20', name: 'Tubo PEX-A 20×1,9 con barrera O₂ rollo 100 m', cat: 'fontaneria', unit: 'm', packLabel: 'rollo 100 m', stock: 400, min: 200, supplier: 'Saltoki Móstoles' },
-  { sku: 'BF-FON-PR16', name: 'Racor prensar multicapa codo 90° 16 mm', cat: 'fontaneria', unit: 'ud', packLabel: 'bolsa 10 ud', stock: 64, min: 40, supplier: 'Saltoki Móstoles' },
   // Fijaciones y consumibles
   { sku: 'BF-FIX-SX8', ean: '4006209701234', name: 'Caja 100 tacos nylon SX 8×40', cat: 'fijaciones', unit: 'caja', contenido: 100, stock: 12, min: 2, supplier: 'Saltoki Alcobendas' },
   { sku: 'BF-FIX-SX6', ean: '4006209700985', name: 'Bote 1000 tacos nylon SX 6×30', cat: 'fijaciones', unit: 'bote', contenido: 1000, stock: 3, min: 2, supplier: 'Saltoki Alcobendas' },

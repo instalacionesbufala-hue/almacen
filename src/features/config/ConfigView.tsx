@@ -22,6 +22,7 @@ import { verificarEntregasServidor } from '../../store/nube/sync';
 import { numEntrega } from '../../domain/reglas';
 import { abrirImportarFotos } from '../fotos/ImportarFotos';
 import { DatosReales } from './Datos';
+import { Categorias } from './Categorias';
 import { Integraciones } from '../cierres/Integraciones';
 
 const Bloque = ({ icon, t, children }: { icon: string; t: string; children: ReactNode }) =>
@@ -47,6 +48,7 @@ export default function ConfigView() {
       <div><span className="font-mono text-label-sm uppercase tracking-wider text-secondary">Sistema</span><h1 className="text-headline-lg-mobile lg:text-headline-lg font-bold">Configuración &amp; auditoría</h1></div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {perm.configurar && <div className="lg:col-span-2"><Bloque icon="swap_horiz" t="Pasar a datos reales"><DatosReales /></Bloque></div>}
+        {perm.configurar && <Bloque icon="category" t="Categorías"><p className="text-body-sm text-secondary">Las del inventario, los filtros y la lectura con IA. Una con artículos no se borra: se desactiva moviéndolos a otra.</p><Categorias /></Bloque>}
         {perm.configurar && <div className="lg:col-span-2"><Bloque icon="hub" t="Integraciones y cierres del wizard"><Integraciones /></Bloque></div>}
         {modoNube && perm.configurar && <div className="lg:col-span-2"><Bloque icon="group" t="Usuarios"><p className="text-body-sm text-secondary">Almacén: operativa diaria; sus mermas se aplican al momento y te llega el aviso, y sus recuentos quedan pendientes de validar. Administrador: todo. Al desactivar a alguien deja de poder entrar y su historial se conserva.</p><Usuarios /></Bloque></div>}
         {perm.validar && <Bloque icon="pending_actions" t="Pendientes de validar"><p className="text-body-sm text-secondary">{nPend ? `Hay ${nPend} pendiente${nPend === 1 ? '' : 's'} de validar.` : 'No hay nada pendiente.'}</p><button onClick={abrirPendientes} className={`${BTN_S} h-12`}><Icon n="pending_actions" className="ico-20" />Abrir la bandeja</button></Bloque>}

@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import qrcode from 'qrcode-generator';
 import type { Movimiento, Producto, TipoMov } from '../../data/tipos';
-import { CATS, OFICINA, REASONS, UNIDADES, UNIT } from '../../data/catalogo';
+import { OFICINA, REASONS, UNIDADES, UNIT, catDe, categoriasActivas } from '../../data/catalogo';
 import { contenidoDe, contenidoTxt, critical, find, formatoEntero, nombreVehiculo, pedidoSugerido, qrContenido, qtyTxt, searchProducts, status, ubicaciones, unidadesABordo, unidadTxt } from '../../domain/reglas';
 import { hace, num, redondea, toNum } from '../../domain/formato';
 import { ejecutar, guardar, mover, operarioSeleccionable, S, useAlmacen } from '../../store/almacen';
@@ -16,6 +16,7 @@ import { usePermisos } from '../../store/permisos';
 import { EditorFoto } from '../../ui/foto';
 import { nuevoId } from '../../store/ops';
 import type { CatId } from '../../data/tipos';
+import { comprobarFusion, diferencias } from '../../domain/fichas';
 
 /* ---------- Fila de movimiento ---------- */
 export function MovRow({ m }: { m: Movimiento }) {
@@ -62,9 +63,9 @@ function Ficha({ sku }: { sku: string }) {
   const E = useAlmacen(), p = find(E, sku), perm = usePermisos();
   if (!p) return <SheetHead title="Referencia no encontrada" />;
   const movs = E.movements.filter(m => m.sku === sku).slice(0, 8);
-  const datos: [string, string][] = [['SKU', p.sku], ['EAN', p.ean || '—'], ['Ref. proveedor', p.supplierRef || '—'], ['Formato', contenidoTxt(p) || (p.unit === 'm' ? 'metros' : 'unidades')], ['Proveedor', p.supplier || '—'], ['Descripción', p.packLabel || '—']];
+  const datos: [string, string][] = [['SKU', p.sku], ['EAN', p.ean || '—'], ['Ref. proveedor', p.supplierRef || '—'], ['Formato', contenidoTxt(p) || (p.unit === 'm' ? 'metros' : 'unidades')], ['Proveedor', p.supplier || '—'], ['Descripción', p.packLabel || '—'], ...(p.notas ? [['Notas', p.notas] as [string, string]] : [])];
   return (<>
-    <SheetHead title={p.name} sub={`${CATS[p.cat].label} · ${p.supplier}`} />
+    <SheetHead title={p.name} sub={`${catDe(p.cat).label} · ${p.supplier}`} />
     <div className="p-5 flex flex-col gap-4">
       <EditorFoto p={p} />
       <div className="flex items-center gap-3">
@@ -81,12 +82,40 @@ function Ficha({ sku }: { sku: string }) {
       </div>
       <div><div className={`${LBL} mb-1`}>Últimos movimientos</div>{movs.length ? movs.map(m => <MovRow key={m.id} m={m} />) : <p className="text-secondary text-body-sm">Sin movimientos todavía.</p>}</div>
     </div>
-    <SheetFoot className={`grid gap-2 ${perm.editarCatalogo ? 'grid-cols-3' : 'grid-cols-2'}`}>
+    <SheetFoot className={`grid gap-2 ${perm.editarCatalogo || !p.borrador ? 'grid-cols-2 sm:grid-cols-3' : 'grid-cols-2'}`}>
       <button onClick={() => abrirMovimiento(sku, 'entrada')} className={`${BTN_T} h-14 !text-tertiary`}><Icon n="add" className="ico-20" />Entrada</button>
       <button onClick={() => abrirMovimiento(sku, 'salida')} className={`${BTN_P} h-14`}><Icon n="remove" className="ico-20" />Salida</button>
-      {perm.editarCatalogo && <button onClick={() => abrirFormProducto(sku)} className={`${BTN_S} h-14`}><Icon n="edit" className="ico-20" />{p.borrador ? 'Completar' : 'Editar'}</button>}
+      {perm.editarCatalogo ? <button onClick={() => abrirFormProducto(sku)} className={`${BTN_S} h-14`}><Icon n="edit" className="ico-20" />{p.borrador ? 'Completar' : 'Editar'}</button>
+        : !p.borrador && <button onClick={() => abrirFormProducto(sku, {}, undefined, { modo: 'propuesta' })} className={`${BTN_S} h-14 col-span-2`}><Icon n="edit_note" className="ico-20" />Proponer un cambio de la ficha</button>}
     </SheetFoot>
+    {perm.editarCatalogo && !p.borrador && <div className="px-4 pb-2"><button onClick={() => abrirFusionar(sku)} className="text-primary text-body-sm font-semibold h-10">Fusionar en otro artículo (era el mismo)…</button></div>}
     {perm.editarCatalogo && p.stock === 0 && !E.movements.some(m => m.sku === sku) && <div className="px-4 pb-4"><button onClick={() => { if (confirm(`¿Borrar la referencia ${sku}? No tiene stock ni historial.`) && ejecutar({ op: 'borrarProducto', args: { sku } })) { closeModal(); toast('Referencia borrada.', 'ok'); } }} className="text-error text-body-sm font-semibold">Borrar esta referencia</button></div>}
+  </>);
+}
+
+/* ---------- E-016 · Fusionar A en B (administrador) ---------- */
+export const abrirFusionar = (sku: string) => openModal(<Fusionar sku={sku} />);
+function Fusionar({ sku }: { sku: string }) {
+  const E = useAlmacen(), a = find(E, sku);
+  const [destino, setDestino] = useState(''), [motivo, setMotivo] = useState('');
+  if (!a) return <SheetHead title="Referencia no encontrada" />;
+  let vista = '', error = '';
+  if (destino) { try { const r = comprobarFusion(E, sku, destino); vista = `${qtyTxt(a, a.stock)} de ${a.name} pasan a ${r.b.name} como ${qtyTxt(r.b, r.qb)}${E.aBordo.some(x => x.sku === sku && x.unidades) ? ', y lo que llevan los vehículos también' : ''}.`; } catch (e) { error = (e as Error).message; } }
+  const fusionar = () => {
+    if (!destino || error) return;
+    if (!confirm(`¿Fusionar ${a.sku} en ${destino}? ${a.sku} quedará archivado; su historial se conserva.`)) return;
+    if (ejecutar({ op: 'fusionar', args: { origen: sku, destino, motivo: motivo.trim() } })) { closeModal(); toast(`${a.sku} fusionado en ${destino}.`, 'ok'); }
+  };
+  return (<>
+    <SheetHead title={`Fusionar ${a.sku}`} sub="Para cuando dos fichas eran el mismo artículo. El stock y lo de los vehículos pasan con ajustes enlazados; nada se borra." />
+    <div className="p-5 flex flex-col gap-3">
+      <Campo label="En qué artículo se fusiona"><select value={destino} onChange={e => setDestino(e.target.value)} className={`${INP} h-12`}><option value="">Elige el artículo</option>
+        {E.products.filter(x => x.sku !== sku && !x.borrador).map(x => <option key={x.sku} value={x.sku}>{x.sku} · {x.name}</option>)}</select></Campo>
+      <Campo label="Motivo (queda en el historial)"><input value={motivo} onChange={e => setMotivo(e.target.value)} className={`${INP} h-12`} placeholder="Se dio de alta dos veces" /></Campo>
+      {vista && <p className="text-body-md bg-primary-fixed/40 rounded-lg p-3">{vista}</p>}
+      {error && <p className="text-body-md bg-error-container text-error rounded-lg p-3">{error}</p>}
+    </div>
+    <SheetFoot><button onClick={fusionar} disabled={!destino || !!error} className={`${BTN_P} h-12 w-full disabled:opacity-40`}><Icon n="merge" className="ico-20" />Fusionar</button></SheetFoot>
   </>);
 }
 
@@ -172,24 +201,25 @@ function Selector({ type }: { type: TipoMov }) {
 
 /* ---------- Alta / edición de referencia: los mismos campos que el CSV del catálogo ---------- */
 type FormProd = { sku: string; ean: string; name: string; cat: Producto['cat']; unit: Producto['unit']; contenido: string; packLabel: string; stock: string; min: string; supplier: string; supplierRef: string;
-  objetivo: string; proveedorHabitual: string; modelo: string; talla: string; propiedad: 'propia' | 'custodia'; propietario: string };
-export const abrirFormProducto = (sku?: string, preset: Partial<Producto> = {}, onCreado?: (sku: string) => void) =>
-  openModal(<FormProducto sku={sku} preset={preset} onCreado={onCreado} />);
-function FormProducto({ sku, preset, onCreado }: { sku?: string; preset: Partial<Producto>; onCreado?: (sku: string) => void }) {
+  objetivo: string; proveedorHabitual: string; modelo: string; talla: string; propiedad: 'propia' | 'custodia'; propietario: string; notas: string };
+/** E-016: modo "propuesta" (el almacén propone cambios, no los aplica) y "revisar" (el administrador aplica una propuesta) */
+export const abrirFormProducto = (sku?: string, preset: Partial<Producto> = {}, onCreado?: (sku: string) => void, o: { modo?: 'propuesta' | 'revisar'; propuesta?: string } = {}) =>
+  openModal(<FormProducto sku={sku} preset={preset} onCreado={onCreado} modo={o.modo} propuesta={o.propuesta} />);
+function FormProducto({ sku, preset, onCreado, modo, propuesta }: { sku?: string; preset: Partial<Producto>; onCreado?: (sku: string) => void; modo?: 'propuesta' | 'revisar'; propuesta?: string }) {
   const p = sku ? find(S(), sku) : undefined;
-  const base: Partial<Producto> = p ?? { cat: 'fijaciones', unit: 'ud', contenido: 1, min: 0, ...preset };
+  const base: Partial<Producto> = p ? { ...p, ...preset } : { cat: 'fijaciones', unit: 'ud', contenido: 1, min: 0, ...preset };
   const [f, setF] = useState<FormProd>({
     sku: base.sku || '', ean: base.ean || '', name: base.name || '', cat: base.cat || 'fijaciones', unit: base.unit || 'ud', contenido: String(base.contenido ?? 1), packLabel: base.packLabel || '',
     stock: String(p?.borrador ? p.stockPropuesto ?? 0 : 0), min: base.minimoDefinido === false ? '' : String(base.min ?? ''), supplier: base.supplier || '', supplierRef: base.supplierRef || '',
     objetivo: base.objetivo != null ? String(base.objetivo) : '', proveedorHabitual: base.proveedorHabitual || '', modelo: base.modelo || '', talla: base.talla || '',
-    propiedad: base.propiedad || 'propia', propietario: base.propietario || S().propietarios[0]?.id || '',
+    propiedad: base.propiedad || 'propia', propietario: base.propietario || S().propietarios[0]?.id || '', notas: base.notas || '',
   });
   const set = (k: keyof FormProd) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setF({ ...f, [k]: e.target.value });
   const conContenido = f.unit !== 'm' && f.unit !== 'ud';
   const guardarProd = () => {
     const E = S(), code = f.sku.trim().toUpperCase(), name = f.name.trim();
     if (!code || !name) return toast('El SKU y el nombre son obligatorios.', 'err');
-    if (!p && find(E, code)) return toast(`Ya existe una referencia con el SKU ${code}.`, 'err');
+    if ((!p || code !== p.sku) && find(E, code)) return toast(`Ya existe una referencia con el SKU ${code}.`, 'err');
     const n = { contenido: conContenido ? toNum(f.contenido) : 1, min: f.min.trim() === '' ? 0 : toNum(f.min), stock: toNum(f.stock) || 0 };
     if (!(n.contenido > 0)) return toast('Indica cuántas unidades trae cada formato (bote de 1000 → 1000).', 'err');
     if (!(n.min >= 0) || !(n.stock >= 0)) return toast('Revisa los números: no pueden ser negativos.', 'err');
@@ -198,8 +228,21 @@ function FormProducto({ sku, preset, onCreado }: { sku?: string; preset: Partial
     const obj: Producto = { sku: code, name, cat: f.cat, unit: f.unit, contenido: n.contenido, packLabel: f.packLabel.trim() || undefined, stock: p?.stock ?? 0, min: n.min, minimoDefinido: f.min.trim() !== '',
       supplier: f.supplier.trim(), ean: f.ean.trim() || undefined, supplierRef: f.supplierRef.trim() || undefined,
       objetivo: f.objetivo.trim() === '' ? undefined : toNum(f.objetivo), proveedorHabitual: f.proveedorHabitual.trim() || undefined, modelo: f.modelo.trim() || undefined, talla: f.talla.trim() || undefined,
-      propiedad: f.propiedad, propietario: custodia ? f.propietario : undefined, foto: p?.foto, fotoMini: p?.fotoMini, fotoOrigen: p?.fotoOrigen };
+      propiedad: f.propiedad, propietario: custodia ? f.propietario : undefined, foto: p?.foto, fotoMini: p?.fotoMini, fotoOrigen: p?.fotoOrigen, notas: f.notas.trim() || undefined };
+    // E-016: el almacén no edita fichas: propone los cambios y el administrador los aplica desde su bandeja
+    if (modo === 'propuesta' && p) {
+      const cambios = Object.fromEntries(diferencias(p, { ...obj, sku: p.sku }).map(d => [d.campo, d.despues]));
+      if (!Object.keys(cambios).length) return toast('No has cambiado nada.', 'warn');
+      if (ejecutar({ op: 'proponerCambio', args: { id: nuevoId(), sku: p.sku, cambios } })) { closeModal(); toast('Propuesta enviada: el administrador la revisará.', 'ok'); }
+      return;
+    }
+    // cambiar el código: ficha nueva con el código nuevo y la antigua fusionada en ella (el historial no se toca)
+    if (p && code !== p.sku) {
+      if (!confirm(`¿Cambiar el código de ${p.sku} a ${code}? El historial y las entregas firmadas conservan el código antiguo; buscarlo llevará al nuevo.`)) return;
+      if (!ejecutar({ op: 'cambiarCodigo', args: { sku: p.sku, nuevo: code } })) return;
+    }
     if (!ejecutar({ op: 'producto', args: { producto: obj, nuevo: !p, stockInicial: p && !p.borrador ? 0 : n.stock } })) return;
+    if (modo === 'revisar' && propuesta) ejecutar({ op: 'resolverPropuesta', args: { id: propuesta, aplicada: true } });
     toast(p?.borrador ? `Borrador aprobado: ${code} ya se puede mover${n.stock > 0 ? ` y entran ${n.stock} ${unidadTxt(f.unit, n.stock)} en el almacén` : ''}.` : p ? 'Referencia actualizada.' : `Referencia ${code} creada.`, 'ok', 6000);
     if (!p) onCreado?.(code);
     closeModal();
@@ -207,12 +250,12 @@ function FormProducto({ sku, preset, onCreado }: { sku?: string; preset: Partial
   const inp = (k: keyof FormProd, label: string, extra: React.InputHTMLAttributes<HTMLInputElement> = {}) =>
     <Campo label={label}><input value={String(f[k])} onChange={set(k)} className={`${INP} h-12`} {...extra} /></Campo>;
   return (<>
-    <SheetHead title={p?.borrador ? 'Completar y aprobar borrador' : p ? 'Editar referencia' : 'Nueva referencia'} sub={p?.borrador ? `${p.sku}${p.propuestoPor ? ` · propuesto por ${p.propuestoPor}` : ''}` : p ? p.sku : 'Alta en el catálogo del almacén'} />
+    <SheetHead title={modo === 'propuesta' ? 'Proponer un cambio' : modo === 'revisar' ? 'Revisar el cambio propuesto' : p?.borrador ? 'Completar y aprobar borrador' : p ? 'Editar referencia' : 'Nueva referencia'} sub={p?.borrador ? `${p.sku}${p.propuestoPor ? ` · propuesto por ${p.propuestoPor}` : ''}` : p ? p.sku : 'Alta en el catálogo del almacén'} />
     <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
-      {inp('sku', 'SKU / ID *', p ? { readOnly: true } : { autoFocus: true })}
+      {inp('sku', p ? 'SKU / ID * (cambiarlo conserva el historial)' : 'SKU / ID *', p ? { readOnly: modo === 'propuesta' || !!p.borrador } : { autoFocus: true })}
       {inp('ean', 'EAN / código de barras', { inputMode: 'numeric' })}
       <div className="sm:col-span-2">{inp('name', 'Nombre *')}</div>
-      <Campo label="Categoría"><select value={f.cat} onChange={set('cat')} className={`${INP} h-12`}>{Object.entries(CATS).map(([k, c]) => <option key={k} value={k}>{c.label}</option>)}</select></Campo>
+      <Campo label="Categoría"><select value={f.cat} onChange={set('cat')} className={`${INP} h-12`}>{categoriasActivas().map(([k, c]) => <option key={k} value={k}>{c.label}</option>)}</select></Campo>
       <Campo label="Se vende y se entrega por"><select value={f.unit} onChange={set('unit')} className={`${INP} h-12`}>{UNIDADES.map(u => <option key={u} value={u}>{u === 'm' ? 'Metros' : u === 'ud' ? 'Unidades' : unidadTxt(u, 2).replace(/^./, c => c.toUpperCase())}</option>)}</select></Campo>
       {conContenido && inp('contenido', `Unidades por ${UNIT[f.unit]} (bote de 1000 → 1000)`, { inputMode: 'numeric' })}
       {(!p || p.borrador) && inp('stock', `Stock inicial en el almacén (${unidadTxt(f.unit, 2)})${p?.borrador ? ' · contado por el almacén' : ''}`, { inputMode: 'decimal' })}
@@ -225,8 +268,10 @@ function FormProducto({ sku, preset, onCreado }: { sku?: string; preset: Partial
       {inp('objetivo', 'Objetivo de reposición (vacío = 2 × mínimo)', { inputMode: 'decimal' })}
       {inp('proveedorHabitual', 'Proveedor habitual (a quién se pide)')}
       {(f.cat === 'ropa' || f.cat === 'epis') && <>{inp('modelo', 'Modelo (agrupa las tallas)')}{inp('talla', 'Talla')}</>}
+      <div className="sm:col-span-2">{inp('notas', 'Notas (dónde está, observaciones…)')}</div>
+      {p && !p.borrador && <p className="sm:col-span-2 text-body-sm text-secondary">El stock no se edita aquí: se corrige con un ajuste (con motivo), con un recuento o, si vino mal de un albarán, con "Reasignar línea" en el albarán.</p>}
     </div>
-    <SheetFoot className="flex gap-2"><button onClick={closeModal} className={`${BTN_S} h-12 px-5`}>Cancelar</button><button onClick={guardarProd} className={`${BTN_P} h-12 flex-1`}><Icon n="save" className="ico-20" />{p?.borrador ? 'Aprobar' : p ? 'Guardar cambios' : 'Crear referencia'}</button></SheetFoot>
+    <SheetFoot className="flex gap-2"><button onClick={closeModal} className={`${BTN_S} h-12 px-5`}>Cancelar</button><button onClick={guardarProd} className={`${BTN_P} h-12 flex-1`}><Icon n="save" className="ico-20" />{modo === 'propuesta' ? 'Enviar la propuesta' : modo === 'revisar' ? 'Aplicar el cambio' : p?.borrador ? 'Aprobar' : p ? 'Guardar cambios' : 'Crear referencia'}</button></SheetFoot>
   </>);
 }
 
@@ -246,7 +291,7 @@ function Borrador({ codigo, onCreado }: { codigo: string; onCreado?: (sku: strin
       <Campo label="Código / SKU"><input value={f.sku} onChange={e => setF({ ...f, sku: e.target.value })} className={`${INP} h-12 font-mono`} /></Campo>
       <Campo label="EAN (código de barras)"><input value={f.ean} onChange={e => setF({ ...f, ean: e.target.value })} inputMode="numeric" className={`${INP} h-12 font-mono`} /></Campo>
       <Campo label="Nombre" className="sm:col-span-2"><input autoFocus value={f.nombre} onChange={e => setF({ ...f, nombre: e.target.value })} className={`${INP} h-12`} placeholder="Lo que pone en la caja" /></Campo>
-      <Campo label="Categoría" className="sm:col-span-2"><select value={f.cat} onChange={e => setF({ ...f, cat: e.target.value as CatId })} className={`${INP} h-12`}>{Object.entries(CATS).map(([k, c]) => <option key={k} value={k}>{c.label}</option>)}</select></Campo>
+      <Campo label="Categoría" className="sm:col-span-2"><select value={f.cat} onChange={e => setF({ ...f, cat: e.target.value as CatId })} className={`${INP} h-12`}>{categoriasActivas().map(([k, c]) => <option key={k} value={k}>{c.label}</option>)}</select></Campo>
     </div>
     <SheetFoot className="flex gap-2"><button onClick={closeModal} className={`${BTN_S} h-12 px-5`}>Cancelar</button><button onClick={crear} className={`${BTN_P} h-12 flex-1`}><Icon n="save" className="ico-20" />Crear borrador</button></SheetFoot>
   </>);
@@ -257,7 +302,7 @@ export const abrirConteo = (cat: string) => openModal(<Conteo cat={cat} />);
 function Conteo({ cat }: { cat: string }) {
   const E = useAlmacen(); const [vals, setVals] = useState<Record<string, string>>({});
   const ps = E.products.filter(p => !p.borrador && (cat === 'all' || p.cat === cat)).sort((a, b) => a.name.localeCompare(b.name));
-  const nombre = cat === 'all' ? 'todo el almacén' : CATS[cat as CatId]?.label || cat;
+  const nombre = cat === 'all' ? 'todo el almacén' : catDe(cat).label;
   const { validar } = usePermisos();
   const confirmar = () => {
     const lineas = Object.entries(vals).filter(([, v]) => v.trim() !== '').map(([sku, v]) => ({ sku, contado: toNum(v) }));

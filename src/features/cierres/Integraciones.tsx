@@ -1,21 +1,21 @@
 /* E-012 · Configuración → Integraciones y cierres (administrador): token del Apps Script del wizard, equipos del wizard,
    apertura, kit de fijación por defecto, tabla de equivalencias (propuesta → confirmar), kits y carga del histórico. */
 import { useRef, useState } from 'react';
-import type { Equivalencia } from '../../data/tipos';
-import { articulosTexto, cierresDeCsv, condicionesTexto, normalizarCierre, parseArticulos, parseCondiciones, traducirEnApp } from '../../domain/cierres';
+import type { ArticuloRegla } from '../../data/tipos';
+import { cierresDeCsv, condicionesTexto, normalizarCierre, traducirEnApp } from '../../domain/cierres';
+import { abrirProbar, abrirRegla, ArticulosEditor, FORMULAS, Recalcular } from './Reglas';
 import { fechaHora } from '../../domain/formato';
 import { find, nombreVehiculo, vehiculoDeEquipo } from '../../domain/reglas';
 import { ejecutar, S, useAlmacen } from '../../store/almacen';
 import { modoNube, supabase, urlSupabase } from '../../store/nube/cliente';
 import { recargar } from '../../store/nube/sync';
-import { closeModal, openModal, SheetFoot, SheetHead } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 import { BTN_P, BTN_S, Campo, Icon, INP, LBL, Tag } from '../../ui/base';
 
 const EQUIPOS_WIZARD = ['Búfala 1', 'Búfala 2', 'Búfala 3'];
 const URL_CIERRE = modoNube ? `${urlSupabase}/functions/v1/registrar-cierre` : '';
 const URL_SCRIPT = 'https://github.com/instalacionesbufala-hue/almacen/blob/main/docs/apps-script-almacen.gs';
-const FORMULA: Record<Equivalencia['formula'], string> = { directa: 'directa', manguitos: 'manguitos floor(m/3)+1', fijaciones: 'fijaciones ceil(m/0,5) × kit', unidad: '1 ud' };
+const FORMULA = FORMULAS;
 
 export function Integraciones() {
   const E = useAlmacen(), archivo = useRef<HTMLInputElement>(null);
@@ -74,6 +74,7 @@ export function Integraciones() {
           {!E.equivalencias.length && <button onClick={() => { if (ejecutar({ op: 'cargarPropuesta', args: {} })) toast('Propuesta cargada como borrador: revísala y confírmala.', 'ok', 6000); }} className={`${BTN_P} h-11 px-4`}><Icon n="download" className="ico-18" />Cargar la propuesta</button>}
           {sinConfirmar > 0 && <button onClick={() => { if (confirm(`¿Confirmar ${sinConfirmar} reglas? A partir de ahora descontarán en los cierres.`) && ejecutar({ op: 'confirmarEquivalencias', args: {} })) toast('Equivalencias confirmadas.', 'ok'); }} className={`${BTN_P} h-11 px-4`}><Icon n="task_alt" className="ico-18" />Confirmar {sinConfirmar}</button>}
           <button onClick={() => abrirRegla()} className={`${BTN_S} h-11 px-4`}><Icon n="add" className="ico-18" />Regla</button>
+          <button onClick={abrirProbar} className={`${BTN_S} h-11 px-4`}><Icon n="science" className="ico-18" />Probar</button>
         </div></div>
       {E.equivalencias.length > 0 && <div className="overflow-x-auto rounded-lg ring-1 ring-surface-container-high"><table className="w-full text-body-sm min-w-[640px]">
         <thead className="bg-surface-container-low"><tr className="text-left"><th className="p-2">Partida</th><th className="p-2">Condición</th><th className="p-2">Artículos</th><th className="p-2">Fórmula</th><th className="p-2" /></tr></thead>
@@ -81,17 +82,21 @@ export function Integraciones() {
           <td className="p-2 font-mono">{r.campo}{!r.confirmada && <Tag c="bg-amber-100 text-amber-800 ml-1">borrador</Tag>}</td>
           <td className="p-2 font-mono text-label-sm">{condicionesTexto(r.condiciones) || '—'}</td>
           <td className="p-2">{r.formula === 'fijaciones' ? `kit ${r.kit || E.configApp.kitFijacion || 'A'}` : r.articulos.map((a, i) => { const p = a.sku ? find(E, a.sku) : undefined;
-            return <div key={i} className={!a.sku || !p ? 'text-amber-800' : ''}>{a.sku ? `${a.sku}${p ? ` · ${p.name}` : ' · no está en el catálogo'}` : `${a.nombre || 'artículo'}: sin dar de alta`}{a.factor !== 1 ? ` ×${a.factor}` : ''}</div>; })}
+            return <div key={i} className={!a.sku || !p ? 'text-error font-semibold' : ''}>{a.sku ? `${a.sku}${p ? ` · ${p.name}` : ' · NO EXISTE en el catálogo'}` : `${a.nombre || 'artículo'}: sin dar de alta`}{a.factor !== 1 ? ` ×${a.factor}` : ''}</div>; })}
+            {r.formula === 'fijaciones' && (E.kits[r.kit || E.configApp.kitFijacion || 'A'] || []).some(a => !a.sku || !find(E, a.sku)) && <div className="text-error font-semibold">el kit tiene artículos que no existen</div>}
             {r.nota && <div className="text-label-sm text-secondary">{r.nota}</div>}</td>
           <td className="p-2">{FORMULA[r.formula]}{r.estimada && <Tag c="bg-amber-100 text-amber-800 ml-1">estimado</Tag>}</td>
           <td className="p-2 whitespace-nowrap"><button onClick={() => abrirRegla(r)} className="text-primary font-semibold h-10 px-1">Editar</button>
-            <button onClick={() => ejecutar({ op: 'equivalencia', args: { regla: { ...r, activa: !r.activa } } })} className="text-secondary font-semibold h-10 px-1">{r.activa ? 'Desactivar' : 'Activar'}</button></td>
+            <button onClick={() => abrirRegla(r, true)} className="text-primary font-semibold h-10 px-1">Duplicar</button>
+            <button onClick={() => ejecutar({ op: 'equivalencia', args: { regla: { ...r, activa: !r.activa } } })} className="text-secondary font-semibold h-10 px-1">{r.activa ? 'Desactivar' : 'Activar'}</button>
+            {!r.confirmada && <button onClick={() => { if (confirm('¿Borrar esta regla en borrador?') && ejecutar({ op: 'borrarEquivalencia', args: { id: r.id } })) toast('Regla borrada.', 'ok'); }} className="text-error font-semibold h-10 px-1">Borrar</button>}</td>
         </tr>)}</tbody></table></div>}
+      <Recalcular />
       <p className="text-body-sm text-secondary">Las partidas sin regla (o con un artículo aún no dado de alta) quedan "sin equivalencia" y no descuentan hasta que se definan. El cable de datos con un cargador que no sea V2C ni Policharger, y los cargadores no reconocidos, van a la pestaña Cierres para elegir el artículo.</p>
     </div>
 
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      <div className="flex flex-col gap-2"><span className={LBL}>Kits de fijación (por fijación)</span>
+      <div className="flex flex-col gap-2"><span className={LBL}>Kits de fijación (qué se gasta en cada fijación)</span>
         {(['A', 'B', 'C'] as const).map(k => <KitFila key={k} kit={k} />)}</div>
       <div className="flex flex-col gap-2"><span className={LBL}>Histórico</span>
         <p className="text-body-sm text-secondary">Lo más sencillo es ejecutar <b>cargarHistoricoAlAlmacen()</b> en el Apps Script (guía, paso 14). También puedes exportar la hoja "Registro" a CSV (cabeceras con los nombres de los campos: numInst, esbrainUuid, fechaCierreIso, equipo, hardware, metrosLinea, pvc32…) y cargarla aquí.</p>
@@ -104,37 +109,12 @@ export function Integraciones() {
 
 function KitFila({ kit }: { kit: 'A' | 'B' | 'C' }) {
   const E = useAlmacen();
-  const [t, setT] = useState(articulosTexto(E.kits[kit] || []));
-  const guardar = () => { try { if (ejecutar({ op: 'kitFijacion', args: { kit, articulos: parseArticulos(t) } })) toast(`Kit ${kit} guardado.`, 'ok'); } catch (e) { toast((e as Error).message, 'err'); } };
-  return <div className="flex gap-2 items-center"><b className="w-6">{kit}</b><input value={t} onChange={e => setT(e.target.value)} placeholder="SKU×1, SKU×1, ?clavo×1" className={`${INP} h-11 font-mono text-label-sm`} aria-label={`Kit ${kit}`} />
-    <button onClick={guardar} className={`${BTN_S} h-11 px-3`}>Guardar</button></div>;
-}
-
-const abrirRegla = (r?: Equivalencia) => openModal(<FormRegla r={r} />);
-function FormRegla({ r }: { r?: Equivalencia }) {
-  const E = useAlmacen();
-  const [f, setF] = useState({ campo: r?.campo || '', formula: r?.formula || 'directa', condiciones: r ? condicionesTexto(r.condiciones) : '', articulos: r ? articulosTexto(r.articulos) : '',
-    kit: r?.kit || '', estimada: r?.estimada ?? false, orden: String(r?.orden ?? (Math.max(0, ...E.equivalencias.map(x => x.orden)) + 10)), nota: r?.nota || '' });
+  const [v, setV] = useState<ArticuloRegla[]>(E.kits[kit] || []);
   const guardar = () => {
-    try {
-      const regla: Equivalencia = { id: r?.id || `R${Date.now().toString(36)}`, campo: f.campo.trim(), formula: f.formula as Equivalencia['formula'], condiciones: parseCondiciones(f.condiciones),
-        articulos: f.formula === 'fijaciones' ? [] : parseArticulos(f.articulos), kit: f.formula === 'fijaciones' ? (f.kit || null) : null, estimada: f.estimada || f.formula === 'manguitos' || f.formula === 'fijaciones',
-        activa: r?.activa ?? true, orden: Number(f.orden) || 100, nota: f.nota.trim(), confirmada: true };
-      if (ejecutar({ op: 'equivalencia', args: { regla } })) { closeModal(); toast('Regla guardada.', 'ok'); }
-    } catch (e) { toast((e as Error).message, 'err', 6000); }
+    if (v.some(a => a.sku === '')) return toast('Elige el artículo de cada línea del kit (o quítala).', 'err');
+    if (ejecutar({ op: 'kitFijacion', args: { kit, articulos: v } })) toast(`Kit ${kit} guardado.`, 'ok');
   };
-  return (<>
-    <SheetHead title={r ? `Regla de ${r.campo}` : 'Nueva regla'} sub="Dentro de cada partida y fórmula se aplica la primera regla (por orden) que cumpla la condición." />
-    <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
-      <Campo label="Partida del wizard (o suma: pvc32+acero32)"><input value={f.campo} onChange={e => setF({ ...f, campo: e.target.value })} className={`${INP} h-12 font-mono`} /></Campo>
-      <Campo label="Fórmula"><select value={f.formula} onChange={e => setF({ ...f, formula: e.target.value as 'directa' })} className={`${INP} h-12`}>{Object.entries(FORMULA).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></Campo>
-      <Campo label="Condición (campo=valor; campo~texto; a|b = uno u otro)" className="sm:col-span-2"><input value={f.condiciones} onChange={e => setF({ ...f, condiciones: e.target.value })} placeholder="tipoLinea=tubo; fase=mono; seccion=6" className={`${INP} h-12 font-mono`} /></Campo>
-      {f.formula === 'fijaciones' ? <Campo label="Kit (vacío = el de por defecto)"><select value={f.kit} onChange={e => setF({ ...f, kit: e.target.value })} className={`${INP} h-12`}><option value="">Por defecto</option><option>A</option><option>B</option><option>C</option></select></Campo>
-        : <Campo label="Artículos (SKU×unidades por unidad de la partida)" className="sm:col-span-2"><input value={f.articulos} onChange={e => setF({ ...f, articulos: e.target.value })} placeholder="6000650603×1, 6000650604×1" className={`${INP} h-12 font-mono`} /></Campo>}
-      <Campo label="Orden"><input value={f.orden} onChange={e => setF({ ...f, orden: e.target.value })} inputMode="numeric" className={`${INP} h-12`} /></Campo>
-      <label className="flex items-center gap-2 text-body-md"><input type="checkbox" checked={f.estimada} onChange={e => setF({ ...f, estimada: e.target.checked })} className="w-5 h-5 accent-primary" />Estimada (sale marcada en los informes)</label>
-      <Campo label="Nota" className="sm:col-span-2"><input value={f.nota} onChange={e => setF({ ...f, nota: e.target.value })} className={`${INP} h-12`} /></Campo>
-    </div>
-    <SheetFoot><button onClick={guardar} className={`${BTN_P} h-12 w-full`}><Icon n="save" className="ico-20" />Guardar regla</button></SheetFoot>
-  </>);
+  return <div className="rounded-xl bg-surface-container-low p-3 flex flex-col gap-2"><div className="flex items-center justify-between"><b>Kit {kit}{(E.configApp.kitFijacion || 'A') === kit ? ' · por defecto' : ''}</b>
+    <button onClick={guardar} className={`${BTN_S} h-10 px-3`}>Guardar</button></div>
+    <ArticulosEditor valor={v} onChange={setV} etiquetaFactor="Por fijación" /></div>;
 }

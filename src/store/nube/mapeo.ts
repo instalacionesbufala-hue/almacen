@@ -1,5 +1,5 @@
 /* Filas de Supabase → estado de la app (src/data/tipos.ts) */
-import type { ActaCustodia, AvisoReposicion, ConfigAvisos, EnvioAviso, MinimoHerramienta, Pendiente, PerfilUsuario, Rol, Albaran, CatId, ClaseDotacion, Entrega, Equipo, EstadoEquipo, EstadoHerramienta, Estado, Herramienta, Movimiento, Producto, Tecnico, TipoIncidencia, TipoMov, Unidad, Vehiculo, Asignacion, StockVehiculo, CopiaEntrega, EnlacePortal, ArticuloRegla, CierreApp, Equivalencia, Integracion, LineaCierre } from '../../data/tipos';
+import type { ActaCustodia, AvisoReposicion, ConfigAvisos, EnvioAviso, MinimoHerramienta, Pendiente, PerfilUsuario, Rol, Albaran, CatId, ClaseDotacion, Entrega, Equipo, EstadoEquipo, EstadoHerramienta, Estado, Herramienta, Movimiento, Producto, Tecnico, TipoIncidencia, TipoMov, Unidad, Vehiculo, Asignacion, StockVehiculo, CopiaEntrega, EnlacePortal, ArticuloRegla, CierreApp, Equivalencia, Integracion, LineaCierre, Categoria, PropuestaFicha } from '../../data/tipos';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Fila = Record<string, any>;
@@ -7,7 +7,7 @@ export interface Tablas {
   productos: Fila[]; equipos: Fila[]; tecnicos: Fila[]; movimientos: Fila[];
   albaranes: Fila[]; entregas: Fila[]; entrega_lineas: Fila[]; dotacion: Fila[];
   dotacion_historial: Fila[]; avisos_reposicion: Fila[]; propietarios: Fila[];
-  vehiculos: Fila[]; asignaciones_tecnico: Fila[]; asignaciones_vehiculo: Fila[]; stock_vehiculo: Fila[]; config_app: Fila[]; portal_enlaces: Fila[]; copias_entrega: Fila[]; cierres: Fila[]; cierre_lineas: Fila[]; equivalencias_cierre: Fila[]; kits_fijacion: Fila[]; integraciones: Fila[];
+  vehiculos: Fila[]; asignaciones_tecnico: Fila[]; asignaciones_vehiculo: Fila[]; stock_vehiculo: Fila[]; config_app: Fila[]; portal_enlaces: Fila[]; copias_entrega: Fila[]; categorias: Fila[]; propuestas_ficha: Fila[]; cierres: Fila[]; cierre_lineas: Fila[]; equivalencias_cierre: Fila[]; kits_fijacion: Fila[]; integraciones: Fila[];
   minimos_herramienta: Fila[]; config_avisos: Fila[]; envios_aviso: Fila[]; actas_custodia: Fila[];
   tallas_tecnico: Fila[];
   perfiles: Fila[]; pendientes: Fila[]; valores_pendientes?: Fila[];
@@ -16,7 +16,7 @@ export interface Tablas {
 export const TABLAS: (keyof Tablas)[] = ['productos', 'equipos', 'tecnicos', 'movimientos', 'albaranes', 'entregas',
   'entrega_lineas', 'dotacion', 'dotacion_historial', 'avisos_reposicion', 'propietarios', 'perfiles', 'pendientes',
   'minimos_herramienta', 'config_avisos', 'envios_aviso', 'actas_custodia', 'tallas_tecnico',
-  'vehiculos', 'asignaciones_tecnico', 'asignaciones_vehiculo', 'stock_vehiculo', 'config_app', 'portal_enlaces', 'copias_entrega', 'cierres', 'cierre_lineas', 'equivalencias_cierre', 'kits_fijacion', 'integraciones'];
+  'vehiculos', 'asignaciones_tecnico', 'asignaciones_vehiculo', 'stock_vehiculo', 'config_app', 'categorias', 'propuestas_ficha', 'portal_enlaces', 'copias_entrega', 'cierres', 'cierre_lineas', 'equivalencias_cierre', 'kits_fijacion', 'integraciones'];
 /** Columnas legibles por cada rol (en pendientes el importe se lee aparte, solo el administrador) */
 export const COLUMNAS: Partial<Record<keyof Tablas, string>> = {
   portal_enlaces: 'tecnico_id, entrega_id, creado, creado_por, revocado',
@@ -29,14 +29,19 @@ const ms = (t: string) => new Date(t).getTime();
 const n = (v: unknown) => Number(v ?? 0);
 
 export function aEstado(t: Tablas, base: Pick<Estado, 'cesta' | 'seq'>, operador: string, rol: Rol = 'almacen'): Estado {
-  const products: Producto[] = t.productos.map(p => ({
+  const todos: (Producto & { archivado?: boolean })[] = t.productos.map(p => ({
     sku: p.sku, ean: p.ean ?? undefined, supplierRef: p.ref_proveedor ?? undefined, name: p.nombre, cat: p.categoria as CatId, unit: p.unidad as Unidad,
     contenido: n(p.contenido) || 1, packLabel: p.formato_texto || undefined, stock: n(p.stock), min: n(p.minimo), minimoDefinido: p.minimo_definido !== false, supplier: p.proveedor || '',
     borrador: !!p.borrador, stockPropuesto: p.stock_propuesto == null ? undefined : n(p.stock_propuesto), propuestoPor: p.propuesto_por || undefined,
     propiedad: p.propiedad === 'custodia' ? 'custodia' : 'propia', propietario: p.propietario_id ?? undefined,
     objetivo: p.objetivo == null ? undefined : n(p.objetivo), proveedorHabitual: p.proveedor_habitual ?? undefined, modelo: p.modelo ?? undefined, talla: p.talla ?? undefined,
     foto: p.foto ?? undefined, fotoMini: p.foto_mini ?? undefined, fotoOrigen: p.foto_origen ?? undefined,
+    ...(p.notas ? { notas: p.notas } : {}), ...(p.archivado ? { archivado: true, fusionadoEn: p.fusionado_en ?? undefined } : {}),
   }));
+  // E-016: los archivados (fusionados en otro) no salen en las listas, pero el historial los sigue encontrando
+  const products: Producto[] = todos.filter(p => !p.archivado), archivados: Producto[] = todos.filter(p => p.archivado);
+  const categorias: Categoria[] = (t.categorias || []).map(c => ({ id: c.id, nombre: c.nombre, icono: c.icono, color: c.color, orden: c.orden, activa: !!c.activa })).sort((a, b) => a.orden - b.orden);
+  const propuestas: PropuestaFicha[] = (t.propuestas_ficha || []).map(x => ({ id: x.id, sku: x.sku, cambios: x.cambios || {}, ts: ms(x.ts), operator: x.operario, estado: x.estado }));
   const activos = t.equipos.filter(e => e.activo);
   const vehiculosActivos = t.vehiculos.filter(v => v.activo);
   const equipos: Equipo[] = activos.map(e => ({ id: e.id, nombre: e.nombre, estado: e.estado as EstadoEquipo,
@@ -62,9 +67,9 @@ export function aEstado(t: Tablas, base: Pick<Estado, 'cesta' | 'seq'>, operador
   const tallas = new Map(t.tallas_tecnico.map(x => [x.tecnico_id, { camiseta: x.camiseta ?? undefined, pantalon: x.pantalon ?? undefined, calzado: x.calzado ?? undefined, guantes: x.guantes ?? undefined }]));
   const tecnicos: Tecnico[] = t.tecnicos.filter(x => x.activo).map(x => ({ id: x.id, nombre: x.nombre, rol: x.rol, dni: x.dni_mascara, tallas: tallas.get(x.id), email: x.email ?? undefined, codigo: x.codigo ?? undefined, telefono: x.telefono ?? undefined }));
   const movements: Movimiento[] = t.movimientos.map(m => ({ id: m.id, ts: ms(m.ts), sku: m.sku, type: m.tipo as TipoMov, qty: n(m.cantidad), reason: m.motivo,
-    ref: m.referencia || '', operator: m.operario, serials: [], equipo: m.equipo_id ?? undefined, entrega: m.entrega_id ?? undefined,
+    ref: m.referencia || '', operator: m.operario, serials: [], equipo: m.equipo_id ?? undefined, entrega: m.entrega_id ?? undefined, ...(m.albaran_id ? { albaran: m.albaran_id } : {}), ...(m.corrige ? { corrige: m.corrige } : {}),
     vehiculo: m.vehiculo_id ?? undefined, unidades: m.unidades == null ? undefined : n(m.unidades), ...(m.cierre_id ? { cierre: m.cierre_id } : {}) })).sort((a, b) => b.ts - a.ts);
-  const albaranes: Albaran[] = t.albaranes.map(a => ({ numero: a.numero, proveedor: a.proveedor, fecha: a.fecha, lineas: a.lineas, unidades: n(a.unidades),
+  const albaranes: Albaran[] = t.albaranes.map(a => ({ id: a.id, delegacion: a.delegacion || undefined, numero: a.numero, proveedor: a.proveedor, fecha: a.fecha, lineas: a.lineas, unidades: n(a.unidades),
     ts: ms(a.ts), operator: a.operario, confianza: a.confianza == null ? .95 : n(a.confianza), modo: a.modo })).sort((a, b) => b.ts - a.ts);
   const lineas = new Map<string, Fila[]>();
   for (const l of t.entrega_lineas) lineas.set(l.entrega_id, [...(lineas.get(l.entrega_id) || []), l]);
@@ -97,5 +102,5 @@ export function aEstado(t: Tablas, base: Pick<Estado, 'cesta' | 'seq'>, operador
   const pendientes: Pendiente[] = t.pendientes.map(p => ({ id: p.id, ts: ms(p.ts), tipo: p.tipo, sku: p.sku, qty: n(p.cantidad), reason: p.motivo, ref: p.referencia || '',
     serials: p.series || [], operator: p.operario, estado: p.estado, resueltoPor: p.resuelto_por ?? undefined, nota: p.nota_resolucion ?? undefined, ...(p.vehiculo_id ? { vehiculo: p.vehiculo_id } : {}) })).sort((a, b) => b.ts - a.ts);
   const perfiles: PerfilUsuario[] = t.perfiles.map(p => ({ id: p.id, nombre: p.nombre, email: p.email ?? null, rol: p.rol, activo: !!p.activo }));
-  return { v: 3, products, movements, albaranes, equipos, tecnicos, entregas, herramientas, propietarios, pendientes, perfiles, rol, avisos, minimosHerramienta, configAvisos, envios, actas, vehiculos, asignaciones, aBordo, configApp, portalEnlaces, copias, cierres, lineasCierre, equivalencias, kits, integraciones, operator: operador, pedidos, cesta: base.cesta, seq: base.seq };
+  return { v: 3, products, movements, albaranes, equipos, tecnicos, entregas, herramientas, propietarios, pendientes, perfiles, rol, avisos, minimosHerramienta, configAvisos, envios, actas, vehiculos, asignaciones, aBordo, configApp, categorias, archivados, propuestas, portalEnlaces, copias, cierres, lineasCierre, equivalencias, kits, integraciones, operator: operador, pedidos, cesta: base.cesta, seq: base.seq };
 }

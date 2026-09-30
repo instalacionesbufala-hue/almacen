@@ -2,7 +2,7 @@
    visor a pantalla completa y editor de la ficha (cámara, archivo o pegar). */
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { CatId, Herramienta, OrigenFoto, Producto } from '../data/tipos';
-import { CATS } from '../data/catalogo';
+import { catDe } from '../data/catalogo';
 import { fotoDe, fotoDeHerramienta, ORIGENES_FOTO, permisoFoto } from '../domain/fotos';
 import { useAlmacen } from '../store/almacen';
 import { crearStore } from '../store/crear';
@@ -11,15 +11,15 @@ import { toast } from './toast';
 
 const Ico = ({ n, className = '' }: { n: string; className?: string }) => <span className={`material-symbols-outlined ${className}`} aria-hidden="true">{n}</span>;
 
-/** Miniatura: la foto si existe; si no (o mientras carga), el icono de la categoría */
+/** Miniatura: la foto si existe (sobre gris muy claro, para que se distingan las piezas blancas o transparentes: E-016); si no, el icono de la categoría */
 export function Miniatura({ ruta, cat, alt, size = 'w-12 h-12', tile, alerta, icono = 'ico-28' }: { ruta?: string; cat: CatId; alt: string; size?: string; tile?: string; alerta?: boolean; icono?: string }) {
   const url = useFotoUrl(ruta);
   const [cargada, setCargada] = useState(false);
   useEffect(() => setCargada(false), [url]);
-  const fondo = tile ?? (alerta ? 'bg-error-container text-error' : CATS[cat].tile);
+  const fondo = tile ?? (alerta ? 'bg-error-container text-error' : catDe(cat).tile);
   return (
-    <div className={`${size} shrink-0 rounded-xl relative overflow-hidden grid place-items-center ${url && cargada ? 'bg-white ring-1 ring-surface-container-high' : fondo}`}>
-      {!(url && cargada) && <Ico n={CATS[cat].icon} className={icono} />}
+    <div className={`${size} shrink-0 rounded-xl relative overflow-hidden grid place-items-center ${url && cargada ? 'bg-slate-100 ring-1 ring-surface-container-high' : fondo}`}>
+      {!(url && cargada) && <Ico n={catDe(cat).icon} className={icono} />}
       {url && <img src={url} alt={alt} loading="lazy" decoding="async" onLoad={() => setCargada(true)} onError={() => setCargada(false)}
         className={`absolute inset-0 w-full h-full object-contain ${cargada ? '' : 'opacity-0'}`} />}
       {url && cargada && alerta && <span className="absolute top-1 right-1 w-3 h-3 rounded-full bg-error ring-2 ring-white" title="Stock crítico" />}
@@ -65,11 +65,11 @@ export function FotoGrande({ p, className = 'h-56', children }: { p: Producto; c
   // mientras llega la grande se enseña la miniatura (ya suele estar en caché de la lista)
   const grande = useFotoUrl(f?.foto), mini = useFotoUrl(f?.mini), url = grande || mini;
   if (!f || !url) return (
-    <div className={`${className} w-full rounded-xl grid place-items-center ${CATS[p.cat].tile} relative`}>
-      <div className="flex flex-col items-center gap-1"><Ico n={CATS[p.cat].icon} className="ico-40" /><span className="text-body-sm opacity-80">{f ? 'Cargando foto…' : 'Sin foto'}</span></div>{children}
+    <div className={`${className} w-full rounded-xl grid place-items-center ${catDe(p.cat).tile} relative`}>
+      <div className="flex flex-col items-center gap-1"><Ico n={catDe(p.cat).icon} className="ico-40" /><span className="text-body-sm opacity-80">{f ? 'Cargando foto…' : 'Sin foto'}</span></div>{children}
     </div>);
   return (
-    <button type="button" onClick={() => abrirVisor(f.foto, p.name)} className={`${className} w-full rounded-xl bg-white ring-1 ring-surface-container-high relative overflow-hidden`} aria-label={`Ampliar la foto de ${p.name}`}>
+    <button type="button" onClick={() => abrirVisor(f.foto, p.name)} className={`${className} w-full rounded-xl bg-slate-100 ring-1 ring-surface-container-high relative overflow-hidden`} aria-label={`Ampliar la foto de ${p.name}`}>
       <img src={url} alt={p.name} className="w-full h-full object-contain" />
       <span className="absolute bottom-2 right-2 w-9 h-9 rounded-full bg-black/45 text-white grid place-items-center"><Ico n="zoom_in" className="ico-20" /></span>
       {children}

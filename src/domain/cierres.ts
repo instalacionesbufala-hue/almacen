@@ -44,10 +44,10 @@ export function registrarCierreLocal(S: Estado, c: Cierre, lineas: LineaTraducid
   const eq = S.equipos.find(e => e.nombre.trim().toLowerCase() === c.equipo.trim().toLowerCase());
   const veh = eq ? vehiculoDeEquipo(S, eq.id, fecha) : undefined;
   const apertura = S.configApp.aperturaCierres ?? S.configApp.demoBorrada;
-  if (ci) Object.assign(ci, { version: c.version, numInst: c.numInst, cliente: c.cliente, direccion: c.direccion, fecha, equipoWizard: c.equipo, equipo: eq?.id, vehiculo: ci.vehiculo ?? veh, hardware: c.hardware, despFallido: c.despFallido });
+  if (ci) Object.assign(ci, { version: c.version, numInst: c.numInst, cliente: c.cliente, direccion: c.direccion, fecha, equipoWizard: c.equipo, equipo: eq?.id, vehiculo: ci.vehiculo ?? veh, hardware: c.hardware, despFallido: c.despFallido, datos: { ...c } });
   else {
     ci = { id: uid('C'), clave, version: c.version, numInst: c.numInst, cliente: c.cliente, direccion: c.direccion, fecha, equipoWizard: c.equipo, equipo: eq?.id, vehiculo: veh,
-      hardware: c.hardware, despFallido: c.despFallido, estado: apertura && fecha < apertura ? 'ignorado' : 'aplicado', origen, recibido: Date.now() };
+      hardware: c.hardware, despFallido: c.despFallido, estado: apertura && fecha < apertura ? 'ignorado' : 'aplicado', origen, recibido: Date.now(), datos: { ...c } };
     S.cierres.unshift(ci);
     if (ci.estado === 'ignorado') return { estado: 'ignorado', id: ci.id };
   }

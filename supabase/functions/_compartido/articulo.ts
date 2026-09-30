@@ -1,9 +1,10 @@
 /* E-015 · Alta de artículos con la cámara: prompt, esquema de respuesta y normalización de lo que propone la IA.
    Módulo puro compartido por la función de servidor "leer-articulo" y por las pruebas. La IA PROPONE; el usuario revisa y guarda. */
 
-export const CATEGORIAS = ['cargadores', 'cuadros', 'epis', 'ropa', 'cables', 'tubos', 'fijaciones', 'aparamenta', 'fontaneria'] as const;
+/** E-016: las categorías son configurables; esta es la lista inicial (la función de servidor lee las activas de la tabla) */
+export const CATEGORIAS = ['cargadores', 'cuadros', 'cables', 'tubos', 'fijaciones', 'aparamenta', 'consumibles', 'epis', 'ropa', 'herramientas'];
 export const UNIDADES = ['m', 'ud', 'bote', 'sobre', 'bolsa', 'pack', 'caja'] as const;
-export type Categoria = typeof CATEGORIAS[number];
+export type Categoria = string;
 export type UnidadArt = typeof UNIDADES[number];
 export type TipoArticulo = 'material' | 'herramienta' | 'epi' | 'ropa';
 
@@ -48,40 +49,42 @@ export function unidadDeTexto(texto: string): { unidad: UnidadArt; contenido: nu
   return null;
 }
 
-export function construirPromptArticulo(codigo?: string): string {
-  return `La foto es de un artículo (o de su etiqueta o envase) de un almacén de instalaciones eléctricas, fontanería y movilidad eléctrica en España: material, herramientas, EPIs o ropa de trabajo.
+export function construirPromptArticulo(codigo?: string, categorias: string[] = CATEGORIAS): string {
+  return `La foto es de un artículo (o de su etiqueta o envase) de un almacén de instalaciones eléctricas y puntos de recarga de vehículo eléctrico en España: material, herramientas, EPIs o ropa de trabajo.
 Propón su ficha para darlo de alta. No inventes: deja vacío lo que no se lea.
 - "tipo": material (se gasta en obra), herramienta, epi o ropa.
 - "nombre": nombre corto y claro en español, como lo escribiría el almacén (p. ej. "Bote 1000 tacos nylon SX 6×30", "Magnetotérmico 2P 40 A curva C").
 - "marca", "modelo" y "referencia" (referencia del fabricante o código del proveedor de la etiqueta).
 - "ean": el número del código de barras si se lee entero (8 o 13 cifras).
-- "categoria": una de ${CATEGORIAS.join(', ')}.
+- "categoria": una de ${categorias.join(', ')}.
 - "unidad" y "contenido": cómo se vende y se entrega. Unidades: m (cables, tubos y mangueras que se cortan por metros), ud (una pieza suelta), bote, sobre, bolsa, pack o caja. "contenido" es cuántas unidades trae cada formato (bote de 1000 tacos → unidad bote, contenido 1000). Para m y ud, contenido 1.
 - "talla" solo en ropa y EPIs, si aparece.
 - "confianza" de 0 a 1 y una "nota" breve si algo es dudoso.
 No extraigas precios ni números de serie.${codigo ? `\nEl código leído con el escáner es: ${codigo}` : ''}`;
 }
 
-export const ESQUEMA_ARTICULO = {
+export const esquemaArticulo = (categorias: string[] = CATEGORIAS) => ({
   type: 'OBJECT',
   properties: {
     tipo: { type: 'STRING', enum: ['material', 'herramienta', 'epi', 'ropa'] },
     nombre: { type: 'STRING' }, marca: { type: 'STRING' }, modelo: { type: 'STRING' }, referencia: { type: 'STRING' }, ean: { type: 'STRING' },
-    categoria: { type: 'STRING', enum: [...CATEGORIAS] }, unidad: { type: 'STRING', enum: [...UNIDADES] }, contenido: { type: 'NUMBER' },
+    categoria: { type: 'STRING', enum: [...categorias] }, unidad: { type: 'STRING', enum: [...UNIDADES] }, contenido: { type: 'NUMBER' },
     talla: { type: 'STRING' }, confianza: { type: 'NUMBER' }, nota: { type: 'STRING' },
   },
   required: ['nombre', 'tipo'],
-};
+});
+export const ESQUEMA_ARTICULO = esquemaArticulo();
 
 const txt = (v: unknown) => String(v ?? '').trim();
 
 /** Limpia la propuesta del modelo: categoría y unidad válidas, contenido coherente, EAN solo si cuadra su control */
-export function normalizarArticulo(raw: unknown): ArticuloLeido {
+export function normalizarArticulo(raw: unknown, categorias: string[] = CATEGORIAS): ArticuloLeido {
   const r = (typeof raw === 'string' ? JSON.parse(raw.replace(/^```(?:json)?|```$/g, '').trim()) : raw) as Record<string, unknown>;
   const tipo: TipoArticulo = (['material', 'herramienta', 'epi', 'ropa'] as const).find(t => t === txt(r?.tipo).toLowerCase()) ?? 'material';
-  let categoria = (CATEGORIAS as readonly string[]).includes(txt(r?.categoria).toLowerCase()) ? txt(r?.categoria).toLowerCase() as Categoria : null;
-  if (!categoria && tipo === 'ropa') categoria = 'ropa';
-  if (!categoria && tipo === 'epi') categoria = 'epis';
+  let categoria: Categoria | null = categorias.includes(txt(r?.categoria).toLowerCase()) ? txt(r?.categoria).toLowerCase() : null;
+  if (!categoria && tipo === 'ropa' && categorias.includes('ropa')) categoria = 'ropa';
+  if (!categoria && tipo === 'epi' && categorias.includes('epis')) categoria = 'epis';
+  if (!categoria && tipo === 'herramienta' && categorias.includes('herramientas')) categoria = 'herramientas';
   const nombre = txt(r?.nombre);
   let unidad = (UNIDADES as readonly string[]).includes(txt(r?.unidad).toLowerCase()) ? txt(r?.unidad).toLowerCase() as UnidadArt : null;
   let contenido = Number(r?.contenido) || 0;

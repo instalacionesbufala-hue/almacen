@@ -2,7 +2,7 @@
    1. Para quién (técnico y, si se quiere, la obra) · 2. Qué se entrega (buscador o escáner seguido) · 3. Firma del técnico.
    Nada predeterminado: el almacén elige los artículos. Se puede guardar como preparada (stock reservado) para firmar más tarde. */
 import { useEffect, useMemo, useState } from 'react';
-import { CATS, UNIT } from '../../data/catalogo';
+import { UNIT, categoriasActivas } from '../../data/catalogo';
 import { contenidoTxt, disponibleReal, find, formatoEntero, nombreVehiculo, numEntrega, qtyTxt, searchProducts, status, vehiculoDeEquipo } from '../../domain/reglas';
 import { fechaHora, num } from '../../domain/formato';
 import { aLineas, esPersonal, esPrenda, problemas, variantes } from '../../domain/entregas';
@@ -104,7 +104,7 @@ function PasoMaterial() {
           <button onClick={() => setEscaneando(!escaneando)} className={`${escaneando ? BTN_P : BTN_S} h-14 px-4 shrink-0`} aria-pressed={escaneando}><Icon n={escaneando ? 'close' : 'barcode_scanner'} className="ico-20" /><span className="hidden sm:inline">{escaneando ? 'Parar' : 'Escanear'}</span></button>
         </div>
         {escaneando && <Escaner onLeer={leer} lecturas={lecturas} manual={manual} setManual={setManual} />}
-        {!q && <div className="flex gap-1 overflow-x-auto no-scrollbar -mx-1 px-1">{[['all', 'Todo'] as const, ...Object.entries(CATS).map(([k, v]) => [k, v.label] as const)].map(([k, l]) =>
+        {!q && <div className="flex gap-1 overflow-x-auto no-scrollbar -mx-1 px-1">{[['all', 'Todo'] as const, ...categoriasActivas().map(([k, v]) => [k, v.label] as const)].map(([k, l]) =>
           <button key={k} onClick={() => setCat(k)} className={`shrink-0 px-3 h-11 rounded-full text-body-sm font-semibold ${cat === k ? 'bg-primary text-white' : 'bg-surface-container-low text-on-surface-variant'}`}>{l}</button>)}</div>}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">{prods.length ? prods.map(p => { const d = disponible(p.sku); return (
           <button key={p.sku} onClick={() => anadirACesta(p.sku)} disabled={d <= 0} className="text-left bg-surface-container-low hover:bg-surface-container rounded-xl p-2.5 flex items-center gap-3 disabled:opacity-40 min-h-16">

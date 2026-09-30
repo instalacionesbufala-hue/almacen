@@ -7,6 +7,7 @@ export function crearStore<T>(inicial: T) {
   const subscribe = (f: () => void) => { subs.add(f); return () => subs.delete(f); };
   return {
     get: () => valor,
+    subscribe,
     set(nuevo: T) { valor = nuevo; version++; subs.forEach(f => f()); },
     emit() { version++; subs.forEach(f => f()); },
     use(): T { useSyncExternalStore(subscribe, () => version); return valor; },
