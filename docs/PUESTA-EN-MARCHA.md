@@ -78,7 +78,12 @@ Nadie puede registrarse solo en la app: los usuarios los da de alta el administr
   insert into public.perfiles (id, nombre, email, rol)
   select id, 'César', email, 'admin' from auth.users where email = 'tu-correo@ejemplo.com';
   ```
-  Debe responder *Success. 1 row*. Si pone *0 rows*, el correo no coincide exactamente con el del paso 3.1.
+  Responderá *Success. No rows returned*. Es normal: Supabase contesta así a cualquier `insert`, **se haya guardado o no**. Por eso hay que comprobarlo en el paso 3.3.
+- [ ] 3.3. Comprueba que ha funcionado. Borra el editor, pega esto y pulsa **Run**:
+  ```sql
+  select nombre, email, rol, activo from public.perfiles;
+  ```
+  Tiene que salir una fila con tu nombre, tu correo, `admin` y `true`. Si sale vacío, el correo no coincide con el del paso 3.1. Míralo con `select email from auth.users;` y repite el 3.2 con ese correo copiado tal cual. No repitas el 3.2 si la fila ya sale: daría un error de duplicado.
 
 ## 4. Poner las variables en GitHub
 
@@ -268,7 +273,7 @@ Si los seis pasos salen bien, la app está en marcha.
 |---|---|
 | La app publicada no pide contraseña | Faltan las variables del paso 4, o no has repetido el paso 5.2 tras crearlas. |
 | "Correo o contraseña incorrectos" siendo correctos | En Supabase → Authentication → Users, el usuario debe estar confirmado (paso 3.1, *Auto Confirm User*). |
-| "Tu usuario no tiene acceso" | Falta el paso 3.2 (la fila en `perfiles`). |
+| "Tu usuario no tiene acceso" | Falta el paso 3.2 (la fila en `perfiles`). Compruébalo con el paso 3.3. |
 | "Dar de alta un usuario" da error | La función `usuarios` no está desplegada (paso 6). |
 | En la consola del navegador sale *blocked by CORS policy* | Falta el secreto `ORIGEN_APP` o no coincide con la dirección de la app (paso 6.2). |
 | Los albaranes siguen en modo simulado | Falta `VITE_ALBARANES_URL` o no has repetido el paso 5.2. |
