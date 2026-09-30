@@ -92,7 +92,7 @@ function StockDesk() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-space-md">
               {catProds.length ? catProds.map(p => { const r = status(p) === 'red'; return (
                 <button key={p.sku} onClick={() => abrirFicha(p.sku)} className={`text-left p-space-md rounded-xl ${r ? 'bg-error-container/40' : 'bg-surface-container-low'} hover:shadow-md transition-shadow flex flex-col gap-space-sm`}>
-                  <div className="flex justify-between items-start gap-2"><span className="font-mono text-label-sm text-secondary break-all">SKU: {p.sku}</span><Pill p={p} short /></div>
+                  <div className="flex justify-between items-start gap-2"><span className="font-mono text-label-sm text-secondary whitespace-nowrap">SKU: {p.sku}</span><Pill p={p} short /></div>
                   <div className="relative"><FotoProducto p={p} size="h-24 w-full" alerta={r} icono="ico-40" />{contenidoTxt(p) && <span className="absolute bottom-2 left-2 font-mono text-label-sm bg-white/85 text-on-surface px-2 py-0.5 rounded">{contenidoTxt(p)}</span>}</div>
                   <div><h3 className="text-headline-sm font-semibold line-clamp-2">{p.name}</h3><p className="text-body-sm text-secondary">{p.supplier}</p></div>
                   <div className="flex justify-between items-end pt-space-sm border-t border-surface-container-high">
@@ -163,7 +163,7 @@ function FilaStock({ p, pedido }: { p: Producto; pedido: boolean }) {
   const r = status(p) === 'red';
   return (
     <tr className={r ? 'bg-error-container/20' : ''}>
-      <td><div className="flex items-center gap-2"><Icon n={r ? 'warning' : 'qr_code_2'} className={`${r ? 'text-error' : 'text-secondary'} ico-20`} /><div><div className={`font-mono text-label-md ${r ? 'text-error' : ''} break-all`}>{p.sku}</div>{p.ean && <div className="font-mono text-label-sm text-secondary">EAN {p.ean}</div>}</div></div></td>
+      <td><div className="flex items-center gap-2"><Icon n={r ? 'warning' : 'qr_code_2'} className={`${r ? 'text-error' : 'text-secondary'} ico-20`} /><div><div className={`font-mono text-label-md ${r ? 'text-error' : ''} whitespace-nowrap`}>{p.sku}</div>{p.ean && <div className="font-mono text-label-sm text-secondary">EAN {p.ean}</div>}</div></div></td>
       <td className="max-w-[340px]"><button onClick={() => abrirFicha(p.sku)} className="text-left flex items-center gap-3"><Tile p={p} size="w-11 h-11" /><div><div className="font-semibold hover:text-primary">{p.name}</div><div className="text-body-sm text-secondary">{catDe(p.cat).label} · {p.supplier}{contenidoTxt(p) ? ` · ${contenidoTxt(p)}` : ''}</div></div></button><div className="flex flex-wrap gap-1 mt-1"><TagCustodia p={p} />{p.borrador && <Tag c="bg-amber-100 text-amber-800">Borrador</Tag>}{pedido && <Tag c="bg-amber-100 text-amber-800">Pedido en curso</Tag>}</div></td>
       <td className="max-w-[260px]"><Ubicaciones p={p} /></td>
       <td><div className={`text-headline-sm font-bold ${r ? 'text-error' : ''}`}>{qtyTxt(p, p.stock)}</div><div className={`font-mono text-label-sm ${r ? 'text-error' : 'text-secondary'}`}>Mín: {p.minimoDefinido === false ? 'sin definir' : num(p.min)}</div></td>
