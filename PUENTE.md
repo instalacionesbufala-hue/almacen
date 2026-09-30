@@ -407,9 +407,92 @@ Hoy hay 3 equipos (Búfala 1, 2 y 3), cada uno con 2 técnicos y 1 furgoneta. **
 - Hay pruebas de: detección de duplicado por código, borrador para el rol almacén, propuesta de la IA con unidad y contenido, alta sin IA, y foto guardada como foto del artículo.
 - En el móvil, un alta completa lleva menos de un minuto.
 
+### E-016 · Correcciones tras la primera carga real · PENDIENTE
+**Qué ha visto el chat en la app real (30/09).** El usuario no importó el CSV: dio de alta el stock **leyendo los 5 albaranes con la IA**, y eso ha dejado estos fallos.
+
+**1. Emparejado de albaranes: un código distinto nunca es el mismo artículo (bug)**
+- **Qué pasó en el albarán 3.322.577:**
+  - la línea **6222106082 (moldura Hager 30x12, 20 m)** se registró como **6222110056 (tapa final)**, con +20;
+  - la línea **6222110054 (ángulo interior, 10 ud)** se registró como **6222110053 (ángulo exterior)**, con +10.
+  - El emparejado por descripción ganó a un código que no existía.
+- **Regla nueva:** si la línea trae un código y ese código **no existe** en el catálogo, se propone **"Artículo nuevo"** con ese código. **Nunca** se empareja por descripción con otro artículo que tenga un código distinto. El emparejado por descripción queda solo para líneas **sin código**.
+- **En la revisión:** las líneas "Artículo nuevo" se marcan en amarillo y el usuario puede confirmarlas o reasignarlas a mano.
+- **Hecho cuando:** hay una prueba con estos dos casos reales, en la que moldura y ángulo interior salen como artículos nuevos.
+
+**2. Artículos creados desde un albarán: unidad, formato, categoría y proveedor**
+- **Todo ha entrado en `ud`.** Los cables y tubos (líneas `ML …`) deben ser `m`, y los formatos `BOTE n`, `BOLSA n`, `PACK n`, `SOBRE n` y `KOMMDATA BOLSA 25` deben ser `bote`, `bolsa`, `pack` o `sobre` con su contenido (E-013). Hay que aplicar la misma detección que el CSV del chat al crear artículos desde la lectura con IA.
+- **Proveedor:** es el **emisor** del albarán, nunca el cliente. En el albarán 3.322.832 salió "BUFALA TECH" como proveedor de 7270020010, 6200020032 y 6201000032. Además, hay que normalizar las variantes "Saltoki Centro, S.A." y "SALTOKI ALCOBENDAS" a un único proveedor **Saltoki**, con la delegación aparte.
+- **Categoría:** ahora hay errores como 2804000757 (bolsas de basura) en "Cables", 7280040060 (RJ45) en "Cables" o 6222110055 (ángulo plano) en "Aparamenta". Se usa la misma heurística del CSV (cable → cables; tubo, moldura, ángulo, junta o tapa ATEHA → tubos; Wago o borna → aparamenta; resto → fijaciones), y el usuario puede corregirla en la revisión.
+
+**3. Importar catálogo: opción "Actualizar fichas existentes"**
+- **Qué hace:** una casilla en Configuración → Importar catálogo que, para los SKU que ya existen, **actualiza nombre, categoría, proveedor, unidad y contenido sin tocar el stock**, con una vista previa de los cambios campo a campo. Así el usuario corrige de una vez las 19 fichas con unidad mal importando `datos/catalogo-stock-real.csv`.
+- **Cambio de unidad** (`ud` → `m`, `ud` → `bote`): la cantidad **no se convierte**, porque el número ya es el del albarán (3 botes, 400 m).
+- **Artículos que faltan:** la importación normal ya los crea con su stock de apertura. Hoy faltan 6222106082 (moldura, 20 m), 6222110054 (ángulo interior, 10 ud) y 9900101045 (cinta aislante negra, **20 ud**). **Corrección del usuario:** de la cinta solo llegó la **negra**; el "1" del albarán es un pack de Saltoki que contiene 20 rollos, así que en el almacén son **20 ud**. La cinta blanca (9900101044) **no se ha recibido** y sale del catálogo.
+
+**4. Corregir una línea de un albarán ya ingresado**
+- **Qué hace:** en Albaranes → detalle, la acción **"Reasignar línea"** (solo administrador) mueve la cantidad de una línea del artículo A al B. Genera un par de movimientos de **ajuste enlazados** (−A y +B) con motivo y referencia al albarán, sin borrar nada del historial.
+- **Uso ahora:** con ella el usuario deja bien las dos líneas del punto 1 cuando existan los dos artículos nuevos.
+- **Hecho cuando:** hay una prueba de reasignación (el stock de A baja, el de B sube y el historial conserva el movimiento original y los dos ajustes).
+
+**6. Categorías configurables (decisión del usuario)**
+- **Tabla `categorias`:** id, nombre, icono, color, orden y activa. Sustituye a la lista fija del código.
+- **Gestión desde Configuración → Categorías (solo administrador):** crear, renombrar, cambiar icono y color, reordenar y desactivar. Una categoría con artículos no se borra: se desactiva y la app pide mover sus artículos a otra.
+- **Fuera "Fontanería":** la empresa es de **instalaciones eléctricas, especializada en puntos de recarga**. La categoría se quita de los datos iniciales, de los filtros, del panel y de cualquier texto. Si tiene artículos, pasan a la que elija el usuario.
+- **Categorías iniciales:**
+  - Cargadores VE
+  - Cuadros de protecciones
+  - Cables
+  - Tubos y canalización
+  - Fijaciones
+  - Aparamenta
+  - Consumibles
+  - EPIs
+  - Ropa de trabajo
+  - Herramientas
+- **Mapa de las antiguas:** `tubos` pasa a "Tubos y canalización"; bolsas, cinta y bridas van a "Consumibles".
+- **Reglas que dependen de la categoría** (heurística de importación y de la lectura con IA, y los filtros): usan la tabla, no nombres fijos en el código.
+
+**7. Editar artículos (administrador)**
+- **Botón "Editar"** en la ficha de cada artículo. Se pueden cambiar: nombre, código (SKU) y ref. del proveedor, EAN, categoría, proveedor, propiedad (propia o custodia) y propietario, unidad y contenido, mínimo, notas y foto.
+- **Cambio de SKU:** el historial referencia al artículo por su id interno, así que no se pierde nada. Antes de guardar se avisa si el nuevo código ya existe.
+- **Fusionar dos artículos:** para el caso "esto era el mismo artículo" (como lo del punto 1), el administrador puede **fusionar A en B**. El stock y el historial de A pasan a B mediante un movimiento de ajuste enlazado y A queda archivado, sin borrar nada.
+- **El stock no se edita en la ficha:** se corrige con un ajuste (con motivo) o con "Reasignar línea" (punto 4).
+- **Auditoría:** cada edición queda en la auditoría: quién, cuándo, y el valor anterior y el nuevo de cada campo.
+- **Permisos (E-004):** el personal de almacén no edita fichas; solo puede proponer cambios en borrador, como en el alta.
+
+**8. Equivalencias editables en la app**
+- **Qué debe poder hacer el administrador** desde Configuración → Integraciones, sin tocar ficheros:
+  - crear, editar, duplicar, activar o desactivar y borrar reglas en borrador;
+  - editar la **partida** del wizard, las **condiciones** (campo del cierre, operador y valor), los **artículos** (buscador con foto), la **fórmula** (directa, factor, `floor(m/3)+1`, `ceil(m/0,5)` o kit) y la marca de "estimada".
+- **Probar una regla:** botón "Probar" que aplica las reglas a un cierre de ejemplo, o a uno real ya recibido, y muestra qué descontaría **sin aplicar nada**.
+- **Historial:** una regla confirmada que se edita guarda su versión anterior. Los cierres ya aplicados no se recalculan, salvo que el administrador lo pida para un periodo ("Recalcular cierres desde…"), que genera ajustes enlazados.
+- **Kits de fijación A, B y C:** también se editan aquí (qué artículos y cuántos por fijación).
+
+**5. Otros detalles**
+- **Canaleta:** la equivalencia apunta a 6222106082 (moldura), que hoy no existe. En la lista de equivalencias, avisa en rojo de las reglas cuyo artículo no existe.
+- **Fotos:** las de las bridas incoloras (5102050137 y 5102050149) se ven prácticamente en blanco, porque la foto de Saltoki es transparente sobre blanco. El usuario las sustituirá con la cámara. En las miniaturas, usar un fondo gris muy claro en lugar de blanco para que se distingan las piezas blancas.
+- **Sin foto:** 2804000757 (bolsas de basura) y 8900590300 (Trydan Esmove); se harán con la cámara.
+
 ---
 
 ## Revisión del chat
+
+### 30/09/2026 · Revisión de E-012 a E-015 y de la primera carga real
+Verificado desde el chat sobre `dc8bdc1`:
+- `npm ci`, **257 pruebas en verde**, `tsc -b` sin errores y `npm run build` correcto.
+- `registrar-cierre` valida el hash del token y rechaza los revocados.
+- `portal-tecnico` usa URL firmadas de corta duración.
+- `apps-script-almacen.gs` guarda el token en las Propiedades del script.
+
+En la app real:
+- Los ejemplos están borrados (30/09, 20:03).
+- Los equipos, vehículos y técnicos están dados de alta.
+- 34 de 36 artículos tienen foto.
+- El chat ha cargado las equivalencias como borrador (18 reglas; **falta que el usuario las confirme**).
+- Todavía no hay token ni Apps Script conectado.
+- Los fallos detectados van en **E-016**, junto con lo que el usuario ha pedido después: categorías configurables sin Fontanería, edición de artículos y equivalencias editables en la app.
+
+**Orden: E-016.**
 
 ### 30/09/2026 · Chat: botón de borrar ejemplos, fotos de Saltoki y alta con cámara
 - **E-013:** el botón **"Borrar datos de ejemplo"** en Configuración queda explícito y es lo primero que se hace.
