@@ -1,4 +1,4 @@
-/* E-007 · Entregas preparadas desde plantilla: reserva, caducidad, anulación y confirmación atómica */
+/* E-007 · Entregas preparadas (desde E-011, cesta libre): reserva, caducidad, anulación y confirmación atómica */
 import { beforeAll, describe, expect, it } from 'vitest';
 import { ADMIN, ALMACEN, como, falla, nuevaBD, superusuario, uuid, valor, type BD } from './pg';
 
@@ -93,15 +93,11 @@ describe('confirmar la entrega', () => {
     await superusuario(db);
     expect(await falla(db, 'update entregas set obra = $2 where id = $1', [id, 'otra'])).toMatch(/no se puede modificar/);
   });
-  it('plantillas y tallas: solo el administrador', async () => {
+  it('tallas: solo el administrador (las plantillas quedan sin uso desde E-011)', async () => {
     await como(db, ALMACEN);
-    const pl = JSON.stringify({ id: uuid(), nombre: 'Dotación inicial', lineas: [{ tipo: 'modelo', modelo: 'Pantalón multibolsillos', tipo_talla: 'pantalon', cantidad: 2 }] });
-    expect(await falla(db, 'select guardar_plantilla($1::jsonb)', [pl])).toMatch(/Solo el administrador/);
     expect(await falla(db, 'select guardar_tallas($1, $2, $3, $4, $5)', ['T1', 'L', '44', '42', '9'])).toMatch(/Solo el administrador/);
     await como(db, ADMIN);
-    await db.query('select guardar_plantilla($1::jsonb)', [pl]);
     await db.query('select guardar_tallas($1, $2, $3, $4, $5)', ['T1', 'L', '44', '42', '9']);
-    expect(await valor(db, 'select count(*)::int from plantilla_lineas')).toBe(1);
     expect(await valor(db, "select pantalon from tallas_tecnico where tecnico_id = 'T1'")).toBe('44');
   });
 });

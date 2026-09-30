@@ -1,4 +1,4 @@
-import type { AlbaranIA, CatId, ConfigAvisos, Equipo, Plantilla, Producto, Propietario, Tecnico, TipoMov, Unidad } from './tipos';
+import type { AlbaranIA, CatId, ConfigAvisos, Equipo, Producto, Propietario, Tecnico, TipoMov, Unidad } from './tipos';
 
 /* =========================================================
    Almacén Búfala · datos de prueba y catálogos fijos
@@ -86,7 +86,7 @@ export const SEED_PRODUCTS: Producto[] = [
 
 /* Técnicos (DNI enmascarado: solo se guardan los últimos dígitos) */
 export const SEED_TECNICOS: Tecnico[] = [
-  { id: 'T1', nombre: 'Luis Martín',   rol: 'Oficial 1ª (Líder)',        dni: '***4291-L', tallas: { camiseta: 'L', pantalon: '44', calzado: '42', guantes: '10' } },
+  { id: 'T1', nombre: 'Luis Martín',   rol: 'Oficial 1ª (Líder)',        dni: '***4291-L', email: 'luis.martin@ejemplo.es', tallas: { camiseta: 'L', pantalon: '44', calzado: '42', guantes: '10' } },
   { id: 'T2', nombre: 'Jorge Ruiz',    rol: 'Técnico de apoyo',          dni: '***7730-K', tallas: { camiseta: 'M', pantalon: '42', calzado: '42', guantes: '9' } },
   { id: 'T3', nombre: 'Andrea Pardo',  rol: 'Instaladora especialista VE', dni: '***1188-P' },
   { id: 'T4', nombre: 'Sergio Molina', rol: 'Técnico electricista',      dni: '***5062-R' },
@@ -99,27 +99,6 @@ export const OFICINA = 'Oficina';
 export const CONFIG_AVISOS_DEFECTO: ConfigAvisos = { correoActivo: false, correoModo: 'resumen', correoHora: '08:00', correoRemitente: '', correoDestinatarios: [],
   pushActivo: true, pushModo: 'inmediato', pushHora: '08:00', telegramActivo: false, telegramModo: 'inmediato', telegramHora: '08:00', telegramChatId: '',
   diasRecordatorio: 7, custodiaEnvio: 'manual', informeCustodia: 'mensual', horasReserva: 48 };
-
-/* E-007: plantillas de ejemplo */
-export const SEED_PLANTILLAS: Plantilla[] = [
-  { id: '9b1c0f00-0000-4000-8000-000000000001', nombre: 'Instalación punto de recarga monofásico', descripcion: 'Material para un punto de recarga de 7,4 kW en garaje', modoKit: false, activa: true, lineas: [
-    { tipo: 'stock', sku: 'BF-VE-POL74', cantidad: 1, editable: false },
-    { tipo: 'stock', sku: 'ESM-CPVE-MONO', cantidad: 1, editable: false },
-    { tipo: 'stock', sku: '6040615306', cantidad: 25, editable: true },
-    { tipo: 'stock', sku: 'BF-TUB-CM20', cantidad: 20, editable: true },
-    { tipo: 'stock', sku: 'BF-FIX-SX8', cantidad: 20, editable: true },
-    { tipo: 'stock', sku: '6611500005', cantidad: 1, editable: true } ] },
-  { id: '9b1c0f00-0000-4000-8000-000000000002', nombre: 'Dotación inicial técnico nuevo', descripcion: 'Ropa y EPIs según las tallas de su ficha', modoKit: false, activa: true, lineas: [
-    { tipo: 'modelo', modelo: 'Pantalón multibolsillos', tipoTalla: 'pantalon', cantidad: 2, editable: true },
-    { tipo: 'modelo', modelo: 'Polo alta visibilidad', tipoTalla: 'camiseta', cantidad: 3, editable: true },
-    { tipo: 'modelo', modelo: 'Guantes dieléctricos clase 0', tipoTalla: 'guantes', cantidad: 1, editable: false },
-    { tipo: 'modelo', modelo: 'Calzado de seguridad S3', tipoTalla: 'calzado', cantidad: 1, editable: false } ] },
-  { id: '9b1c0f00-0000-4000-8000-000000000003', nombre: 'Reposición semanal furgoneta', descripcion: 'Contenido objetivo de la furgoneta: se entrega solo lo que falta', modoKit: true, activa: true, lineas: [
-    { tipo: 'stock', sku: 'BF-FIX-SX8', cantidad: 200, editable: true },
-    { tipo: 'stock', sku: 'BF-TUB-CM20', cantidad: 100, editable: true },
-    { tipo: 'stock', sku: 'CAB-RZ1K-5G6', cantidad: 200, editable: true },
-    { tipo: 'stock', sku: '6611500005', cantidad: 2, editable: true } ] },
-];
 
 /* E-008: depositantes de material en custodia */
 export const SEED_PROPIETARIOS: Propietario[] = [{ id: 'ESMOVE', nombre: 'Esmove', contacto: '', correosReposicion: [], correosInformes: [] }];

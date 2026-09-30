@@ -1,6 +1,7 @@
 /* Validaciones de las funciones de servidor (la parte que no depende de Deno) */
 import { describe, expect, it } from 'vitest';
 import { origenPermitido, validarAlta, validarBloqueo, validarClave } from '../functions/_compartido/validar';
+import { estadoCopia, MAX_REINTENTOS, toca, trasIntento } from '../functions/_compartido/envios';
 
 describe('alta de usuarios', () => {
   it('exige correo, nombre, rol válido y contraseña segura', () => {
@@ -46,5 +47,25 @@ describe('E-010 · CORS solo para el origen de la app', () => {
     expect(origenPermitido('https://instalacionesbufala-hue.github.io.malicioso.es', APP)).toBeNull();
     expect(origenPermitido('http://localhost.malicioso.es', APP)).toBeNull();
     expect(origenPermitido(null, APP)).toBeNull();
+  });
+});
+
+describe('E-011 · cola de envíos: reintentos y estado de la copia', () => {
+  it('se reintenta hasta 5 veces y registra el motivo; al enviarse limpia el error', () => {
+    const e = { estado: 'pendiente' as const, reintentos: 0 };
+    expect(toca(e)).toBe(true);
+    const f = trasIntento(e, new Error('Resend 403: You can only send testing emails to your own email address'));
+    expect(f).toMatchObject({ estado: 'error', reintentos: 1, error: expect.stringMatching(/Resend 403/) });
+    expect(toca({ estado: 'error', reintentos: MAX_REINTENTOS - 1 })).toBe(true);
+    expect(toca({ estado: 'error', reintentos: MAX_REINTENTOS })).toBe(false);
+    expect(trasIntento({ estado: 'error', reintentos: 2 })).toEqual({ estado: 'enviado', reintentos: 2, error: null });
+    expect(trasIntento(e, 'x'.repeat(900)).error).toHaveLength(500);
+  });
+  it('estado de la copia de una entrega para la app', () => {
+    expect(estadoCopia([])).toBe('sin-correo');
+    expect(estadoCopia([{ estado: 'descartado', reintentos: 5 }])).toBe('sin-correo');
+    expect(estadoCopia([{ estado: 'error', reintentos: 2 }])).toBe('pendiente');
+    expect(estadoCopia([{ estado: 'error', reintentos: 5 }])).toBe('fallida');
+    expect(estadoCopia([{ estado: 'error', reintentos: 5 }, { estado: 'enviado', reintentos: 0 }])).toBe('enviada');
   });
 });

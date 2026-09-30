@@ -67,8 +67,12 @@ export interface ConfigAvisos {
   diasRecordatorio: number; custodiaEnvio: 'manual' | 'automatico'; informeCustodia: 'semanal' | 'mensual' | 'ninguno';
   /** E-007: horas que dura la reserva de una entrega preparada */
   horasReserva: number;
+  /** E-011: copia de cada entrega firmada también a los destinatarios de correo (administración) */
+  copiaEntregasAdmin?: boolean;
 }
-export interface EnvioAviso { id: string; ts: number; canal: 'correo' | 'push' | 'telegram'; tipo: string; asunto: string; estado: 'pendiente' | 'enviado' | 'error' | 'descartado'; error?: string }
+export interface EnvioAviso { id: string; ts: number; canal: 'correo' | 'push' | 'telegram'; tipo: string; asunto: string; estado: 'pendiente' | 'enviado' | 'error' | 'descartado'; error?: string;
+  /** E-011: copia de una entrega firmada */
+  entrega?: string; destinatarios?: string[]; reintentos?: number }
 export interface ActaCustodia { id: string; numero?: string; ts: number; propietario: string; representante: string; firma: string; lineas: { sku: string; sistema: number; contado: number }[]; hash?: string; operator: string }
 
 export interface Propietario { id: string; nombre: string; contacto: string; correosReposicion: string[]; correosInformes: string[] }
@@ -110,8 +114,10 @@ export interface Tecnico {
   rol: string;
   /** Solo enmascarado: ***1234-X */
   dni: string;
-  /** E-007: tallas para resolver la ropa y los EPIs de las plantillas */
+  /** Tallas: preseleccionan la talla de la ropa y los EPIs en la cesta de entrega */
   tallas?: Tallas;
+  /** E-011: correo al que se envía la copia de sus entregas (opcional) */
+  email?: string;
 }
 
 export interface Equipo {
@@ -148,14 +154,10 @@ export interface Entrega {
   operator: string;
   /** E-007: preparada (stock reservado hasta 'caduca') → firmada | anulada. Sin estado = firmada. */
   estado?: 'preparada' | 'firmada' | 'anulada';
-  plantilla?: string;
   obra?: string;
   caduca?: number;
 }
 
-/* E-007 · Plantillas de entrega */
-export interface LineaPlantilla { tipo: 'stock' | 'modelo' | 'herramienta'; sku?: string; modelo?: string; tipoTalla?: TipoTalla; cantidad: number; editable: boolean }
-export interface Plantilla { id: string; nombre: string; descripcion: string; modoKit: boolean; activa: boolean; lineas: LineaPlantilla[] }
 
 /* Dotación: herramientas, EPIs y ropa de trabajo, con asignación a equipo y/o técnico e historial de incidencias */
 export type ClaseDotacion = 'herramienta' | 'epi' | 'ropa';
@@ -199,6 +201,9 @@ export interface Pedido {
   qty: number;
 }
 
+/** E-011 · Cesta libre de entrega: para quién, qué y en qué paso va */
+export interface Cesta { equipo: string; receptor: string | null; lineas: LineaEntrega[]; obra?: string; paso?: 1 | 2 | 3 }
+
 export interface Estado {
   v: number;
   products: Producto[];
@@ -220,8 +225,8 @@ export interface Estado {
   configAvisos: ConfigAvisos;
   envios: EnvioAviso[];
   actas: ActaCustodia[];
-  plantillas: Plantilla[];
-  cesta: { equipo: string; receptor: string | null; lineas: LineaEntrega[] };
+  /** E-011: entrega en curso (se conserva en el dispositivo si se cierra la app) */
+  cesta: Cesta;
   seq: { ent: number };
 }
 

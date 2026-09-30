@@ -17,8 +17,8 @@ import { toast } from '../ui/toast';
 const LS = modoNube ? 'almacen-bufala-nube-cache-v1' : 'almacen-bufala-v5';
 const LS_OLD = 'almacen-bufala-v2';
 
-export const vacio = (): Estado => ({ v: 3, products: [], movements: [], albaranes: [], equipos: [], tecnicos: [], entregas: [], herramientas: [], propietarios: [], pendientes: [], perfiles: [], rol: 'almacen', avisos: [], minimosHerramienta: [], configAvisos: { ...CONFIG_AVISOS_DEFECTO }, envios: [], actas: [], plantillas: [],
-  operator: '', pedidos: {}, cesta: { equipo: '', receptor: null, lineas: [] }, seq: { ent: 0 } });
+export const vacio = (): Estado => ({ v: 3, products: [], movements: [], albaranes: [], equipos: [], tecnicos: [], entregas: [], herramientas: [], propietarios: [], pendientes: [], perfiles: [], rol: 'almacen', avisos: [], minimosHerramienta: [], configAvisos: { ...CONFIG_AVISOS_DEFECTO }, envios: [], actas: [],
+  operator: '', pedidos: {}, cesta: { equipo: '', receptor: null, lineas: [], obra: '', paso: 1 }, seq: { ent: 0 } });
 
 function migrate(s: Partial<Estado>): Estado {
   const f = (modoNube ? vacio() : fresh()) as unknown as Record<string, unknown>;

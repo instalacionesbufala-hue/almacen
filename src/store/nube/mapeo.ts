@@ -1,5 +1,5 @@
 /* Filas de Supabase → estado de la app (src/data/tipos.ts) */
-import type { Plantilla, ActaCustodia, AvisoReposicion, ConfigAvisos, EnvioAviso, MinimoHerramienta, Pendiente, PerfilUsuario, Rol, Albaran, CatId, ClaseDotacion, Entrega, Equipo, EstadoEquipo, EstadoHerramienta, Estado, Herramienta, Movimiento, Producto, Tecnico, TipoIncidencia, TipoMov, Unidad } from '../../data/tipos';
+import type { ActaCustodia, AvisoReposicion, ConfigAvisos, EnvioAviso, MinimoHerramienta, Pendiente, PerfilUsuario, Rol, Albaran, CatId, ClaseDotacion, Entrega, Equipo, EstadoEquipo, EstadoHerramienta, Estado, Herramienta, Movimiento, Producto, Tecnico, TipoIncidencia, TipoMov, Unidad } from '../../data/tipos';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Fila = Record<string, any>;
@@ -8,12 +8,12 @@ export interface Tablas {
   albaranes: Fila[]; entregas: Fila[]; entrega_lineas: Fila[]; dotacion: Fila[]; costes_dotacion: Fila[];
   dotacion_historial: Fila[]; costes_incidencia: Fila[]; avisos_reposicion: Fila[]; propietarios: Fila[];
   minimos_herramienta: Fila[]; config_avisos: Fila[]; envios_aviso: Fila[]; actas_custodia: Fila[];
-  plantillas_entrega: Fila[]; plantilla_lineas: Fila[]; tallas_tecnico: Fila[];
+  tallas_tecnico: Fila[];
   perfiles: Fila[]; pendientes: Fila[]; valores_pendientes?: Fila[];
 }
 export const TABLAS: (keyof Tablas)[] = ['productos', 'costes_producto', 'series', 'equipos', 'tecnicos', 'movimientos', 'albaranes', 'entregas',
   'entrega_lineas', 'dotacion', 'costes_dotacion', 'dotacion_historial', 'costes_incidencia', 'avisos_reposicion', 'propietarios', 'perfiles', 'pendientes',
-  'minimos_herramienta', 'config_avisos', 'envios_aviso', 'actas_custodia', 'plantillas_entrega', 'plantilla_lineas', 'tallas_tecnico'];
+  'minimos_herramienta', 'config_avisos', 'envios_aviso', 'actas_custodia', 'tallas_tecnico'];
 /** Columnas legibles por cada rol (en pendientes el importe se lee aparte, solo el administrador) */
 export const COLUMNAS: Partial<Record<keyof Tablas, string>> = {
   pendientes: 'id, ts, tipo, sku, cantidad, motivo, referencia, series, operario, estado, resuelto_por, nota_resolucion',
@@ -38,7 +38,7 @@ export function aEstado(t: Tablas, base: Pick<Estado, 'cesta' | 'seq'>, operador
   const equipos: Equipo[] = activos.map(e => ({ id: e.id, nombre: e.nombre, flota: e.flota, matricula: e.matricula, estado: e.estado as EstadoEquipo,
     tecnicos: t.tecnicos.filter(x => x.activo && x.equipo_id === e.id).map(x => x.id) }));
   const tallas = new Map(t.tallas_tecnico.map(x => [x.tecnico_id, { camiseta: x.camiseta ?? undefined, pantalon: x.pantalon ?? undefined, calzado: x.calzado ?? undefined, guantes: x.guantes ?? undefined }]));
-  const tecnicos: Tecnico[] = t.tecnicos.filter(x => x.activo).map(x => ({ id: x.id, nombre: x.nombre, rol: x.rol, dni: x.dni_mascara, tallas: tallas.get(x.id) }));
+  const tecnicos: Tecnico[] = t.tecnicos.filter(x => x.activo).map(x => ({ id: x.id, nombre: x.nombre, rol: x.rol, dni: x.dni_mascara, tallas: tallas.get(x.id), email: x.email ?? undefined }));
   const movements: Movimiento[] = t.movimientos.map(m => ({ id: m.id, ts: ms(m.ts), sku: m.sku, type: m.tipo as TipoMov, qty: n(m.cantidad), reason: m.motivo,
     ref: m.referencia || '', operator: m.operario, serials: m.series || [], equipo: m.equipo_id ?? undefined, entrega: m.entrega_id ?? undefined })).sort((a, b) => b.ts - a.ts);
   const albaranes: Albaran[] = t.albaranes.map(a => ({ numero: a.numero, proveedor: a.proveedor, fecha: a.fecha, lineas: a.lineas, unidades: n(a.unidades),
@@ -46,7 +46,7 @@ export function aEstado(t: Tablas, base: Pick<Estado, 'cesta' | 'seq'>, operador
   const lineas = new Map<string, Fila[]>();
   for (const l of t.entrega_lineas) lineas.set(l.entrega_id, [...(lineas.get(l.entrega_id) || []), l]);
   const entregas: Entrega[] = t.entregas.map(e => ({ id: e.id, numero: e.numero, ts: ms(e.firmada_ts || e.ts), equipo: e.equipo_id, receptor: e.receptor_id, dni: e.dni, firma: e.firma || '', hash: e.hash ?? undefined, operator: e.operario,
-    estado: e.estado, plantilla: e.plantilla_id ?? undefined, obra: e.obra || undefined, caduca: e.caduca ? ms(e.caduca) : undefined,
+    estado: e.estado, obra: e.obra || undefined, caduca: e.caduca ? ms(e.caduca) : undefined,
     lineas: (lineas.get(e.id) || []).sort((a, b) => a.n - b.n).map(l => ({ sku: l.sku ?? '', qty: n(l.cantidad), serials: l.series || [], tipo: l.tipo, dotacion: l.dotacion_id ?? undefined })) })).sort((a, b) => b.ts - a.ts);
   const valor = new Map(t.costes_dotacion.map(c => [c.id, n(c.valor)]));
   const coste = new Map(t.costes_incidencia.map(c => [c.incidencia_id, n(c.coste)]));
@@ -66,9 +66,10 @@ export function aEstado(t: Tablas, base: Pick<Estado, 'cesta' | 'seq'>, operador
   const c = t.config_avisos[0];
   const configAvisos: ConfigAvisos = c ? { correoActivo: c.correo_activo, correoModo: c.correo_modo, correoHora: String(c.correo_hora).slice(0, 5), correoRemitente: c.correo_remitente, correoDestinatarios: c.correo_destinatarios || [],
     pushActivo: c.push_activo, pushModo: c.push_modo, pushHora: String(c.push_hora).slice(0, 5), telegramActivo: c.telegram_activo, telegramModo: c.telegram_modo, telegramHora: String(c.telegram_hora).slice(0, 5),
-    telegramChatId: c.telegram_chat_id, diasRecordatorio: c.dias_recordatorio, custodiaEnvio: c.custodia_envio, informeCustodia: c.informe_custodia, horasReserva: c.horas_reserva ?? 48 }
+    telegramChatId: c.telegram_chat_id, diasRecordatorio: c.dias_recordatorio, custodiaEnvio: c.custodia_envio, informeCustodia: c.informe_custodia, horasReserva: c.horas_reserva ?? 48, copiaEntregasAdmin: !!c.copia_entregas_admin }
     : { correoActivo: false, correoModo: 'resumen', correoHora: '08:00', correoRemitente: '', correoDestinatarios: [], pushActivo: true, pushModo: 'inmediato', pushHora: '08:00', telegramActivo: false, telegramModo: 'inmediato', telegramHora: '08:00', telegramChatId: '', diasRecordatorio: 7, custodiaEnvio: 'manual', informeCustodia: 'mensual', horasReserva: 48 };
-  const envios: EnvioAviso[] = t.envios_aviso.map(e => ({ id: e.id, ts: ms(e.ts), canal: e.canal, tipo: e.tipo, asunto: e.asunto, estado: e.estado, error: e.error ?? undefined })).sort((a, b) => b.ts - a.ts);
+  const envios: EnvioAviso[] = t.envios_aviso.map(e => ({ id: e.id, ts: ms(e.ts), canal: e.canal, tipo: e.tipo, asunto: e.asunto, estado: e.estado, error: e.error ?? undefined,
+    entrega: e.entrega_id ?? undefined, destinatarios: e.destinatarios || [], reintentos: n(e.reintentos) })).sort((a, b) => b.ts - a.ts);
   const actas: ActaCustodia[] = t.actas_custodia.map(a => ({ id: a.id, numero: a.numero, ts: ms(a.ts), propietario: a.propietario_id, representante: a.representante, firma: a.firma,
     lineas: (a.lineas || []).map((l: Fila) => ({ sku: l.sku, sistema: n(l.sistema), contado: n(l.contado) })), hash: a.hash, operator: a.operario })).sort((a, b) => b.ts - a.ts);
   const propietarios = t.propietarios.filter(o => o.activo).map(o => ({ id: o.id, nombre: o.nombre, contacto: o.contacto || '', correosReposicion: o.correos_reposicion || [], correosInformes: o.correos_informes || [] }));
@@ -76,9 +77,5 @@ export function aEstado(t: Tablas, base: Pick<Estado, 'cesta' | 'seq'>, operador
   const pendientes: Pendiente[] = t.pendientes.map(p => ({ id: p.id, ts: ms(p.ts), tipo: p.tipo, sku: p.sku, qty: n(p.cantidad), reason: p.motivo, ref: p.referencia || '',
     serials: p.series || [], operator: p.operario, estado: p.estado, resueltoPor: p.resuelto_por ?? undefined, nota: p.nota_resolucion ?? undefined, valor: valorPend.get(p.id) })).sort((a, b) => b.ts - a.ts);
   const perfiles: PerfilUsuario[] = t.perfiles.map(p => ({ id: p.id, nombre: p.nombre, email: p.email ?? null, rol: p.rol, activo: !!p.activo }));
-  const lp = new Map<string, Fila[]>();
-  for (const l of t.plantilla_lineas) lp.set(l.plantilla_id, [...(lp.get(l.plantilla_id) || []), l]);
-  const plantillas: Plantilla[] = t.plantillas_entrega.filter(p => p.activa).map(p => ({ id: p.id, nombre: p.nombre, descripcion: p.descripcion, modoKit: p.modo_kit, activa: p.activa,
-    lineas: (lp.get(p.id) || []).sort((a, b) => a.n - b.n).map(l => ({ tipo: l.tipo, sku: l.sku ?? undefined, modelo: l.modelo ?? undefined, tipoTalla: l.tipo_talla ?? undefined, cantidad: n(l.cantidad), editable: l.editable })) }));
-  return { v: 3, products, movements, albaranes, equipos, tecnicos, entregas, herramientas, propietarios, pendientes, perfiles, rol, avisos, minimosHerramienta, configAvisos, envios, actas, plantillas, operator: operador, pedidos, cesta: base.cesta, seq: base.seq };
+  return { v: 3, products, movements, albaranes, equipos, tecnicos, entregas, herramientas, propietarios, pendientes, perfiles, rol, avisos, minimosHerramienta, configAvisos, envios, actas, operator: operador, pedidos, cesta: base.cesta, seq: base.seq };
 }

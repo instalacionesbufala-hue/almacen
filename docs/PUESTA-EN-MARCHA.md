@@ -56,7 +56,7 @@ Las "migraciones" son los archivos de `supabase/migrations/`: crean las tablas, 
   ```bash
   npx.cmd supabase db push
   ```
-  Te enseña la lista de migraciones (8 archivos) y pregunta si continúa: escribe `Y` y pulsa Enter. Termina con *Finished supabase db push*.
+  Te enseña la lista de migraciones (9 archivos) y pregunta si continúa: escribe `Y` y pulsa Enter. Termina con *Finished supabase db push*.
 - [ ] 2.4. **(Opcional) Cargar los datos de demostración** (referencias, furgonetas y técnicos de ejemplo). Sirve para probar la app antes de meter lo real:
   ```bash
   npx.cmd supabase db push --include-seed
@@ -193,6 +193,16 @@ Después, cada canal se configura en la app, en **Configuración → Avisos**, d
   - **Sin dominio propio:** usa `Almacén <onboarding@resend.dev>`. Solo llega **a tu propio correo**, el de la cuenta de Resend.
   - **Con dominio propio:** para enviar a otros (por ejemplo, a Esmove), en Resend → **Domains** → **Add domain**. Añade en tu proveedor de dominio los registros DNS que te indica y usa `Almacén <avisos@tudominio.es>`.
 - [ ] 8.4. En la app, en **Configuración → Avisos → Correo**: activa el canal y rellena el remitente y los destinatarios. Pulsa **Guardar configuración de avisos** y luego **Enviar prueba** (desde esta versión, Enviar prueba guarda antes los cambios). Si falta la clave del paso 8.2, el Registro de envíos lo dirá.
+
+### Copia de las entregas a los técnicos (E-011)
+Al firmar una entrega, la app envía al técnico el **PDF del justificante firmado** al correo de su ficha. El correo se puede escribir en la propia pantalla de firma, y lo puede hacer también el personal de almacén.
+
+> **Importante:** para que la copia llegue a los técnicos hace falta un **dominio propio verificado en Resend** (paso 8.3, opción *Con dominio propio*, por ejemplo `avisos.bufalatech.es`). Con `onboarding@resend.dev`, Resend solo entrega al correo de tu cuenta: la copia al técnico sale como *Copia no enviada*.
+>
+> Mientras no tengas dominio, en el albarán de cada entrega están **Compartir PDF** (WhatsApp, correo… desde el móvil) y **Descargar PDF**.
+
+- [ ] 8.4b. *(Opcional)* En **Configuración → Avisos → Correo**, marca **Copia de cada entrega firmada** para recibir tú también cada justificante en los destinatarios de correo.
+- En **Entrega → Últimas entregas** verás si cada copia ha llegado (*Copia enviada*, *Enviando copia*, *Copia no enviada*). En el albarán puedes corregir el correo y pulsar **Reenviar copia**.
 
 ### Notificaciones push en el móvil
 - [ ] 8.5. Genera el par de claves de push en la terminal:

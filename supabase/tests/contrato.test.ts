@@ -114,24 +114,26 @@ describe('contrato de operaciones', () => {
     expect(E.actas[0]).toMatchObject({ representante: 'Ana', lineas: [{ sku: 'ESM-CPVE-TRI', sistema: E.products.find(p => p.sku === 'ESM-CPVE-TRI')!.stock, contado: 1 }] });
   });
 
-  it('operaciones de E-007: plantilla, tallas, preparar, confirmar y anular', async () => {
+  it('operaciones de E-007/E-011: tallas, correo, preparar, confirmar (con copia), reenviar y anular', async () => {
     await como(db, ADMIN);
-    const pid = nuevoId();
-    await rpc(db, { op: 'plantilla', args: { id: pid, nombre: 'Dotación inicial', descripcion: '', modoKit: false, activa: true, lineas: [{ tipo: 'modelo', modelo: 'Polo alta visibilidad', tipoTalla: 'camiseta', cantidad: 2, editable: true }] } });
     await rpc(db, { op: 'tallas', args: { tecnico: 'T2', tallas: { camiseta: 'M', pantalon: '42' } } });
     await como(db, ALMACEN);
     const e1 = nuevoId(), e2 = nuevoId();
-    await rpc(db, { op: 'prepararEntrega', args: { id: e1, equipo: 'F01', receptor: 'T2', obra: 'C/ Eros 10', plantilla: pid, lineas: [{ tipo: 'stock', sku: 'ROPA-POLO-M', qty: 2, serials: [] }] } });
+    await rpc(db, { op: 'prepararEntrega', args: { id: e1, equipo: 'F01', receptor: 'T2', obra: 'C/ Eros 10', lineas: [{ tipo: 'stock', sku: 'ROPA-POLO-M', qty: 2, serials: [] }] } });
     await rpc(db, { op: 'prepararEntrega', args: { id: e2, equipo: 'F01', receptor: 'T2', obra: '', lineas: [{ tipo: 'stock', sku: 'BF-FIX-SX8', qty: 50, serials: [] }] } });
     let E = await estado(db);
-    expect(E.entregas.find(e => e.id === e1)).toMatchObject({ estado: 'preparada', plantilla: pid, obra: 'C/ Eros 10' });
-    expect(E.plantillas.find(p => p.id === pid)!.lineas[0]).toMatchObject({ tipo: 'modelo', tipoTalla: 'camiseta' });
+    expect(E.entregas.find(e => e.id === e1)).toMatchObject({ estado: 'preparada', obra: 'C/ Eros 10' });
     expect(E.tecnicos.find(t => t.id === 'T2')!.tallas).toMatchObject({ camiseta: 'M', pantalon: '42' });
+    await rpc(db, { op: 'emailTecnico', args: { tecnico: 'T2', email: 'jorge@bufalatech.es' } });
     await rpc(db, { op: 'confirmarEntrega', args: { id: e1, firma: 'data:image/png;base64,AA' } });
+    await rpc(db, { op: 'reenviarCopia', args: { entrega: e1 } });
     await rpc(db, { op: 'anularEntrega', args: { id: e2 } });
     E = await estado(db);
     expect(E.entregas.find(e => e.id === e1)!.estado).toBe('firmada');
     expect(E.entregas.find(e => e.id === e2)!.estado).toBe('anulada');
     expect(E.herramientas.some(h => h.clase === 'ropa' && h.talla === 'M' && h.tecnico === 'T2')).toBe(true);
+    // el almacén ve la copia: la primera descartada al reenviar y la nueva pendiente, al correo guardado en la ficha
+    expect(E.tecnicos.find(t => t.id === 'T2')!.email).toBe('jorge@bufalatech.es');
+    expect(E.envios.filter(x => x.entrega === e1).map(x => [x.estado, x.destinatarios])).toEqual(expect.arrayContaining([['pendiente', ['jorge@bufalatech.es']], ['descartado', ['jorge@bufalatech.es']]]));
   });
 });

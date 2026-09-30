@@ -2,9 +2,9 @@
    - aplicarse en local (validación previa con src/domain y respuesta inmediata en pantalla), y
    - traducirse a su función SQL del servidor (la fuente de verdad en modo nube).
    En modo nube la operación se guarda en la cola y se reaplica en local hasta que el servidor la confirma. */
-import type { OrigenFoto, Plantilla, Tallas, ConfigAvisos, Propietario, Rol, CatId, EstadoEquipo, Estado, Herramienta, LineaEntrega, Producto, TipoIncidencia, TipoMov } from '../data/tipos';
+import type { OrigenFoto, Tallas, ConfigAvisos, Propietario, Rol, CatId, EstadoEquipo, Estado, Herramienta, LineaEntrega, Producto, TipoIncidencia, TipoMov } from '../data/tipos';
 import { applyMovement, find, delta, disponibleReal, seriesReservadas } from '../domain/reglas';
-import { herramientasLibres } from '../domain/plantillas';
+import { emailValido, herramientasLibres } from '../domain/entregas';
 import { redondea } from '../domain/formato';
 import { asignarHerramienta, registrarIncidencia } from '../domain/herramientas';
 import { fotoDe, grupoFoto } from '../domain/fotos';
@@ -24,7 +24,7 @@ export type Op =
   | { op: 'equipo'; args: { id: string; nombre: string; flota: string; matricula: string; estado: EstadoEquipo } }
   | { op: 'estadoEquipo'; args: { id: string; estado: EstadoEquipo } }
   | { op: 'retirarEquipo'; args: { id: string; destino?: string } }
-  | { op: 'tecnico'; args: { id: string; nombre: string; rol: string; dni: string; equipo?: string } }
+  | { op: 'tecnico'; args: { id: string; nombre: string; rol: string; dni: string; equipo?: string; email?: string } }
   | { op: 'asignarTecnico'; args: { tecnico: string; equipo?: string } }
   | { op: 'altaDotacion'; args: Herramienta }
   | { op: 'asignarDotacion'; args: { id: string; dotacion: string; equipo?: string; tecnico?: string } }
@@ -41,10 +41,11 @@ export type Op =
   | { op: 'propietario'; args: Propietario }
   | { op: 'cambiarPropiedad'; args: { sku: string; propiedad: 'propia' | 'custodia'; propietario?: string } }
   | { op: 'envio'; args: { canal: 'correo' | 'push' | 'telegram'; tipo: 'prueba' | 'solicitud' | 'informe'; asunto: string; cuerpo: string; destinatarios: string[]; csv?: string } }
-  | { op: 'prepararEntrega'; args: { id: string; equipo: string; receptor: string; obra: string; plantilla?: string; lineas: LineaEntrega[]; numero?: string; caduca?: number } }
+  | { op: 'prepararEntrega'; args: { id: string; equipo: string; receptor: string; obra: string; lineas: LineaEntrega[]; numero?: string; caduca?: number } }
   | { op: 'confirmarEntrega'; args: { id: string; firma: string; hash?: string } }
   | { op: 'anularEntrega'; args: { id: string } }
-  | { op: 'plantilla'; args: Plantilla }
+  | { op: 'emailTecnico'; args: { tecnico: string; email: string } }
+  | { op: 'reenviarCopia'; args: { entrega: string; email?: string } }
   | { op: 'tallas'; args: { tecnico: string; tallas: Tallas } }
   | { op: 'foto'; args: { sku: string; foto: string; mini: string; origen: OrigenFoto } }
   | { op: 'quitarFoto'; args: { sku: string } }
@@ -150,11 +151,13 @@ export const OPS: Defs = {
   tecnico: {
     local: (S, a) => {
       const t = S.tecnicos.find(x => x.id === a.id);
-      if (t) Object.assign(t, { nombre: a.nombre, rol: a.rol, dni: a.dni });
-      else S.tecnicos.push({ id: a.id, nombre: a.nombre, rol: a.rol, dni: a.dni });
+      if (a.email && !emailValido(a.email)) throw new Error(`Correo no válido: ${a.email}`);
+      const email = a.email === undefined ? t?.email : a.email.trim().toLowerCase() || undefined;
+      if (t) Object.assign(t, { nombre: a.nombre, rol: a.rol, dni: a.dni, email });
+      else S.tecnicos.push({ id: a.id, nombre: a.nombre, rol: a.rol, dni: a.dni, email });
       if (a.equipo !== undefined) OPS.asignarTecnico.local(S, { tecnico: a.id, equipo: a.equipo });
     },
-    rpc: a => ['guardar_tecnico', { p_tecnico: { id: a.id, nombre: a.nombre, rol: a.rol, dni_mascara: a.dni, equipo_id: a.equipo ?? '' } }],
+    rpc: a => ['guardar_tecnico', { p_tecnico: { id: a.id, nombre: a.nombre, rol: a.rol, dni_mascara: a.dni, equipo_id: a.equipo ?? '', ...(a.email !== undefined ? { email: a.email } : {}) } }],
     desc: (_S, a) => `Técnico ${a.nombre}`,
   },
   asignarTecnico: {
@@ -261,7 +264,8 @@ export const OPS: Defs = {
     local: (S, a) => { if (S.rol !== 'admin') throw new Error('Solo el administrador puede cambiar la configuración'); S.configAvisos = { ...a }; },
     rpc: a => ['guardar_config_avisos', { p: { correo_activo: a.correoActivo, correo_modo: a.correoModo, correo_hora: a.correoHora, correo_remitente: a.correoRemitente, correo_destinatarios: a.correoDestinatarios,
       push_activo: a.pushActivo, push_modo: a.pushModo, push_hora: a.pushHora, telegram_activo: a.telegramActivo, telegram_modo: a.telegramModo, telegram_hora: a.telegramHora,
-      telegram_chat_id: a.telegramChatId, dias_recordatorio: a.diasRecordatorio, custodia_envio: a.custodiaEnvio, informe_custodia: a.informeCustodia } }],
+      telegram_chat_id: a.telegramChatId, dias_recordatorio: a.diasRecordatorio, custodia_envio: a.custodiaEnvio, informe_custodia: a.informeCustodia,
+      horas_reserva: a.horasReserva, copia_entregas_admin: !!a.copiaEntregasAdmin } }],
     desc: () => 'Configuración de avisos',
   },
   propietario: {
@@ -344,9 +348,9 @@ export const OPS: Defs = {
       }
       const numero = a.numero || (/^ENT-/.test(a.id) ? a.id : undefined);
       S.entregas.unshift({ id: a.id, numero, ts: Date.now(), equipo: a.equipo, receptor: a.receptor, dni: t.dni, lineas: JSON.parse(JSON.stringify(a.lineas)), firma: '', operator: S.operator,
-        estado: 'preparada', plantilla: a.plantilla, obra: a.obra, caduca: a.caduca || Date.now() + (S.configAvisos.horasReserva || 48) * 3600e3 });
+        estado: 'preparada', obra: a.obra, caduca: a.caduca || Date.now() + (S.configAvisos.horasReserva || 48) * 3600e3 });
     },
-    rpc: a => ['preparar_entrega', { p_id: a.id, p_equipo: a.equipo, p_receptor: a.receptor, p_obra: a.obra, p_plantilla: a.plantilla ?? null,
+    rpc: a => ['preparar_entrega', { p_id: a.id, p_equipo: a.equipo, p_receptor: a.receptor, p_obra: a.obra, p_plantilla: null,
       p_lineas: a.lineas.map(l => l.tipo === 'herramienta' ? { tipo: 'herramienta', dotacion_id: l.dotacion } : { tipo: 'stock', sku: l.sku, cantidad: l.qty, series: l.serials }) }],
     desc: (S, a) => `Preparar entrega para ${S.tecnicos.find(t => t.id === a.receptor)?.nombre || a.receptor}`,
   },
@@ -388,18 +392,30 @@ export const OPS: Defs = {
     rpc: a => ['anular_entrega', { p_id: a.id }],
     desc: () => 'Anular entrega preparada',
   },
-  plantilla: {
+  emailTecnico: {
+    // E-011: el almacén puede escribir el correo del técnico al firmar (única edición de la ficha que se le permite)
     local: (S, a) => {
-      if (S.rol !== 'admin') throw new Error('Solo el administrador edita las plantillas');
-      if (!a.nombre.trim()) throw new Error('Indica el nombre de la plantilla');
-      if (a.lineas.some(l => !(l.cantidad > 0))) throw new Error('Las cantidades deben ser mayores que cero');
-      const i = S.plantillas.findIndex(x => x.id === a.id);
-      if (!a.activa) { if (i >= 0) S.plantillas.splice(i, 1); return; }
-      if (i >= 0) S.plantillas[i] = JSON.parse(JSON.stringify(a)); else S.plantillas.push(JSON.parse(JSON.stringify(a)));
+      const t = S.tecnicos.find(x => x.id === a.tecnico); if (!t) throw new Error('Técnico no encontrado');
+      const e = a.email.trim().toLowerCase();
+      if (e && !emailValido(e)) throw new Error(`Correo no válido: ${a.email}`);
+      t.email = e || undefined;
     },
-    rpc: a => ['guardar_plantilla', { p: { id: a.id, nombre: a.nombre, descripcion: a.descripcion, modo_kit: a.modoKit, activa: a.activa,
-      lineas: a.lineas.map(l => ({ tipo: l.tipo, sku: l.sku ?? '', modelo: l.modelo ?? '', tipo_talla: l.tipoTalla ?? '', cantidad: l.cantidad, editable: l.editable })) } }],
-    desc: (_S, a) => `Plantilla ${a.nombre}`,
+    rpc: a => ['guardar_email_tecnico', { p_tecnico: a.tecnico, p_email: a.email.trim() }],
+    desc: (S, a) => `Correo de ${S.tecnicos.find(t => t.id === a.tecnico)?.nombre || a.tecnico}`,
+  },
+  reenviarCopia: {
+    local: (S, a) => {
+      const e = S.entregas.find(x => x.id === a.entrega); if (!e) throw new Error('Entrega no encontrada');
+      if ((e.estado ?? 'firmada') !== 'firmada') throw new Error('Solo se envía copia de una entrega firmada');
+      const t = S.tecnicos.find(x => x.id === e.receptor);
+      if (a.email?.trim()) { if (!emailValido(a.email)) throw new Error(`Correo no válido: ${a.email}`); if (t) t.email = a.email.trim().toLowerCase(); }
+      if (!t?.email && !S.configAvisos.copiaEntregasAdmin) throw new Error('El técnico no tiene correo: escríbelo para enviar la copia');
+      // lo anterior deja de reintentarse; la copia nueva queda pendiente hasta que la envíe el servidor
+      for (const x of S.envios) if (x.entrega === e.id && (x.estado === 'pendiente' || x.estado === 'error')) x.estado = 'descartado';
+      S.envios.unshift({ id: nuevoId(), ts: Date.now(), canal: 'correo', tipo: 'entrega', asunto: `Entrega de material n.º ${e.numero || ''}`, estado: 'pendiente', entrega: e.id, destinatarios: t?.email ? [t.email] : [], reintentos: 0 });
+    },
+    rpc: a => ['reenviar_copia_entrega', { p_entrega: a.entrega, p_email: a.email?.trim() || null }],
+    desc: (S, a) => `Reenviar la copia de ${S.entregas.find(e => e.id === a.entrega)?.numero || 'la entrega'}`,
   },
   tallas: {
     local: (S, a) => { if (S.rol !== 'admin') throw new Error('Solo el administrador edita las tallas'); const t = S.tecnicos.find(x => x.id === a.tecnico); if (!t) throw new Error('Técnico no encontrado'); t.tallas = { ...a.tallas }; },

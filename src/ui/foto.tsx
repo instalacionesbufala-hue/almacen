@@ -141,7 +141,7 @@ export function EditorFoto({ p }: { p: Producto }) {
   );
 }
 
-/** Miniatura para una línea de entrega, plantilla o pedido: artículo por SKU, modelo de ropa/EPI o herramienta */
+/** Miniatura para una línea de entrega o de pedido: artículo por SKU, modelo de ropa/EPI o herramienta */
 export function FotoLinea({ sku, modelo, herramienta, size = 'w-10 h-10' }: { sku?: string; modelo?: string; herramienta?: string; size?: string }) {
   const E = useAlmacen();
   const h = herramienta ? E.herramientas.find(x => x.id === herramienta) : undefined;

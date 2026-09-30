@@ -23,12 +23,12 @@ export function ConfigAvisosPanel() {
   const probar = async (canal: 'correo' | 'push' | 'telegram') => {
     if (!modoNube) return toast('En la demostración no se envían mensajes reales: conecta Supabase (guía de puesta en marcha).', 'warn', 6000);
     // la prueba usa la configuración guardada: si hay cambios sin guardar, se guardan antes (van en orden en la cola)
-    if (cambiado && !ejecutar({ op: 'configAvisos', args: { ...c, correoDestinatarios: dest.split(/[,;s]+/).filter(Boolean) } })) return;
+    if (cambiado && !ejecutar({ op: 'configAvisos', args: { ...c, correoDestinatarios: dest.split(/[,;\s]+/).filter(Boolean) } })) return;
     if (!ejecutar({ op: 'envio', args: { canal, tipo: 'prueba', asunto: 'Prueba de avisos del almacén', cuerpo: 'Si lees esto, el canal funciona.', destinatarios: [] } })) return;
     const e = await procesarAhora(); e ? toast(e, 'err', 7000) : toast('Prueba enviada. Mira el registro de envíos.', 'ok');
   };
   const push = async () => { const e = await activarPush(); e ? toast(e, 'err', 8000) : toast('Este dispositivo recibirá las notificaciones.', 'ok'); };
-  const ultimo = (canal: string) => E.envios.find(x => x.canal === canal);
+  const ultimo = (canal: string) => E.envios.find(x => x.canal === canal && !x.entrega);
   const campoModo = (k: 'correo' | 'push' | 'telegram') => {
     const modo = c[`${k}Modo`] as ModoEnvio, hora = c[`${k}Hora`] as string;
     return <div className="flex flex-wrap items-center gap-2">
@@ -50,7 +50,9 @@ export function ConfigAvisosPanel() {
             {campoModo(ch.k)}
             {ch.k === 'correo' && <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <Campo label="Destinatarios (separados por comas)"><input value={dest} onChange={e => setDest(e.target.value)} className={`${INP} h-10`} placeholder="admin@empresa.es" /></Campo>
-              <Campo label="Remitente (dominio verificado en Resend)"><input value={c.correoRemitente} onChange={e => setC({ ...c, correoRemitente: e.target.value })} className={`${INP} h-10`} placeholder="Almacén <avisos@tudominio.es>" /></Campo></div>}
+              <Campo label="Remitente (dominio verificado en Resend)"><input value={c.correoRemitente} onChange={e => setC({ ...c, correoRemitente: e.target.value })} className={`${INP} h-10`} placeholder="Almacén <avisos@tudominio.es>" /></Campo>
+              <label className="sm:col-span-2 flex items-start gap-2 text-body-sm"><input type="checkbox" checked={!!c.copiaEntregasAdmin} onChange={e => setC({ ...c, copiaEntregasAdmin: e.target.checked })} className="w-5 h-5 mt-0.5 accent-primary" />
+                <span>Copia de cada <b>entrega firmada</b> (PDF) también a estos destinatarios. Al técnico le llega siempre que tenga correo en su ficha.</span></label></div>}
             {ch.k === 'telegram' && <Campo label="chat_id"><input value={c.telegramChatId} onChange={e => setC({ ...c, telegramChatId: e.target.value })} className={`${INP} h-10 font-mono !w-56`} /></Campo>}
             {ch.k === 'push' && <button onClick={() => void push()} disabled={modoNube && !pushDisponible()} className={`${BTN_S} self-start h-10 px-3 text-body-sm`}><Icon n="phonelink_ring" className="ico-18" />Activar en este dispositivo</button>}
             {u?.estado === 'error' && u.error && <p className="text-body-sm text-error">{u.error}</p>}

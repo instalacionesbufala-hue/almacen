@@ -6,13 +6,17 @@ import { createClient, type SupabaseClient } from 'jsr:@supabase/supabase-js@2';
 import webpush from 'npm:web-push@3.6.7';
 import { conCors, json } from '../_compartido/validar.ts';
 import { construirInforme, informeCsv, informeHtml, periodoAnterior, type DatosInforme } from '../_compartido/informe.ts';
+import { construirJustificante, nombreArchivo, type ConstructorPdf } from '../_compartido/justificante.ts';
+import { MAX_REINTENTOS, trasIntento } from '../_compartido/envios.ts';
+import { jsPDF } from 'npm:jspdf@3.0.4';
 
 const URL = Deno.env.get('SUPABASE_URL')!;
 const ANON = Deno.env.get('SUPABASE_ANON_KEY')!;
 const SERVICIO = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const env = (k: string) => Deno.env.get(k) || '';
 
-type Envio = { id: string; canal: 'correo' | 'push' | 'telegram'; tipo: string; asunto: string; cuerpo: string; destinatarios: string[]; adjunto_csv: string | null; reintentos: number };
+type Envio = { id: string; canal: 'correo' | 'push' | 'telegram'; tipo: string; asunto: string; cuerpo: string; destinatarios: string[]; adjunto_csv: string | null; reintentos: number; entrega_id: string | null; estado: 'pendiente' | 'error' };
+type Adjunto = { filename: string; content: string };
 
 Deno.serve(conCors(async (req) => {
   let cuerpo: Record<string, unknown> = {};
@@ -37,24 +41,25 @@ Deno.serve(conCors(async (req) => {
 
 async function procesar(db: SupabaseClient) {
   const { data: config } = await db.from('config_avisos').select('*').eq('id', 1).single();
-  const { data: cola } = await db.from('envios_aviso').select('*').in('estado', ['pendiente', 'error']).lt('reintentos', 5).order('ts').limit(50);
+  const { data: cola } = await db.from('envios_aviso').select('*').in('estado', ['pendiente', 'error']).lt('reintentos', MAX_REINTENTOS).order('ts').limit(50);
   let enviados = 0, errores = 0;
   for (const e of (cola || []) as Envio[]) {
     try {
-      if (e.canal === 'correo') await enviarCorreo(e, config?.correo_remitente);
+      // E-011: la copia de una entrega lleva el justificante firmado en PDF, generado aquí con los datos del servidor
+      if (e.canal === 'correo') await enviarCorreo(e, config?.correo_remitente, e.entrega_id ? [await adjuntoEntrega(db, e.entrega_id)] : []);
       else if (e.canal === 'push') await enviarPush(db, e);
       else await enviarTelegram(e, config?.telegram_chat_id);
-      await db.from('envios_aviso').update({ estado: 'enviado', enviado_ts: new Date().toISOString(), error: null }).eq('id', e.id);
+      await db.from('envios_aviso').update({ ...trasIntento(e), enviado_ts: new Date().toISOString() }).eq('id', e.id);
       enviados++;
     } catch (err) {
-      await db.from('envios_aviso').update({ estado: 'error', error: String((err as Error).message).slice(0, 500), reintentos: e.reintentos + 1 }).eq('id', e.id);
+      await db.from('envios_aviso').update(trasIntento(e, err)).eq('id', e.id);
       errores++;
     }
   }
   return { enviados, errores };
 }
 
-async function enviarCorreo(e: Envio, remitente?: string) {
+async function enviarCorreo(e: Envio, remitente?: string, adjuntos: Adjunto[] = []) {
   if (!env('RESEND_API_KEY')) throw new Error('Falta el secreto RESEND_API_KEY');
   if (!e.destinatarios?.length) throw new Error('Sin destinatarios');
   const esHtml = e.cuerpo.trim().startsWith('<');
@@ -63,10 +68,43 @@ async function enviarCorreo(e: Envio, remitente?: string) {
     body: JSON.stringify({
       from: remitente || 'Almacén <onboarding@resend.dev>', to: e.destinatarios, subject: e.asunto,
       ...(esHtml ? { html: e.cuerpo } : { text: e.cuerpo }),
-      ...(e.adjunto_csv ? { attachments: [{ filename: 'informe.csv', content: btoa(unescape(encodeURIComponent(e.adjunto_csv))) }] } : {}),
+      ...(e.adjunto_csv || adjuntos.length ? { attachments: [...(e.adjunto_csv ? [{ filename: 'informe.csv', content: btoa(unescape(encodeURIComponent(e.adjunto_csv))) }] : []), ...adjuntos] } : {}),
     }),
   });
   if (!r.ok) throw new Error(`Resend ${r.status}: ${await r.text()}`);
+}
+
+function base64(buf: ArrayBuffer): string {
+  const b = new Uint8Array(buf); let s = '';
+  for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode(...b.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+const cifra = (n: number) => new Intl.NumberFormat('es-ES', { maximumFractionDigits: 3 }).format(n);
+
+/** Justificante firmado de una entrega, en PDF (sin fotos: el servidor no convierte WebP; el PDF de la app sí las lleva) */
+async function adjuntoEntrega(db: SupabaseClient, id: string): Promise<Adjunto> {
+  const { data: e, error } = await db.from('entregas').select('*').eq('id', id).single();
+  if (error || !e) throw new Error('Entrega no encontrada para el justificante');
+  const { data: lineas } = await db.from('entrega_lineas').select('*').eq('entrega_id', id).order('n');
+  const skus = (lineas || []).map(l => l.sku).filter(Boolean);
+  const dots = (lineas || []).map(l => l.dotacion_id).filter(Boolean);
+  const [{ data: prods }, { data: dotacion }, { data: t }, { data: eq }] = await Promise.all([
+    db.from('productos').select('sku, nombre, unidad').in('sku', skus.length ? skus : ['-']),
+    db.from('dotacion').select('id, nombre, serie').in('id', dots.length ? dots : ['-']),
+    db.from('tecnicos').select('nombre').eq('id', e.receptor_id).single(),
+    db.from('equipos').select('nombre, flota, matricula').eq('id', e.equipo_id).single(),
+  ]);
+  const p = new Map((prods || []).map(x => [x.sku, x]));
+  const d = new Map((dotacion || []).map(x => [x.id, x]));
+  const pdf = construirJustificante(jsPDF as unknown as ConstructorPdf, {
+    numero: e.numero, fecha: new Date(e.firmada_ts || e.ts).getTime(),
+    equipo: eq ? `${eq.nombre} · ${eq.flota} (${eq.matricula})` : e.equipo_id, receptor: t?.nombre || e.receptor_id, dni: e.dni, obra: e.obra || undefined,
+    lineas: (lineas || []).map(l => l.tipo === 'herramienta'
+      ? { nombre: d.get(l.dotacion_id)?.nombre || l.dotacion_id, codigo: d.get(l.dotacion_id)?.serie || '', cantidad: '1 ud', series: [] }
+      : { nombre: p.get(l.sku)?.nombre || l.sku, codigo: l.sku, cantidad: `${cifra(Number(l.cantidad))} ${p.get(l.sku)?.unidad || 'ud'}`, series: l.series || [] }),
+    firma: e.firma, hash: e.hash, operador: e.operario,
+  });
+  return { filename: nombreArchivo(e.numero), content: base64(pdf) };
 }
 
 async function enviarPush(db: SupabaseClient, e: Envio) {

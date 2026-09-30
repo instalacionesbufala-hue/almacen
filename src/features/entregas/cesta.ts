@@ -1,49 +1,28 @@
-/* Cesta de entrega (almacén → furgoneta). Se guarda en el estado para no perderla al cambiar de pantalla. */
-import { find, qtyTxt } from '../../domain/reglas';
-import { redondea } from '../../domain/formato';
+/* E-011 · Cesta de entrega en curso. Vive en el estado (se guarda en el dispositivo: si se cierra la app, se conserva).
+   Las reglas están en src/domain/entregas.ts; aquí solo se guardan los cambios y se avisa. */
+import type { Cesta } from '../../data/tipos';
+import * as D from '../../domain/entregas';
 import { guardar, S } from '../../store/almacen';
 import { toast } from '../../ui/toast';
 
-export function disponible(sku: string) {
-  const E = S(), p = find(E, sku); if (!p) return 0;
-  const l = E.cesta.lineas.find(x => x.sku === sku);
-  return redondea(p.stock - (l ? l.qty : 0));
-}
+export const cesta = (): Cesta => { const E = S(); E.cesta.obra ??= ''; E.cesta.paso ??= 1; return E.cesta; };
+const hecho = (r: D.Resultado, silencio = false) => { guardar(); if (r.aviso && !silencio) toast(r.aviso, r.ok ? 'ok' : 'warn'); return r; };
 
-export function anadirACesta(sku: string, n?: number) {
-  const E = S(), p = find(E, sku); if (!p) return;
-  const paso = n ?? (p.unit === 'm' ? 10 : 1);
-  let l = E.cesta.lineas.find(x => x.sku === sku);
-  if (!l) { l = { sku, qty: 0, serials: [] }; E.cesta.lineas.push(l); }
-  if (p.serialized) {
-    const libre = (p.serials || []).find(s => !l!.serials.includes(s));
-    if (!libre) toast(`No quedan más ${p.name} en stock.`, 'warn');
-    else { l.serials.push(libre); l.qty = l.serials.length; }
-  } else if (l.qty + paso > p.stock) { toast(`Solo hay ${qtyTxt(p, p.stock)} de ${p.name}.`, 'warn'); l.qty = p.stock; }
-  else l.qty = redondea(l.qty + paso);
-  E.cesta.lineas = E.cesta.lineas.filter(x => x.qty > 0);
+export const anadirACesta = (sku: string) => hecho(D.anadir(S(), cesta(), sku));
+export const sumarUno = (sku: string) => hecho(D.sumar(S(), cesta(), sku));
+export const quitarDeCesta = (sku: string) => { D.restar(S(), cesta(), sku); guardar(); };
+export const fijarCantidad = (sku: string, q: number) => hecho(D.fijar(S(), cesta(), sku, q));
+export const alternarSerie = (sku: string, serie: string) => hecho(D.alternarSerie(S(), cesta(), sku, serie));
+export const cambiarTalla = (sku: string, nuevo: string) => hecho(D.cambiarTalla(S(), cesta(), sku, nuevo));
+/** Lectura del escáner seguido: devuelve el resultado para que la pantalla lo muestre en su registro */
+export const escanearEnCesta = (raw: string) => hecho(D.escanear(S(), cesta(), raw), true);
+export const disponible = (sku: string) => { const E = S(), p = E.products.find(x => x.sku === sku); return p ? D.disponibleEnCesta(E, cesta(), p) : 0; };
+
+export function paraQuien(receptor: string) {
+  const E = S(), c = cesta(), eq = E.equipos.find(e => e.tecnicos.includes(receptor));
+  c.receptor = receptor; c.equipo = eq?.id || '';
   guardar();
 }
-
-export function quitarDeCesta(sku: string) {
-  const E = S(), p = find(E, sku), l = E.cesta.lineas.find(x => x.sku === sku); if (!p || !l) return;
-  if (p.serialized) { l.serials.pop(); l.qty = l.serials.length; }
-  else l.qty = Math.max(0, redondea(l.qty - (p.unit === 'm' ? 10 : 1)));
-  E.cesta.lineas = E.cesta.lineas.filter(x => x.qty > 0);
-  guardar();
-}
-
-export function fijarCantidad(sku: string, q: number) {
-  const E = S(), p = find(E, sku), l = E.cesta.lineas.find(x => x.sku === sku); if (!p || !l || !(q >= 0)) return;
-  l.qty = Math.min(q, p.stock);
-  E.cesta.lineas = E.cesta.lineas.filter(x => x.qty > 0);
-  guardar();
-}
-
-export function alternarSerie(sku: string, s: string) {
-  const E = S(), l = E.cesta.lineas.find(x => x.sku === sku); if (!l) return;
-  l.serials = l.serials.includes(s) ? l.serials.filter(x => x !== s) : [...l.serials, s];
-  l.qty = l.serials.length;
-  E.cesta.lineas = E.cesta.lineas.filter(x => x.qty > 0);
-  guardar();
-}
+export const irAPaso = (paso: 1 | 2 | 3) => { cesta().paso = paso; guardar(); };
+export const fijarObra = (obra: string) => { cesta().obra = obra; guardar(); };
+export function vaciarCesta() { const c = cesta(); c.lineas = []; c.obra = ''; c.paso = 1; guardar(); }

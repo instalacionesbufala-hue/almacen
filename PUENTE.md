@@ -209,7 +209,7 @@ Las imágenes de Saltoki Online tienen nombres internos que no corresponden con 
 - Las miniaturas cargan rápido en una lista de 200 artículos por datos móviles.
 - La foto se muestra también en el justificante PDF de entrega de E-007 (miniatura por línea) y en el informe de custodia para Esmove.
 
-### E-011 · Entregas libres con firma y copia por correo · PENDIENTE
+### E-011 · Entregas libres con firma y copia por correo · HECHO
 **Decisión del usuario:** las plantillas de E-007 **no son como las quiere**. No quiere nada predeterminado. Quiere un lugar donde **seleccionar los artículos** de cada entrega y que después **el técnico firme**. Este encargo sustituye el flujo de plantillas.
 
 **1. Quitar lo predeterminado**
@@ -630,3 +630,71 @@ Cubren también el formato de cantidades, las respuestas envueltas en ```json y 
 **Decisiones:**
 - Si el administrador sustituye o quita una foto sin cobertura, el archivo viejo puede quedar huérfano en el bucket. No se ve ni ocupa casi nada.
 - Pendiente para el chat: preparar las fotos de Saltoki como `<código>.webp` (punto 4). Code no se conecta a Saltoki.
+
+### 30/09/2026 · E-011 · HECHO
+**1. Sin nada predeterminado**
+- Fuera de la interfaz: la sección Plantillas, el selector de plantilla, "Preparar desde plantilla" (también el botón de Equipos) y el modo kit. `grep -ri plantilla src` solo da comentarios de código.
+- Borrados `Plantillas.tsx`, `domain/plantillas.ts` (con su prueba), `SEED_PLANTILLAS` y la operación `plantilla`.
+- Migración `20261003000100_e011_entregas_libres.sql`:
+  - `plantillas_entrega` y `plantilla_lineas` se conservan con sus datos, con un comentario "SIN USO desde E-011";
+  - se retira el permiso de ejecutar `guardar_plantilla`;
+  - la app ya no carga esas tablas.
+- Se conservan de E-007 la reserva, la caducidad, `confirmar_entrega` atómica, la huella, la firma en pantalla grande y las tallas del técnico (ahora sirven para preseleccionar la talla).
+
+**2. Nueva entrega en tres pasos** (`EntregasView.tsx`, botones de 56 px)
+1. **Para quién:**
+   - buscador de técnicos por nombre, equipo o furgoneta, con un icono si tiene correo;
+   - un técnico sin equipo sale desactivado, porque el servidor lo exige;
+   - obra opcional.
+2. **Material:**
+   - buscador con foto, nombre, SKU y disponible (stock menos lo reservado) y filtros por categoría;
+   - **escáner en modo seguido**: cámara en la misma pantalla, cada lectura suma, con un registro de las últimas lecturas y vibración; también se puede escribir el código;
+   - cada línea tiene − y +, talla en la línea (ropa y EPIs; sale la de la ficha y se cambia con un desplegable), n.º de serie en los cargadores (leído o elegido) y avisos de stock o de serie en la propia línea;
+   - "Guardar preparada" reserva el stock durante `horasReserva`.
+3. **Firma:** resumen grande con fotos y cantidades, correo de la copia, firma con el dedo y "Firmar y recibir". Por dentro hace preparar y confirmar seguidos en la cola.
+- La **cesta** está en `Estado.cesta` (con `obra` y `paso`) y se guarda en el dispositivo.
+- Reglas puras en `src/domain/entregas.ts`; la tienda (`features/entregas/cesta.ts`) solo guarda y avisa.
+- El hook de cámara pasa a `features/escaner/camara.ts`, compartido con el escáner, con `pausarConModal` y `repetirMs`.
+
+**3. Correo y copia**
+- **Correo del técnico:**
+  - `tecnicos.email`, validado en la base de datos y en la app;
+  - `guardar_email_tecnico` lo puede usar cualquier usuario activo, y es lo único que el almacén puede editar de la ficha;
+  - `guardar_tecnico` (administrador) también lo acepta;
+  - en Equipos → Técnicos se ve y se edita, y el alta de técnico lo pide.
+- **Envío al firmar:**
+  - `confirmar_entrega` encola la copia **en la misma transacción** (`_encolar_copia_entrega`), con destino el técnico y, si se marca en Configuración → Avisos, también la administración (`copia_entregas_admin`);
+  - asunto del tipo "Entrega de material n.º ENT-2026-0413 · 30/09/2026";
+  - si el técnico no tiene correo, no se encola nada.
+- **PDF:**
+  - `notificar` genera el justificante firmado con `_compartido/justificante.ts` y `npm:jspdf` y lo adjunta en Resend; comprobado en Deno, firma PNG incluida;
+  - la app usa el mismo generador, ahora con `jspdf` empaquetado en un trozo aparte en lugar del CDN, así que el PDF se genera sin conexión y con las fotos.
+- **Registro y reenvío:**
+  - `envios_aviso.entrega_id`; el almacén puede leer esas filas (política `envios_entregas`), pero no el resto del registro;
+  - "Últimas entregas" y el albarán muestran si llegó la copia (enviada, enviando, no enviada o sin copia);
+  - `reenviar_copia_entrega(id, correo?)` descarta los intentos anteriores y encola uno nuevo, guardando el correo si se escribe;
+  - reintentos: hasta 5, con la regla pura en `_compartido/envios.ts`.
+- **Sin dominio en Resend:** la pantalla de firma y el albarán avisan. El albarán tiene "Compartir PDF" (compartir nativo del móvil; si no se puede, descarga) y "Descargar PDF". La guía, paso 8, tiene un apartado nuevo que explica que hace falta un dominio verificado.
+
+**Pruebas:** 160 en verde (`npm test`, de ellas 92 de base de datos).
+- `src/domain/entregas.test.ts` (10): escaneo repetido que suma, QR de cargador con serie sin duplicar, códigos desconocidos, talla preseleccionada y editable, límites de stock, serie obligatoria, reserva y su caducidad, firma atómica, y correo y reenvío.
+- `supabase/tests/e011.test.ts` (7): correo, copia encolada al firmar sin duplicar, copia al administrador, sin correo, reenvío con registro, visibilidad para el almacén, serie obligatoria y plantillas sin uso.
+- `funciones.test.ts`: reintentos y estado de la copia.
+- `contrato.test.ts` actualizado.
+- `tsc -b` sin errores, `npm run build` correcto y `deno check` de las tres funciones sin errores.
+
+**Probado en el navegador (modo demostración, móvil):**
+- flujo completo: técnico → pantalón (sale en talla 44 por la ficha de Luis) → un código leído dos veces suma 2 → QR de cargador con serie (repetido, avisa) → código desconocido (avisa) → firma → stock descontado, huella, cesta vacía y albarán con Compartir, Descargar e Imprimir;
+- el PDF se genera;
+- "Guardar preparada" reserva el material 48 h, que se firma después desde la lista, guardando el correo nuevo en la ficha;
+- un correo mal escrito bloquea la firma.
+
+**Desplegado:** la migración y `notificar` en el Supabase del usuario, comprobado con una consulta de solo lectura.
+
+**Sin verificar aquí:** el envío real del correo con el adjunto. Con `onboarding@resend.dev` solo llegaría al correo del administrador; hace falta que el usuario verifique su dominio en Resend.
+
+**Decisiones:**
+- En la cesta libre solo hay artículos del catálogo. Las **herramientas** de la dotación se siguen asignando desde Herramientas, EPIs y ropa. Las entregas preparadas antiguas con herramientas se siguen pudiendo firmar.
+- El PDF del correo va **sin fotos**: el servidor no convierte WebP. El PDF de la app sí las lleva.
+- En la nube, si el que firma es administrador, la copia sale al momento. Si es del almacén, la envía la tarea programada en menos de un minuto.
+- Corregido de paso un fallo mío de ayer en Configuración → Avisos: "Enviar prueba" con cambios sin guardar partía los destinatarios por la letra "s" (a la expresión le faltaba una barra).

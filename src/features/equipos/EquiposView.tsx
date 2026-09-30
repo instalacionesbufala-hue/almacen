@@ -15,8 +15,7 @@ import { ir, setUI, useEsEscritorio, useUI } from '../../store/ui';
 import { closeModal, openModal, SheetFoot, SheetHead } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 import { Avatar, BTN_P, BTN_S, BTN_T, CARD, Campo, ESTADO_EQ, FirmaImg, Icon, INP, LBL, Vacio } from '../../ui/base';
-import { abrirRecibo } from '../entregas/EntregasView';
-import { abrirPreparar, abrirTallas } from '../entregas/Plantillas';
+import { abrirRecibo, abrirTallas } from '../entregas/Hojas';
 
 export default function EquiposView() {
   const E = useAlmacen(), u = useUI(), { gestionarFlota } = usePermisos();
@@ -38,8 +37,10 @@ export default function EquiposView() {
         ? <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4 lg:gap-space-lg">{E.equipos.map(e => <CardEquipo key={e.id} e={e} />)}</div>
         : <div className={`${CARD} overflow-hidden`}>{E.tecnicos.map(t => { const e = E.equipos.find(x => x.tecnicos.includes(t.id)), dot = herramientasDe(E, { tecnico: t.id }); return (
           <div key={t.id} className="flex flex-wrap items-center gap-3 p-4 border-b border-surface-container"><Avatar n={t.nombre} />
-            <div className="flex-1 min-w-[160px]"><div className="font-semibold">{t.nombre}</div><div className="font-mono text-label-sm text-secondary">{t.rol} · DNI {t.dni} · {dot.length} en dotación · tallas {t.tallas ? Object.values(t.tallas).filter(Boolean).join('/') || '—' : '—'}</div></div>
+            <div className="flex-1 min-w-[160px]"><div className="font-semibold">{t.nombre}</div><div className="font-mono text-label-sm text-secondary">{t.rol} · DNI {t.dni} · {dot.length} en dotación · tallas {t.tallas ? Object.values(t.tallas).filter(Boolean).join('/') || '—' : '—'}</div>
+              <div className="text-body-sm text-secondary flex items-center gap-1"><Icon n="mail" className="ico-16" />{t.email || 'Sin correo'}</div></div>
             {gestionarFlota && <button onClick={() => abrirTallas(t.id)} className="text-primary text-body-sm font-semibold">Tallas</button>}
+            {gestionarFlota && <button onClick={() => { const v = prompt(`Correo de ${t.nombre} (vacío para quitarlo):`, t.email || ''); if (v !== null && ejecutar({ op: 'emailTecnico', args: { tecnico: t.id, email: v } })) toast('Correo guardado.', 'ok'); }} className="text-primary text-body-sm font-semibold">Correo</button>}
             <label className="flex items-center gap-2"><span className={LBL}>Equipo</span>
               <select disabled={!gestionarFlota} value={e?.id || ''} onChange={ev => { if (ejecutar({ op: 'asignarTecnico', args: { tecnico: t.id, equipo: ev.target.value || undefined } })) toast('Asignación actualizada.', 'ok'); }} className={`${INP} !w-auto h-11`}>
                 <option value="">— Sin equipo —</option>{E.equipos.map(x => <option key={x.id} value={x.id}>{x.nombre} ({x.matricula})</option>)}</select></label>
@@ -57,7 +58,8 @@ function CardEquipo({ e }: { e: Equipo }) {
   const dot = herramientasDe(E, { equipo: e.id }), avis = new Set(avisosDotacion(E).map(h => h.id)), dotAvisos = dot.filter(h => avis.has(h.id)).length;
   const cambiarEstado = () => { const ks = Object.keys(ESTADO_EQ) as EstadoEquipo[]; ejecutar({ op: 'estadoEquipo', args: { id: e.id, estado: ks[(ks.indexOf(e.estado) + 1) % ks.length] } }); };
   const verVan = () => { setUI({ almacen: e.id }); ir('stock'); };
-  const cargar = () => { E.cesta.equipo = e.id; guardar(); ir('entregas'); };
+  // E-011: abre la entrega con el primer técnico del equipo ya elegido (se puede cambiar en el paso 1)
+  const cargar = () => { E.cesta.equipo = e.id; E.cesta.receptor = e.tecnicos[0] ?? null; E.cesta.paso = e.tecnicos[0] ? 2 : 1; guardar(); ir('entregas'); };
   return (
     <article className={`${CARD} p-4 lg:p-space-md flex flex-col gap-3`}>
       <div className="flex items-start gap-3"><span className="w-12 h-12 rounded-xl bg-surface-container-low text-primary grid place-items-center shrink-0"><Icon n={e.tecnicos.length > 1 ? 'airport_shuttle' : 'directions_car'} /></span>
@@ -78,8 +80,7 @@ function CardEquipo({ e }: { e: Equipo }) {
       <div className="mt-auto flex flex-col gap-2">
         {!gestionarFlota ? null : e.tecnicos.length > 1 ? <button onClick={() => abrirFormEquipo(e)} className={`${BTN_T} h-11`}><Icon n="call_split" className="ico-20" />Desdoblar en técnicos (1+1)</button>
           : <button onClick={() => abrirEmparejar(e.id)} className={`${BTN_T} h-11`}><Icon n="call_merge" className="ico-20" />Formar pareja</button>}
-        <div className="grid grid-cols-[1fr_auto] gap-2"><button onClick={cargar} className={`${BTN_P} h-12`}><Icon n="inventory" className="ico-20" />{e.estado === 'depot' ? 'Asignar material para la ruta de hoy' : 'Gestionar carga de furgoneta'}</button>
-          <button onClick={() => abrirPreparar(e.id)} title="Preparar desde plantilla (p. ej. reposición semanal)" className={`${BTN_T} h-12 px-3`}><Icon n="playlist_add_check" className="ico-20" /></button></div>
+        <button onClick={cargar} className={`${BTN_P} h-12`}><Icon n="inventory" className="ico-20" />{e.estado === 'depot' ? 'Asignar material para la ruta de hoy' : 'Gestionar carga de furgoneta'}</button>
       </div>
     </article>
   );
@@ -167,12 +168,12 @@ function abrirEmparejar(id: string) {
 /* ---------- Nuevo técnico ---------- */
 const abrirFormTecnico = () => openModal(<FormTecnico />);
 function FormTecnico() {
-  const [f, setF] = useState({ nombre: '', rol: 'Técnico electricista', dni: '' });
+  const [f, setF] = useState({ nombre: '', rol: 'Técnico electricista', dni: '', email: '' });
   const crear = () => {
     if (!f.nombre.trim()) return toast('Indica el nombre.', 'err');
     const d = f.dni.replace(/\W/g, '').toUpperCase();
     // el DNI completo nunca sale del navegador: solo se guarda enmascarado
-    if (!ejecutar({ op: 'tecnico', args: { id: uid('T'), nombre: f.nombre.trim(), rol: f.rol.trim() || 'Técnico', dni: d.length >= 5 ? `***${d.slice(-5, -1)}-${d.slice(-1)}` : (d || '—') } })) return;
+    if (!ejecutar({ op: 'tecnico', args: { id: uid('T'), nombre: f.nombre.trim(), rol: f.rol.trim() || 'Técnico', dni: d.length >= 5 ? `***${d.slice(-5, -1)}-${d.slice(-1)}` : (d || '—'), email: f.email.trim() } })) return;
     closeModal(); setUI({ eqTab: 'tecnicos' }); toast('Técnico añadido. Asígnale un equipo.', 'ok');
   };
   return (<>
@@ -181,6 +182,7 @@ function FormTecnico() {
       <Campo label="Nombre y apellidos *"><input autoFocus value={f.nombre} onChange={e => setF({ ...f, nombre: e.target.value })} className={`${INP} h-12`} /></Campo>
       <Campo label="Puesto"><input value={f.rol} onChange={e => setF({ ...f, rol: e.target.value })} className={`${INP} h-12`} /></Campo>
       <Campo label="DNI (se enmascara)"><input value={f.dni} onChange={e => setF({ ...f, dni: e.target.value })} className={`${INP} h-12`} /></Campo>
+      <Campo label="Correo (opcional: le llega la copia de sus entregas)"><input value={f.email} onChange={e => setF({ ...f, email: e.target.value })} type="email" inputMode="email" className={`${INP} h-12`} placeholder="nombre@empresa.es" /></Campo>
     </div>
     <SheetFoot><button onClick={crear} className={`${BTN_P} h-12 w-full`}><Icon n="person_add" className="ico-20" />Añadir técnico</button></SheetFoot>
   </>);

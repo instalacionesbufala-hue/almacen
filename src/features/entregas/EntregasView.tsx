@@ -1,159 +1,241 @@
-/* Entrega de material a una furgoneta con firma del receptor */
-import { useEffect, useState } from 'react';
-import { CATS, MARCA, UNIT } from '../../data/catalogo';
-import { find, numEntrega, qtyTxt, searchProducts, status } from '../../domain/reglas';
+/* E-011 · Nueva entrega en tres pasos (móvil primero, botones de 56 px):
+   1. Para quién (técnico y, si se quiere, la obra) · 2. Qué se entrega (buscador o escáner seguido) · 3. Firma del técnico.
+   Nada predeterminado: el almacén elige los artículos. Se puede guardar como preparada (stock reservado) para firmar más tarde. */
+import { useEffect, useMemo, useState } from 'react';
+import { CATS, UNIT } from '../../data/catalogo';
+import { disponibleReal, find, numEntrega, qtyTxt, searchProducts, status } from '../../domain/reglas';
 import { fechaHora, num } from '../../domain/formato';
-import { hashEntrega } from '../../domain/hash';
-import { avisoEstado, ejecutar, guardar, useAlmacen } from '../../store/almacen';
-import { nuevoId, type OpEntrega } from '../../store/ops';
+import { aLineas, esPrenda, problemas, seriesLibres, variantes } from '../../domain/entregas';
+import { avisoEstado, ejecutar, guardar, S, useAlmacen } from '../../store/almacen';
+import { nuevoId } from '../../store/ops';
 import { modoNube } from '../../store/nube/cliente';
-import { ir } from '../../store/ui';
-import { openModal, SheetFoot, SheetHead, closeModal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
-import { BTN_P, BTN_S, CARD, ESTADO_EQ, FirmaImg, Icon, INP, LBL, Tag, TagCustodia, Tile } from '../../ui/base';
-import { alternarSerie, anadirACesta, disponible, fijarCantidad, quitarDeCesta } from './cesta';
-import { Firma, firmaPNG, type Trazo } from '../../ui/firma';
-import { abrirInformeEntregas, abrirPlantillas, abrirPreparar, enviarJustificante, Preparadas } from './Plantillas';
-import { usePermisos } from '../../store/permisos';
+import { Avatar, BTN_P, BTN_S, CARD, Icon, INP, LBL, TagCustodia, Tile } from '../../ui/base';
+import { useCamara } from '../escaner/camara';
+import { alternarSerie, anadirACesta, cambiarTalla, cesta, disponible, escanearEnCesta, fijarCantidad, fijarObra, irAPaso, paraQuien, quitarDeCesta, sumarUno, vaciarCesta } from './cesta';
+import { abrirInformeEntregas, abrirRecibo, confirmarFirma, EtiquetaCopia, PanelFirma, Preparadas } from './Hojas';
 
+export { abrirRecibo };
+
+const PASOS = [{ n: 1, t: 'Para quién', i: 'person' }, { n: 2, t: 'Material', i: 'inventory_2' }, { n: 3, t: 'Firma', i: 'signature' }] as const;
 
 export default function EntregasView() {
-  const E = useAlmacen(), perm = usePermisos();
-  const [cat, setCat] = useState('cargadores'), [q, setQ] = useState(''), [verSN, setVerSN] = useState<string | null>(null);
-  const [firma, setFirma] = useState<Trazo[]>([]), [certifica, setCertifica] = useState(false);
-  let eq = E.equipos.find(e => e.id === E.cesta.equipo);
-  if (!eq && E.equipos[0]) { eq = E.equipos[0]; E.cesta.equipo = eq.id; }
-  const recs = eq ? eq.tecnicos.map(t => E.tecnicos.find(x => x.id === t)).filter(Boolean) as typeof E.tecnicos : [];
-  if (!recs.find(t => t.id === E.cesta.receptor)) E.cesta.receptor = recs[0]?.id ?? null;
-  const rec = E.tecnicos.find(t => t.id === E.cesta.receptor);
-  const prods = searchProducts(E, q, { cat: q ? 'all' : cat }).slice(0, 12);
-  const lineas = E.cesta.lineas.filter(l => find(E, l.sku));
-  // E-007: las entregas preparadas se firman desde su lista; aquí sigue la entrega directa (cesta + firma)
-  const nextId = modoNube ? 'se asigna al enviar' : `ENT-${new Date().getFullYear()}-${String(E.seq.ent + 1).padStart(4, '0')}`;
-  const firmado = firma.length > 0, puede = !!(lineas.length && rec && firmado && certifica);
-
-  const confirmar = async () => {
-    if (!eq || !rec) return;
-    const antes = lineas.map(l => { const p = find(E, l.sku)!; return { p, before: status(p) }; });
-    // en la nube el número y la huella los pone el servidor; en modo local se calculan aquí
-    const args: OpEntrega = { id: modoNube ? nuevoId() : nextId, numero: modoNube ? undefined : nextId, ts: Date.now(), equipo: eq.id, receptor: rec.id, dni: rec.dni,
-      lineas: JSON.parse(JSON.stringify(lineas)), firma: firmaPNG(firma) };
-    if (!modoNube) args.hash = await hashEntrega({ ...args, operator: E.operator });
-    if (!ejecutar({ op: 'entrega', args })) return;
-    if (!modoNube) E.seq.ent++;
-    E.cesta.lineas = []; guardar(); setFirma([]); setCertifica(false); setVerSN(null);
-    toast(modoNube ? `Entrega firmada por ${rec.nombre}. Stock descontado; el número y la huella llegan al sincronizar.` : `Entrega ${nextId} firmada por ${rec.nombre}. Stock descontado.`, 'ok', 6000);
-    antes.forEach(a => avisoEstado({ ...a, after: status(a.p) }));
-    abrirRecibo(args.id);
-  };
-
+  const E = useAlmacen(), c = cesta(), paso = c.paso || 1;
+  const rec = E.tecnicos.find(t => t.id === c.receptor), eq = E.equipos.find(e => e.id === c.equipo);
+  const puedePaso = (n: number) => n === 1 || (n === 2 && !!rec && !!eq) || (n === 3 && !!rec && !!eq && c.lineas.length > 0);
   return (
-    <div className="px-4 lg:px-gutter py-4 lg:py-space-lg flex flex-col gap-4 lg:gap-space-lg max-w-[1600px]">
-      <div className="hidden lg:flex items-end justify-between"><div><span className={LBL}>Custodia de material · almacén → furgoneta</span><h1 className="text-headline-lg font-bold">Entrega y firma de material</h1></div>
-        <button onClick={() => ir('equipos')} className={`${BTN_S} px-4 h-11`}><Icon n="verified_user" className="ico-20" />Auditoría de entregas</button></div>
-      <div className="lg:hidden flex items-center justify-between gap-2 bg-surface-container-low rounded-xl px-3 py-2.5 font-mono text-label-sm"><span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-tertiary-container pulso" />SYNC LOCAL</span><span className="text-primary">{eq?.id} · Doc #{nextId}</span></div>
-      <div className="flex flex-wrap gap-2"><button onClick={() => abrirPreparar(E.cesta.equipo)} className={`${BTN_P} h-12 px-4`}><Icon n="playlist_add_check" className="ico-20" />Preparar desde plantilla</button>
-        {perm.admin && <button onClick={abrirPlantillas} className={`${BTN_S} h-12 px-4`}><Icon n="list_alt" className="ico-20" />Plantillas</button>}
-        <button onClick={abrirInformeEntregas} className={`${BTN_S} h-12 px-4`}><Icon n="summarize" className="ico-20" />Entregas por técnico</button></div>
-      <Preparadas />
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-space-lg items-start">
-        <div className="lg:col-span-7 flex flex-col gap-4 lg:gap-space-lg">
-          <section className={`${CARD} p-4 lg:p-space-md flex flex-col gap-3`}>
-            <div className="flex items-center justify-between gap-2"><div className="flex items-center gap-3"><span className="w-10 h-10 rounded-lg bg-surface-container-low text-primary grid place-items-center"><Icon n="local_shipping" /></span><h2 className="text-headline-md font-semibold">Unidad receptora</h2></div>
-              <button onClick={() => ir('equipos')} className="font-mono text-label-sm text-primary">Gestionar equipos →</button></div>
-            {eq ? <div className="flex items-center gap-3 bg-surface-container-low rounded-xl p-3">
-              <span className="w-12 h-12 rounded-full bg-white grid place-items-center font-mono font-semibold text-primary shrink-0">{eq.id}</span>
-              <div className="flex-1 min-w-0"><div className="font-semibold truncate">{eq.flota} · {eq.nombre}</div><div className="text-body-sm text-secondary truncate">{recs.map(t => t.nombre).join(' · ')} · {eq.matricula}</div></div>
-              <span className={`font-mono text-label-sm px-2 py-1 rounded-full whitespace-nowrap ${ESTADO_EQ[eq.estado].c}`}>{ESTADO_EQ[eq.estado].t}</span></div>
-              : <p className="text-secondary">Crea primero un equipo.</p>}
-            <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-1 px-1">{E.equipos.map(e =>
-              <button key={e.id} onClick={() => { E.cesta.equipo = e.id; guardar(); }} className={`shrink-0 px-4 h-11 rounded-full text-body-sm font-semibold ${e.id === E.cesta.equipo ? 'bg-primary text-white' : 'bg-surface-container-low text-on-surface-variant'}`}>{e.id === E.cesta.equipo ? '✓ ' : ''}{e.id} {e.nombre.replace('Equipo ', '')}{e.tecnicos.length === 1 ? ' (1)' : ''}</button>)}</div>
-          </section>
-
-          <section className={`${CARD} p-4 lg:p-space-md flex flex-col gap-3`}>
-            <div className="flex items-center justify-between"><h2 className="text-headline-md font-semibold flex items-center gap-2"><Icon n="add_box" className="text-primary" />Añadir al despacho</h2><span className="text-body-sm text-secondary">Toca para sumar</span></div>
-            <div className="relative"><Icon n="search" className="absolute left-3 top-1/2 -translate-y-1/2 text-outline ico-20" /><input value={q} onChange={e => setQ(e.target.value)} type="search" className={`${INP} pl-10 h-12`} placeholder="Buscar en todo el catálogo" /></div>
-            {!q && <div className="flex bg-surface-container-low rounded-lg p-1 overflow-x-auto no-scrollbar">{Object.entries(CATS).map(([k, c]) =>
-              <button key={k} onClick={() => setCat(k)} className={`shrink-0 px-3 h-10 rounded-md text-body-sm font-semibold ${cat === k ? 'bg-white text-primary shadow-sm' : 'text-on-surface-variant'}`}>{c.label}</button>)}</div>}
-            <div className="grid grid-cols-2 xl:grid-cols-3 gap-2">{prods.length ? prods.map(p => { const d = disponible(p.sku); return (
-              <button key={p.sku} onClick={() => anadirACesta(p.sku)} disabled={d <= 0} className="text-left bg-surface-container-low hover:bg-surface-container rounded-xl p-3 flex flex-col gap-1 disabled:opacity-40 relative">
-                <span className="absolute top-2.5 right-2.5 text-primary"><Icon n="add_circle" /></span>
-                <Tile p={p} size="w-11 h-11" />
-                <span className="self-start flex flex-wrap gap-1"><Tag c="bg-white text-secondary">{p.packLabel || CATS[p.cat].label}</Tag><TagCustodia p={p} /></span>
-                <span className="font-semibold leading-snug line-clamp-2 pr-5">{p.name}</span>
-                <span className="font-mono text-label-sm text-secondary truncate">{p.serialized ? `SN: ${(p.serials || [])[0] || '—'}` : p.loc}</span>
-                <span className="flex justify-between items-end mt-1"><span className="font-mono text-label-sm">Disp: <b>{num(d)}</b> {UNIT[p.unit]}</span><span className="font-mono text-label-sm text-primary">+{p.unit === 'm' ? 10 : 1}</span></span>
-              </button>); }) : <p className="text-secondary col-span-2">Sin resultados.</p>}</div>
-          </section>
-        </div>
-
-        <div className="lg:col-span-5 flex flex-col gap-4 lg:gap-space-lg lg:sticky lg:top-20">
-          <section className={`${CARD} p-4 lg:p-space-md flex flex-col gap-3`}>
-            <div className="flex items-center justify-between"><h2 className="text-headline-md font-semibold flex items-center gap-2"><span className="w-7 h-7 rounded-md bg-primary-container text-white grid place-items-center font-mono text-label-md">{lineas.length}</span>Material en cesta de entrega</h2>
-              {lineas.length > 0 && <button onClick={() => { E.cesta.lineas = []; guardar(); }} className="text-error text-body-sm flex items-center gap-1"><Icon n="delete" className="ico-18" />Limpiar</button>}</div>
-            {lineas.length ? lineas.map(l => { const p = find(E, l.sku)!; return (
-              <div key={l.sku} className="bg-surface-container-low rounded-xl p-3 flex flex-col gap-2">
-                <div className="flex items-center gap-3"><Tile p={p} size="w-12 h-12" /><div className="flex-1 min-w-0"><div className="font-semibold leading-snug">{p.name} <TagCustodia p={p} /></div>
-                  <div className="font-mono text-label-sm text-secondary">{p.serialized ? <>S/N: {l.serials.map(s => <span key={s} className="bg-primary-fixed text-primary px-1 rounded mr-1">{s}</span>)}</> : `${p.loc} · ${p.packLabel || ''}`}</div></div>
-                  <div className="flex items-center bg-white rounded-lg shrink-0">
-                    <button onClick={() => quitarDeCesta(p.sku)} className="w-11 h-11 grid place-items-center" aria-label="Menos"><Icon n="remove" /></button>
-                    {p.serialized ? <span className="w-10 text-center font-bold">{l.qty}</span>
-                      : <CantidadCesta sku={p.sku} qty={l.qty} />}
-                    <button onClick={() => anadirACesta(p.sku)} className="w-11 h-11 grid place-items-center bg-primary text-white rounded-r-lg" aria-label="Más"><Icon n="add" /></button></div></div>
-                {p.serialized && <><button onClick={() => setVerSN(verSN === p.sku ? null : p.sku)} className="self-start font-mono text-label-sm text-primary">{verSN === p.sku ? 'Ocultar' : 'Elegir n.º de serie'}</button>
-                  {verSN === p.sku && <div className="flex flex-wrap gap-1.5">{(p.serials || []).map(s => <button key={s} onClick={() => alternarSerie(p.sku, s)} className={`px-2.5 h-9 rounded-lg font-mono text-label-sm ${l.serials.includes(s) ? 'bg-primary text-white' : 'bg-white'}`}>{s}</button>)}</div>}</>}
-              </div>); }) : <div className="text-center text-secondary py-6 bg-surface-container-low rounded-xl">La cesta está vacía. Añade material desde el catálogo o desde el inventario.</div>}
-          </section>
-
-          <section className={`${CARD} p-4 lg:p-space-md flex flex-col gap-3`}>
-            <div className="flex items-center justify-between gap-2"><h2 className="text-headline-md font-semibold flex items-center gap-2"><span className="w-9 h-9 rounded-lg bg-tertiary-fixed/40 text-tertiary grid place-items-center"><Icon n="signature" /></span>Firma digital del receptor</h2>
-              <button onClick={() => setFirma([])} className="text-body-sm text-secondary flex items-center gap-1"><Icon n="refresh" className="ico-18" />Borrar</button></div>
-            <label className="flex items-center gap-3 bg-surface-container-low rounded-xl p-3"><Icon n="badge" className="text-secondary" />
-              <span className="flex-1 min-w-0"><span className={`${LBL} block`}>Firmante designado</span>
-                <select value={E.cesta.receptor ?? ''} onChange={e => { E.cesta.receptor = e.target.value; guardar(); }} className="bg-transparent font-semibold focus:outline-none w-full">{recs.map(t => <option key={t.id} value={t.id}>{t.nombre} (DNI {t.dni})</option>)}</select></span>
-              {rec && <Tag c="bg-white text-secondary">{rec.rol.split(' ')[0]}</Tag>}</label>
-            <div className="relative"><Firma trazos={firma} onChange={setFirma} />
-              <span className={`absolute top-2 right-2 font-mono text-label-sm px-2 py-0.5 rounded-full pointer-events-none ${firmado ? 'bg-tertiary-fixed text-on-tertiary-fixed' : 'bg-white text-secondary'}`}>● {firmado ? 'Trazo capturado' : 'Esperando trazo'}</span>
-              {!firmado && <span className="absolute bottom-3 left-4 font-mono text-label-sm text-outline pointer-events-none">✕ Firma táctil requerida</span>}</div>
-            <label className="flex items-start gap-3 bg-surface-container-low rounded-xl p-3 cursor-pointer"><input type="checkbox" checked={certifica} onChange={e => setCertifica(e.target.checked)} className="w-6 h-6 mt-0.5 accent-primary shrink-0" />
-              <span className="text-body-sm">Certifico que el material relacionado se entrega revisado, completo, con precintos intactos y sin desperfectos visibles.</span></label>
-            <div className="flex justify-between font-mono text-label-sm text-secondary"><span className="flex items-center gap-1"><Icon n="lock" className="ico-16" />Huella SHA-256 + fecha y hora</span><span>Doc #{nextId}</span></div>
-          </section>
-
-          <button onClick={confirmar} disabled={!puede} className={`${BTN_P} w-full h-16 text-headline-sm`}><Icon n="check_circle" className="ico-fill" />Confirmar entrega y descontar stock</button>
-          {!puede && <p className="text-body-sm text-secondary text-center">{!lineas.length ? 'Añade material a la cesta.' : !rec ? 'Elige quién recibe.' : !firmado ? 'Falta la firma del receptor.' : 'Marca la casilla de conformidad.'}</p>}
-        </div>
+    <div className="px-4 lg:px-gutter py-4 lg:py-space-lg flex flex-col gap-4 lg:gap-space-lg max-w-[1400px]">
+      <div className="flex flex-wrap items-end justify-between gap-2">
+        <div><span className={LBL}>Almacén → técnico</span><h1 className="text-headline-lg font-bold">Entrega de material</h1></div>
+        <button onClick={abrirInformeEntregas} className={`${BTN_S} h-12 px-4`}><Icon n="summarize" className="ico-20" />Entregas por técnico</button>
       </div>
+      <Preparadas />
+      <nav className="grid grid-cols-3 gap-2" aria-label="Pasos de la entrega">{PASOS.map(p => (
+        <button key={p.n} onClick={() => puedePaso(p.n) && irAPaso(p.n)} disabled={!puedePaso(p.n)} aria-current={paso === p.n ? 'step' : undefined}
+          className={`h-14 rounded-xl flex items-center justify-center gap-2 font-semibold text-body-md disabled:opacity-40 ${paso === p.n ? 'bg-primary text-white' : 'bg-surface-container-low text-on-surface'}`}>
+          <span className={`w-7 h-7 rounded-full grid place-items-center font-mono text-label-md ${paso === p.n ? 'bg-white/20' : 'bg-white'}`}>{p.n}</span>
+          <span className="truncate">{p.t}{p.n === 2 && c.lineas.length ? ` (${c.lineas.length})` : ''}</span></button>))}</nav>
+      {paso === 1 && <PasoQuien />}
+      {paso === 2 && <PasoMaterial />}
+      {paso === 3 && <PasoFirma />}
+      <Ultimas />
     </div>
   );
 }
 
-function CantidadCesta({ sku, qty }: { sku: string; qty: number }) {
+/* ---------- 1 · Para quién ---------- */
+function PasoQuien() {
+  const E = useAlmacen(), c = cesta();
+  const [q, setQ] = useState('');
+  const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  const eqDe = (id: string) => E.equipos.find(e => e.tecnicos.includes(id));
+  const lista = E.tecnicos.filter(t => !q.trim() || norm(`${t.nombre} ${eqDe(t.id)?.nombre || ''} ${eqDe(t.id)?.flota || ''} ${eqDe(t.id)?.id || ''}`).includes(norm(q.trim())));
+  return (
+    <section className={`${CARD} p-4 lg:p-space-md flex flex-col gap-3`}>
+      <h2 className="text-headline-md font-semibold flex items-center gap-2"><Icon n="person_search" className="text-primary" />¿Quién recibe el material?</h2>
+      <div className="relative"><Icon n="search" className="absolute left-3 top-1/2 -translate-y-1/2 text-outline ico-20" />
+        <input value={q} onChange={e => setQ(e.target.value)} type="search" className={`${INP} pl-10 h-14`} placeholder="Buscar técnico, equipo o furgoneta" /></div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">{lista.map(t => { const eq = eqDe(t.id), sel = c.receptor === t.id; return (
+        <button key={t.id} disabled={!eq} onClick={() => paraQuien(t.id)} className={`text-left min-h-16 rounded-xl p-3 flex items-center gap-3 disabled:opacity-50 ${sel ? 'bg-primary text-white' : 'bg-surface-container-low hover:bg-surface-container'}`}>
+          <Avatar n={t.nombre} c={sel ? 'bg-white/20 text-white' : undefined} />
+          <span className="flex-1 min-w-0"><span className="block font-semibold truncate">{t.nombre}</span>
+            <span className={`block text-body-sm truncate ${sel ? 'text-white/80' : 'text-secondary'}`}>{eq ? `${eq.nombre} · ${eq.flota}` : 'Sin equipo: asígnalo en Equipos y técnicos'}</span></span>
+          {sel ? <Icon n="check_circle" className="ico-fill" /> : t.email ? <Icon n="mail" className="text-secondary ico-20" /> : null}
+        </button>); })}</div>
+      <label className="flex flex-col gap-1"><span className={LBL}>Obra (opcional)</span>
+        <input value={c.obra || ''} onChange={e => fijarObra(e.target.value)} className={`${INP} h-14`} placeholder="C/ Recogidas 12, Granada" /></label>
+      <button onClick={() => irAPaso(2)} disabled={!c.receptor || !c.equipo} className={`${BTN_P} h-14 text-body-lg`}><Icon n="arrow_forward" />Siguiente: elegir el material</button>
+    </section>
+  );
+}
+
+/* ---------- 2 · Qué se entrega ---------- */
+interface Lectura { ts: number; texto: string; ok: boolean }
+function PasoMaterial() {
+  const E = useAlmacen(), c = cesta();
+  const [q, setQ] = useState(''), [cat, setCat] = useState('all'), [escaneando, setEscaneando] = useState(false), [manual, setManual] = useState('');
+  const [lecturas, setLecturas] = useState<Lectura[]>([]);
+  const rec = E.tecnicos.find(t => t.id === c.receptor), eq = E.equipos.find(e => e.id === c.equipo);
+  const prods = useMemo(() => searchProducts(E, q, { cat: q ? 'all' : cat }).filter(p => !p.borrador).slice(0, 24), [E, q, cat]);
+  const leer = (raw: string) => {
+    const r = escanearEnCesta(raw), p = r.sku ? find(S(), r.sku) : undefined;
+    const l = p ? S().cesta.lineas.find(x => x.sku === p.sku) : undefined;
+    const texto = r.ok ? `${p?.name}${l ? ` · ${p!.serialized ? l.serials.at(-1) : qtyTxt(p!, l.qty)} en la cesta` : ''}` : r.aviso || 'No se ha podido añadir';
+    setLecturas(x => [{ ts: Date.now(), texto, ok: r.ok }, ...x].slice(0, 6));
+    if (navigator.vibrate) navigator.vibrate(r.ok ? 40 : [60, 60, 60]);
+  };
+  const guardarPreparada = () => {
+    const err = problemas(S(), c); if (err.length) return toast(err[0], 'err', 6000);
+    const numero = modoNube ? undefined : `ENT-${new Date().getFullYear()}-${String(E.seq.ent + 1).padStart(4, '0')}`;
+    const id = modoNube ? nuevoId() : numero!;
+    if (!ejecutar({ op: 'prepararEntrega', args: { id, numero, equipo: c.equipo, receptor: c.receptor!, obra: (c.obra || '').trim(), lineas: aLineas(c) } })) return;
+    if (!modoNube) E.seq.ent++;
+    vaciarCesta();
+    toast(`Entrega preparada: el material queda reservado ${E.configAvisos.horasReserva || 48} h hasta que ${rec?.nombre} firme.`, 'ok', 6000);
+  };
+  const err = problemas(E, c);
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-space-lg items-start">
+      <section className={`${CARD} p-4 lg:p-space-md flex flex-col gap-3 lg:col-span-7`}>
+        <button onClick={() => irAPaso(1)} className="self-start flex items-center gap-2 rounded-lg bg-surface-container-low px-3 h-11 text-body-sm"><Icon n="person" className="ico-18 text-primary" /><b>{rec?.nombre}</b>{eq ? ` · ${eq.flota}` : ''}{c.obra ? ` · ${c.obra}` : ''}<Icon n="edit" className="ico-16 text-secondary" /></button>
+        <div className="flex gap-2">
+          <div className="relative flex-1"><Icon n="search" className="absolute left-3 top-1/2 -translate-y-1/2 text-outline ico-20" />
+            <input value={q} onChange={e => setQ(e.target.value)} type="search" className={`${INP} pl-10 h-14`} placeholder="Buscar por nombre, SKU o código" /></div>
+          <button onClick={() => setEscaneando(!escaneando)} className={`${escaneando ? BTN_P : BTN_S} h-14 px-4 shrink-0`} aria-pressed={escaneando}><Icon n={escaneando ? 'close' : 'barcode_scanner'} className="ico-20" /><span className="hidden sm:inline">{escaneando ? 'Parar' : 'Escanear'}</span></button>
+        </div>
+        {escaneando && <Escaner onLeer={leer} lecturas={lecturas} manual={manual} setManual={setManual} />}
+        {!q && <div className="flex gap-1 overflow-x-auto no-scrollbar -mx-1 px-1">{[['all', 'Todo'] as const, ...Object.entries(CATS).map(([k, v]) => [k, v.label] as const)].map(([k, l]) =>
+          <button key={k} onClick={() => setCat(k)} className={`shrink-0 px-3 h-11 rounded-full text-body-sm font-semibold ${cat === k ? 'bg-primary text-white' : 'bg-surface-container-low text-on-surface-variant'}`}>{l}</button>)}</div>}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">{prods.length ? prods.map(p => { const d = disponible(p.sku); return (
+          <button key={p.sku} onClick={() => anadirACesta(p.sku)} disabled={d <= 0} className="text-left bg-surface-container-low hover:bg-surface-container rounded-xl p-2.5 flex items-center gap-3 disabled:opacity-40 min-h-16">
+            <Tile p={p} size="w-14 h-14" />
+            <span className="flex-1 min-w-0"><span className="block font-semibold leading-snug line-clamp-2">{p.name}</span>
+              <span className="block font-mono text-label-sm text-secondary truncate">{p.sku}{esPrenda(p) && p.modelo ? ' · talla en la cesta' : ''}</span>
+              <span className="flex items-center gap-1 mt-0.5"><span className="font-mono text-label-sm">Disp. <b>{num(d)}</b> {UNIT[p.unit]}</span><TagCustodia p={p} /></span></span>
+            <Icon n="add_circle" className="text-primary ico-28" />
+          </button>); }) : <p className="text-secondary">Sin resultados.</p>}</div>
+      </section>
+
+      <section className={`${CARD} p-4 lg:p-space-md flex flex-col gap-3 lg:col-span-5 lg:sticky lg:top-20`}>
+        <div className="flex items-center justify-between"><h2 className="text-headline-md font-semibold flex items-center gap-2"><span className="w-7 h-7 rounded-md bg-primary-container text-white grid place-items-center font-mono text-label-md">{c.lineas.length}</span>Cesta</h2>
+          {c.lineas.length > 0 && <button onClick={() => { if (confirm('¿Vaciar la cesta?')) { c.lineas = []; guardar(); } }} className="text-error text-body-sm flex items-center gap-1 h-11"><Icon n="delete" className="ico-18" />Vaciar</button>}</div>
+        {c.lineas.length ? c.lineas.map(l => <LineaCesta key={l.sku} sku={l.sku} />)
+          : <div className="text-center text-secondary py-6 bg-surface-container-low rounded-xl">Busca o escanea los artículos que se lleva.<br /><span className="text-body-sm">La cesta se guarda en este dispositivo aunque cierres la app.</span></div>}
+        {c.lineas.length > 0 && err.length > 0 && <ul className="text-body-sm text-amber-800 flex flex-col gap-0.5">{err.map(x => <li key={x}>• {x}</li>)}</ul>}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <button onClick={guardarPreparada} disabled={err.length > 0} className={`${BTN_S} h-14`} title="El stock queda reservado hasta que el técnico firme"><Icon n="bookmark_add" className="ico-20" />Guardar preparada</button>
+          <button onClick={() => irAPaso(3)} disabled={err.length > 0} className={`${BTN_P} h-14`}><Icon n="signature" className="ico-20" />Siguiente: firmar</button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function LineaCesta({ sku }: { sku: string }) {
+  const E = useAlmacen(), c = cesta(), l = c.lineas.find(x => x.sku === sku), p = find(E, sku);
+  const [ver, setVer] = useState(false);
+  if (!l || !p) return null;
+  const disp = Math.max(0, disponibleReal(E, p)), falta = p.serialized && l.serials.length !== l.qty, excede = l.qty > disp;
+  const tallas = esPrenda(p) ? variantes(E, p) : [];
+  return (
+    <div className={`rounded-xl p-3 flex flex-col gap-2 ${excede || falta ? 'bg-amber-50 ring-1 ring-amber-300' : 'bg-surface-container-low'}`}>
+      <div className="flex items-center gap-3"><Tile p={p} size="w-12 h-12" />
+        <div className="flex-1 min-w-0"><div className="font-semibold leading-snug">{p.name} <TagCustodia p={p} /></div>
+          <div className="font-mono text-label-sm text-secondary">{p.sku} · disp. {qtyTxt(p, disp)}</div></div></div>
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center bg-white rounded-lg">
+          <button onClick={() => quitarDeCesta(sku)} className="w-14 h-14 grid place-items-center" aria-label={`Menos ${p.name}`}><Icon n="remove" /></button>
+          {p.serialized ? <span className="w-12 text-center font-bold text-body-lg">{l.qty}</span> : <Cantidad sku={sku} qty={l.qty} />}
+          <button onClick={() => sumarUno(sku)} className="w-14 h-14 grid place-items-center bg-primary text-white rounded-r-lg" aria-label={`Más ${p.name}`}><Icon n="add" /></button>
+        </div>
+        <span className="text-body-sm text-secondary">{UNIT[p.unit]}</span>
+        {tallas.length > 1 && <label className="flex items-center gap-2 ml-auto"><span className={LBL}>Talla</span>
+          <select value={sku} onChange={e => cambiarTalla(sku, e.target.value)} className={`${INP} !w-auto h-14 font-semibold`} aria-label={`Talla de ${p.name}`}>
+            {tallas.map(v => <option key={v.sku} value={v.sku} disabled={v.sku !== sku && Math.max(0, disponibleReal(E, v)) <= 0}>{v.talla || v.sku}{v.sku !== sku ? ` (${num(Math.max(0, disponibleReal(E, v)))})` : ''}</option>)}</select></label>}
+      </div>
+      {p.serialized && <>
+        <div className="flex flex-wrap gap-1.5">{l.serials.map(s => <button key={s} onClick={() => alternarSerie(sku, s)} className="px-2.5 h-10 rounded-lg font-mono text-label-sm bg-primary text-white flex items-center gap-1" aria-label={`Quitar ${s}`}>{s}<Icon n="close" className="ico-16" /></button>)}</div>
+        <button onClick={() => setVer(!ver)} className="self-start font-mono text-label-sm text-primary h-10">{ver ? 'Ocultar' : 'Elegir otro n.º de serie (o escanéalo)'}</button>
+        {ver && <div className="flex flex-wrap gap-1.5">{seriesLibres(E, c, p).map(s => <button key={s} onClick={() => alternarSerie(sku, s)} className="px-2.5 h-10 rounded-lg font-mono text-label-sm bg-white">{s}</button>)}
+          {!seriesLibres(E, c, p).length && <span className="text-body-sm text-secondary">No quedan más libres.</span>}</div>}
+      </>}
+      {excede && <p className="text-body-sm text-amber-800">Solo hay {qtyTxt(p, disp)} disponibles: ajusta la cantidad.</p>}
+      {falta && <p className="text-body-sm text-amber-800">Indica los n.º de serie ({l.serials.length} de {l.qty}).</p>}
+    </div>
+  );
+}
+
+function Cantidad({ sku, qty }: { sku: string; qty: number }) {
   const [v, setV] = useState(String(qty));
   useEffect(() => setV(String(qty)), [qty]);
   return <input value={v} onChange={e => setV(e.target.value)} onBlur={() => fijarCantidad(sku, Number(v.replace(',', '.')))} onKeyDown={e => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
-    inputMode="decimal" className="w-14 text-center font-bold bg-transparent focus:outline-none" aria-label="Cantidad" />;
+    inputMode="decimal" className="w-16 text-center font-bold text-body-lg bg-transparent focus:outline-none" aria-label="Cantidad" />;
 }
 
-export const abrirRecibo = (id: string) => openModal(<Recibo id={id} />);
-function Recibo({ id }: { id: string }) {
-  const E = useAlmacen(), e = E.entregas.find(x => x.id === id);
-  if (!e) return <SheetHead title="Entrega no encontrada" />;
-  const eq = E.equipos.find(x => x.id === e.equipo), rec = E.tecnicos.find(t => t.id === e.receptor);
-  return (<>
-    <SheetHead title={`Albarán de entrega ${numEntrega(e)}`} sub={fechaHora(e.ts)} />
-    <div id="impresion" className="p-5 flex flex-col gap-3 bg-white">
-      <div className="flex justify-between"><div><div className="font-bold">{MARCA.nombre}</div><div className="text-body-sm text-secondary">{MARCA.nave}</div></div><div className="text-right font-mono text-label-md">{numEntrega(e)}<br />{fechaHora(e.ts)}</div></div>
-      <div className="grid grid-cols-2 gap-2 text-body-sm">
-        <div className="bg-surface-container-low rounded-lg p-2.5"><div className={LBL}>Equipo / vehículo</div>{eq ? `${eq.nombre} · ${eq.flota} (${eq.matricula})` : e.equipo}</div>
-        <div className="bg-surface-container-low rounded-lg p-2.5"><div className={LBL}>Recibe</div>{rec?.nombre} · DNI {e.dni || rec?.dni}</div></div>
-      <table className="w-full text-body-sm"><thead><tr className={`text-left ${LBL}`}><th className="py-1">Material</th><th>S/N</th><th className="text-right">Cant.</th></tr></thead>
-        <tbody>{e.lineas.map(l => { const p = find(E, l.sku); return <tr key={l.sku} className="border-t border-surface-container"><td className="py-1.5">{p ? p.name : l.sku}<div className="font-mono text-label-sm text-secondary">{l.sku}</div></td><td className="font-mono text-label-sm">{(l.serials || []).map(s => <div key={s}>{s}</div>)}</td><td className="text-right font-semibold">{p ? qtyTxt(p, l.qty) : num(l.qty)}</td></tr>; })}</tbody></table>
-      <div className="flex items-end justify-between gap-3 border-t border-surface-container pt-3"><div><FirmaImg f={e.firma} className="h-16 w-44" /><div className="text-body-sm text-secondary">Firma del receptor</div></div>
-        <div className="font-mono text-[9px] text-secondary break-all max-w-[55%] text-right">Huella SHA-256<br />{e.hash || 'Se calcula en el servidor al sincronizar'}</div></div>
-      {(e.obra || e.plantilla) && <p className="text-body-sm">{e.obra ? <>Obra: <b>{e.obra}</b></> : null}{e.plantilla ? <> · Plantilla: {E.plantillas.find(p => p.id === e.plantilla)?.nombre || '—'}</> : null}</p>}
-      <p className="text-body-sm text-secondary">Aceptación de la entrega por el receptor. Registrado por {e.operator}.</p>
+/** Escáner en modo seguido: cada lectura suma a la cesta sin salir de la pantalla */
+function Escaner({ onLeer, lecturas, manual, setManual }: { onLeer: (c: string) => void; lecturas: Lectura[]; manual: string; setManual: (v: string) => void }) {
+  const { video, estado } = useCamara(true, onLeer, { pausarConModal: false, repetirMs: 1500 });
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="relative rounded-xl overflow-hidden bg-[#0b1c30] h-52">
+        <video ref={video} playsInline muted className="w-full h-full object-cover" />
+        {!estado.on && <p className="absolute inset-0 grid place-items-center text-white/80 text-body-sm text-center p-4">{estado.msg || 'Abriendo la cámara…'}</p>}
+        {estado.on && <span className="absolute top-2 left-2 font-mono text-label-sm bg-black/50 text-white px-2 py-0.5 rounded">Lectura seguida · cada código suma</span>}
+      </div>
+      <form onSubmit={e => { e.preventDefault(); if (manual.trim()) { onLeer(manual.trim()); setManual(''); } }} className="flex gap-2">
+        <input value={manual} onChange={e => setManual(e.target.value)} className={`${INP} h-14 font-mono`} placeholder="O escribe o pega un código" aria-label="Código manual" />
+        <button className={`${BTN_S} h-14 px-4`}>Añadir</button>
+      </form>
+      {lecturas.length > 0 && <ul className="flex flex-col gap-1">{lecturas.map(l => <li key={l.ts} className={`text-body-sm flex items-center gap-2 ${l.ok ? 'text-tertiary' : 'text-amber-800'}`}><Icon n={l.ok ? 'check_circle' : 'error'} className="ico-18" />{l.texto}</li>)}</ul>}
     </div>
-    <SheetFoot className="flex flex-wrap gap-2"><button onClick={closeModal} className={`${BTN_S} h-12 px-5`}>Cerrar</button><button onClick={() => void enviarJustificante(e)} className={`${BTN_S} h-12 px-4`}><Icon n="cloud_upload" className="ico-20" />{modoNube ? 'Justificante PDF (guardar y enviar)' : 'Descargar PDF'}</button><button onClick={() => print()} className={`${BTN_P} h-12 flex-1`}><Icon n="print" className="ico-20" />Imprimir o guardar PDF</button></SheetFoot>
-  </>);
+  );
+}
+
+/* ---------- 3 · Firma ---------- */
+function PasoFirma() {
+  const E = useAlmacen(), c = cesta(), rec = E.tecnicos.find(t => t.id === c.receptor), eq = E.equipos.find(e => e.id === c.equipo);
+  const err = problemas(E, c);
+  const firmar = async (firma: string, email: string) => {
+    const bad = problemas(S(), c); if (bad.length) { toast(bad[0], 'err', 6000); return false; }
+    const antes = c.lineas.map(l => { const p = find(S(), l.sku)!; return { p, before: status(p) }; });
+    const numero = modoNube ? undefined : `ENT-${new Date().getFullYear()}-${String(S().seq.ent + 1).padStart(4, '0')}`;
+    const id = modoNube ? nuevoId() : numero!;
+    // preparar (reserva) y confirmar van seguidas en la cola: en el servidor la firma descuenta todo o nada
+    if (!ejecutar({ op: 'prepararEntrega', args: { id, numero, equipo: c.equipo, receptor: c.receptor!, obra: (c.obra || '').trim(), lineas: aLineas(c) } })) return false;
+    if (!modoNube) S().seq.ent++;
+    if (!(await confirmarFirma(id, firma, email, c.receptor!))) { toast('La entrega ha quedado preparada (reservada): fírmala desde la lista de preparadas.', 'warn', 7000); vaciarCesta(); return false; }
+    vaciarCesta();
+    toast(`Entrega firmada por ${rec?.nombre}. Stock descontado${email ? ' y copia por correo en camino' : ''}.`, 'ok', 6000);
+    antes.forEach(a => avisoEstado({ ...a, after: status(a.p) }));
+    abrirRecibo(id);
+    return true;
+  };
+  if (err.length) return <section className={`${CARD} p-4`}><p className="text-amber-800">{err[0]}</p><button onClick={() => irAPaso(2)} className={`${BTN_S} h-14 px-4 mt-3`}>Volver a la cesta</button></section>;
+  return (
+    <section className={`${CARD} overflow-hidden max-w-3xl w-full mx-auto`}>
+      <div className="px-4 lg:px-5 pt-4 flex flex-wrap items-center justify-between gap-2">
+        <div><h2 className="text-headline-md font-semibold">Entrega para {rec?.nombre}</h2><p className="text-body-sm text-secondary">{eq?.nombre} · {eq?.flota} ({eq?.matricula}) · comprueba el material y firma</p></div>
+        <button onClick={() => irAPaso(2)} className={`${BTN_S} h-11 px-3`}><Icon n="edit" className="ico-18" />Cambiar</button>
+      </div>
+      <PanelFirma enPagina lineas={aLineas(c)} receptor={c.receptor!} obra={c.obra} onFirmar={firmar} />
+    </section>
+  );
+}
+
+/* ---------- Últimas entregas: si llegó la copia, y reenviar ---------- */
+function Ultimas() {
+  const E = useAlmacen();
+  const lista = E.entregas.filter(e => (e.estado ?? 'firmada') === 'firmada').sort((a, b) => b.ts - a.ts).slice(0, 8);
+  if (!lista.length) return null;
+  return (
+    <section className={`${CARD} p-4 lg:p-space-md flex flex-col gap-1`}>
+      <h2 className="text-headline-sm font-semibold mb-1 flex items-center gap-2"><Icon n="history" className="text-primary" />Últimas entregas</h2>
+      {lista.map(e => { const t = E.tecnicos.find(x => x.id === e.receptor); return (
+        <button key={e.id} onClick={() => abrirRecibo(e.id)} className="text-left flex flex-wrap items-center gap-x-3 gap-y-1 py-3 border-t border-surface-container min-h-14">
+          <span className="font-mono text-label-md text-primary">{numEntrega(e)}</span>
+          <span className="flex-1 min-w-[140px] font-medium">{t?.nombre || e.receptor}<span className="block text-body-sm text-secondary">{fechaHora(e.ts)} · {e.lineas.length} líneas{e.obra ? ` · ${e.obra}` : ''}</span></span>
+          <EtiquetaCopia e={e} /><Icon n="chevron_right" className="text-secondary" />
+        </button>); })}
+    </section>
+  );
 }
