@@ -160,6 +160,8 @@ Son tres pequeños programas que se ejecutan en Supabase, donde las claves no es
 
 Si aparece *Se ha alcanzado el límite gratuito*, has pasado el cupo diario de Gemini: vuelve a intentarlo al día siguiente.
 
+Si aparece *Gemini está saturado* (error 503), es cosa de Google: el nivel gratuito se satura a ratos. La función ya reintenta sola y prueba un modelo más ligero; si aun así falla, espera un minuto y vuelve a subir el albarán.
+
 Si aparece *Gemini ha respondido 404* o *Gemini no reconoce el modelo*, Google ha retirado el modelo. La función usa `gemini-flash-latest`, que siempre apunta al vigente. Vuelve a desplegarla con `npx.cmd supabase functions deploy leer-albaran` y, si creaste el secreto `GEMINI_MODELO`, bórralo en Supabase → **Edge Functions** → **Secrets**.
 
 ## 8. Avisos de reposición: correo, push y Telegram (opcional)

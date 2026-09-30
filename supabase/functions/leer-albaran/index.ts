@@ -12,6 +12,7 @@ const ANON = Deno.env.get('SUPABASE_ANON_KEY')!;
 const CLAVE = Deno.env.get('GEMINI_API_KEY') || '';
 // Alias que Google mantiene apuntando al Flash vigente: los modelos con número se retiran (gemini-2.5-flash ya no admite usuarios nuevos)
 const MODELO = Deno.env.get('GEMINI_MODELO') || 'gemini-flash-latest';
+const RESERVA = Deno.env.get('GEMINI_MODELO_RESERVA') || 'gemini-3.5-flash-lite';  // más ligero, para cuando el principal está saturado
 const MAX_BYTES = 10 * 1024 * 1024;
 
 function base64(buf: ArrayBuffer): string {
@@ -40,23 +41,34 @@ Deno.serve(conCors(async (req) => {
   if (error) return json({ error: error.message }, 500);
   const catalogo: ItemCatalogo[] = (prods || []).map(p => ({ sku: p.sku, ref: p.ref_proveedor ?? undefined, ean: p.ean ?? undefined, nombre: p.nombre, unidad: p.unidad, proveedor: p.proveedor, custodia: p.propiedad === 'custodia' }));
 
-  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODELO}:generateContent`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': CLAVE },
-    body: JSON.stringify({
-      contents: [{ role: 'user', parts: [{ inline_data: { mime_type: mime, data: base64(await archivo.arrayBuffer()) } }, { text: construirPrompt(catalogo) }] }],
-      generationConfig: { temperature: 0, responseMimeType: 'application/json', responseSchema: ESQUEMA_RESPUESTA },
-    }),
+  // Gemini gratuito se satura a ratos (503) o agota el cupo de un modelo (429): se reintenta y, si sigue, se usa un modelo de reserva
+  const cuerpo = JSON.stringify({
+    contents: [{ role: 'user', parts: [{ inline_data: { mime_type: mime, data: base64(await archivo.arrayBuffer()) } }, { text: construirPrompt(catalogo) }] }],
+    generationConfig: { temperature: 0, responseMimeType: 'application/json', responseSchema: ESQUEMA_RESPUESTA },
   });
+  const intentos: [string, number][] = [[MODELO, 0], [MODELO, 2500], [RESERVA, 1000], [RESERVA, 4000]];
+  let r: Response | null = null, usado = MODELO;
+  for (const [modelo, espera] of intentos) {
+    if (espera) await new Promise(ok => setTimeout(ok, espera));
+    r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': CLAVE }, body: cuerpo,
+    });
+    usado = modelo;
+    if (r.ok) break;
+    if (r.status === 404 && modelo === RESERVA) continue;            // la reserva también retirada: se prueba el siguiente intento
+    if (![429, 500, 503, 504].includes(r.status) && !(r.status === 404 && modelo !== MODELO)) break;
+  }
+  r = r!;
+  if (r.status === 503 || r.status === 500 || r.status === 504) return json({ error: 'Gemini está saturado ahora mismo (le pasa a ratos al nivel gratuito). Espera un minuto y vuelve a subir el albarán.' }, 503);
   if (r.status === 429) return json({ error: 'Se ha alcanzado el límite gratuito de lecturas de Gemini. Prueba más tarde.' }, 429);
-  if (r.status === 404) return json({ error: `Gemini no reconoce el modelo "${MODELO}" (Google lo habrá retirado). Quita el secreto GEMINI_MODELO o pon uno vigente, y vuelve a desplegar leer-albaran.` }, 502);
+  if (r.status === 404) return json({ error: `Gemini no reconoce el modelo "${usado}" (Google lo habrá retirado). Quita el secreto GEMINI_MODELO o pon uno vigente, y vuelve a desplegar leer-albaran.` }, 502);
   if (r.status === 400 || r.status === 403) return json({ error: `Gemini rechaza la petición (${r.status}): revisa que GEMINI_API_KEY sea correcta y esté activa en Google AI Studio.` }, 502);
   if (!r.ok) return json({ error: `Gemini ha respondido ${r.status}` }, 502);
   const g = await r.json();
   const texto = g?.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text || '').join('') || '';
   if (!texto) return json({ error: 'La IA no ha devuelto nada: prueba con una foto más nítida y de frente' }, 422);
   try {
-    return json({ ...normalizarRespuesta(texto, catalogo), modelo: MODELO });
+    return json({ ...normalizarRespuesta(texto, catalogo), modelo: usado });
   } catch {
     return json({ error: 'No se ha podido interpretar la respuesta de la IA' }, 502);
   }
