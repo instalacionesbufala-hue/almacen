@@ -8,20 +8,21 @@ import { construirInforme, informeCsv, informeHtml, periodoAnterior } from '../.
 describe('informe de custodia', () => {
   const S = fresh();
   // precio "trampa" en un artículo de custodia: aunque existiera, no debe salir
-  S.products.find(p => p.sku === 'WBX-PULSAR-22')!.price = 889.55;
+  (S.products.find(p => p.sku === 'WBX-PULSAR-22') as unknown as Record<string, number>).price = 889.55;
   applyMovement(S, { sku: 'ESM-CPVE-MONO', type: 'entrada', qty: 2, reason: 'Recepción en custodia', ref: 'Alb. Esmove 77' });
-  applyMovement(S, { sku: 'WBX-PULSAR-22', type: 'salida', qty: 1, reason: 'Instalado en obra', ref: 'Garaje C/ Recogidas 12', serials: ['WBX-22-899281'] });
+  applyMovement(S, { sku: 'WBX-PULSAR-22', type: 'salida', qty: 1, reason: 'Instalado en obra', ref: 'Garaje C/ Recogidas 12' });
   applyMovement(S, { sku: 'ESM-CPVE-TRI', type: 'merma', qty: 1, reason: 'Rotura o daño', ref: 'Caída en la carga' });
   applyMovement(S, { sku: 'BF-FIX-SX8', type: 'salida', qty: 10, reason: 'Obra', ref: 'C/ Eros 10' }); // material propio: no entra
   const ahora = Date.now();
   const inf = construirInforme(datosInformeCustodia(S, 'ESMOVE', ahora - 864e5, ahora + 864e5));
   const csv = informeCsv(inf), html = informeHtml(inf);
 
-  it('solo incluye material del propietario, con sus entradas, salidas por obra con S/N e incidencias', () => {
+  it('solo incluye material del propietario, con sus entradas, lo instalado en obra y las incidencias (sin n.º de serie)', () => {
     const [stock, entradas, salidas, incidencias] = inf.secciones;
     expect(stock.filas.every(f => String(f[0]).match(/^(ESM-|WBX|BF-VE|CIR)/))).toBe(true);
-    expect(entradas.filas.some(f => f[1] === 'ESM-CPVE-MONO' && f[5] === 'Alb. Esmove 77')).toBe(true);
-    expect(salidas.filas.find(f => f[4] === 'WBX-22-899281')).toEqual(expect.arrayContaining(['WBX-PULSAR-22', 'WBX-22-899281', 'Garaje C/ Recogidas 12']));
+    expect(entradas.filas.some(f => f[1] === 'ESM-CPVE-MONO' && f[4] === 'Alb. Esmove 77')).toBe(true);
+    expect(salidas.filas.find(f => f[1] === 'WBX-PULSAR-22')).toEqual(expect.arrayContaining(['WBX-PULSAR-22', 'Garaje C/ Recogidas 12']));
+    expect(JSON.stringify(inf)).not.toMatch(/serie/i);
     expect(incidencias.filas.some(f => f[1] === 'ESM-CPVE-TRI')).toBe(true);
     expect(csv).not.toMatch(/BF-FIX-SX8/);
   });

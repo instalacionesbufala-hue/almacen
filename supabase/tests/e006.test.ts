@@ -10,24 +10,24 @@ describe('trigger de avisos', () => {
   beforeAll(async () => { db = await nuevaBD(); await como(db, ALMACEN); });
 
   it('lo que ya estaba bajo mínimo al cargar tiene su aviso', async () => {
-    expect(await abiertos(db, 'BF-FIX-SX6')).toBe(1);   // 80 tacos, mínimo 100
+    expect(await abiertos(db, 'SCH-IC60N-40')).toBe(1);   // 1 ud, mínimo 12
     expect(await abiertos(db, 'BF-FIX-SX8')).toBe(0);
   });
   it('crea el aviso solo al cruzar el mínimo hacia abajo y no lo duplica', async () => {
-    // tacos SX 8: 1200, mínimo 100
-    await db.query(MOV, [uuid(), 'BF-FIX-SX8', 'salida', 1000, 'Obra', 'C/ Eros 10', [], null]);   // 200: por encima
+    // tacos SX 8: 12 cajas, mínimo 2
+    await db.query(MOV, [uuid(), 'BF-FIX-SX8', 'salida', 9, 'Obra', 'C/ Eros 10', [], null]);   // 3: por encima
     expect(await abiertos(db, 'BF-FIX-SX8')).toBe(0);
-    await db.query(MOV, [uuid(), 'BF-FIX-SX8', 'salida', 150, 'Obra', 'C/ Eros 10', [], null]);    // 50: cruza
+    await db.query(MOV, [uuid(), 'BF-FIX-SX8', 'salida', 2, 'Obra', 'C/ Eros 10', [], null]);   // 1: cruza
     expect(await abiertos(db, 'BF-FIX-SX8')).toBe(1);
-    await db.query(MOV, [uuid(), 'BF-FIX-SX8', 'salida', 20, 'Obra', 'C/ Eros 10', [], null]);     // 30: sigue abajo
+    await db.query(MOV, [uuid(), 'BF-FIX-SX8', 'salida', 1, 'Obra', 'C/ Eros 10', [], null]);   // 0: sigue abajo
     expect(await abiertos(db, 'BF-FIX-SX8')).toBe(1);
     const a = (await db.query<{ destino: string; grupo: string }>("select destino, grupo from avisos_reposicion where sku = 'BF-FIX-SX8'")).rows[0];
     expect(a).toEqual({ destino: 'proveedor', grupo: 'Saltoki Alcobendas' });
   });
   it('se cierra solo cuando una entrada devuelve el stock al mínimo; si vuelve a bajar, nace otro', async () => {
-    await db.query(MOV, [uuid(), 'BF-FIX-SX8', 'entrada', 50, 'Compra a proveedor', 'Alb. 1', [], null]);   // 80
+    await db.query(MOV, [uuid(), 'BF-FIX-SX8', 'entrada', 1, 'Compra a proveedor', 'Alb. 1', [], null]);   // 1
     expect(await abiertos(db, 'BF-FIX-SX8')).toBe(1);
-    await db.query(MOV, [uuid(), 'BF-FIX-SX8', 'entrada', 20, 'Compra a proveedor', 'Alb. 2', [], null]);   // 100 = mínimo
+    await db.query(MOV, [uuid(), 'BF-FIX-SX8', 'entrada', 1, 'Compra a proveedor', 'Alb. 2', [], null]);   // 2 = mínimo
     expect(await abiertos(db, 'BF-FIX-SX8')).toBe(0);
     expect(await valor(db, "select estado from avisos_reposicion where sku = 'BF-FIX-SX8'")).toBe('cerrado');
     await db.query(MOV, [uuid(), 'BF-FIX-SX8', 'salida', 1, 'Obra', 'C/ Eros 10', [], null]);
@@ -87,9 +87,9 @@ describe('cola de envíos, resúmenes y recordatorios', () => {
     await como(db, ADMIN);
     await db.query('select guardar_config_avisos($1::jsonb)', [JSON.stringify({ correo_activo: true, correo_destinatarios: ['admin@x.es'] })]);
     await como(db, ALMACEN);
-    await db.query(MOV, [uuid(), 'BF-FIX-SX8', 'salida', 1150, 'Obra', 'C/ Eros 10', [], null]);
+    await db.query(MOV, [uuid(), 'BF-FIX-SX8', 'salida', 11, 'Obra', 'C/ Eros 10', [], null]);
     await como(db, ADMIN);
-    const e = (await db.query<{ canal: string; tipo: string }>("select canal, tipo from envios_aviso where asunto like '%Taco nylon SX 8%'")).rows;
+    const e = (await db.query<{ canal: string; tipo: string }>("select canal, tipo from envios_aviso where asunto like '%tacos nylon SX 8%'")).rows;
     expect(e).toEqual([{ canal: 'push', tipo: 'critico' }]);
   });
   it('el resumen diario sale una vez al día a partir de la hora configurada', async () => {
@@ -99,7 +99,7 @@ describe('cola de envíos, resúmenes y recordatorios', () => {
     expect(await valor<number>(db, "select encolar_programados('2026-10-01 06:05:00+00')")).toBe(1);   // 8:05 en Madrid
     expect(await valor<number>(db, "select encolar_programados('2026-10-01 09:00:00+00')")).toBe(0);   // ya enviado hoy
     const cuerpo = await valor<string>(db, "select cuerpo from envios_aviso where tipo = 'resumen'");
-    expect(cuerpo).toMatch(/Taco nylon SX 8/);
+    expect(cuerpo).toMatch(/tacos nylon SX 8/);
   });
   it('un pedido sin recibir en X días se vuelve a avisar', async () => {
     await como(db, ADMIN);
@@ -146,11 +146,12 @@ describe('custodia de Esmove (E-008)', () => {
     await superusuario(db);
     expect(await falla(db, "update actas_custodia set representante = 'otro'")).toMatch(/no se puede modificar/);
   });
-  it('solo el administrador cambia la propiedad de un artículo; al pasar a custodia pierde el precio', async () => {
+  it('solo el administrador cambia la propiedad de un artículo (sin precios: E-013)', async () => {
     await como(db, ALMACEN);
     expect(await falla(db, 'select cambiar_propiedad($1, $2, $3)', ['7501013532', 'custodia', 'ESMOVE'])).toMatch(/Solo el administrador/);
     await como(db, ADMIN);
     await db.query('select cambiar_propiedad($1, $2, $3)', ['7501013532', 'custodia', 'ESMOVE']);
-    expect(await valor(db, "select precio from costes_producto where sku = '7501013532'")).toBeNull();
+    expect(await valor(db, "select propietario_id from productos where sku = '7501013532'")).toBe('ESMOVE');
+    expect(await valor(db, "select count(*)::int from costes_producto")).toBe(0);
   });
 });

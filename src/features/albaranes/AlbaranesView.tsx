@@ -2,7 +2,7 @@
 import { useRef, useState } from 'react';
 import type { AlbaranIA } from '../../data/tipos';
 import { MARCA, UNIT } from '../../data/catalogo';
-import { find, matchLine, qtyTxt } from '../../domain/reglas';
+import { contenidoTxt, find, formatoEntero, matchLine, qtyTxt } from '../../domain/reglas';
 import { fechaHora, hace, num, parseSN, toNum } from '../../domain/formato';
 import { descargarCsv } from '../../domain/csv';
 import { ejecutar, S, useAlmacen } from '../../store/almacen';
@@ -76,15 +76,12 @@ function confirmar() {
   for (const l of lines) {
     const p = find(E, l.sku!)!, q = toNum(l.cantidad);
     if (!(q > 0)) return toast(`Revisa la cantidad de ${p.name}.`, 'err');
-    if (p.serialized) {
-      const sn = parseSN(l.series);
-      if (sn.length !== q) return toast(`${p.name}: hay ${sn.length} n.º de serie para ${q} unidades. Corrígelo antes de confirmar.`, 'err', 7000);
-    }
+    if (formatoEntero(p) && q !== Math.trunc(q)) return toast(`${p.name}: se recibe por ${p.unit} entero (revisa la cantidad).`, 'err', 7000);
   }
   const conf = a.lines.reduce((s, l) => s + l.confianza, 0) / (a.lines.length || 1);
   // todo o nada: se valida entero en local y el servidor lo repite en una sola transacción
   if (!ejecutar({ op: 'albaran', args: { id: nuevoId(), cabecera: { numero: a.doc.numero || 's/n', proveedor: a.doc.proveedor, cif: a.doc.cif, fecha: a.doc.fecha, confianza: conf, modo: a.mode || 'sim' },
-    lineas: lines.map(l => ({ sku: l.sku!, cantidad: toNum(l.cantidad), series: find(E, l.sku!)!.serialized ? parseSN(l.series) : [] })) } })) return;
+    lineas: lines.map(l => ({ sku: l.sku!, cantidad: toNum(l.cantidad), series: [] })) } })) return;
   toast(`Albarán ${a.doc.numero} integrado: ${lines.length} línea${lines.length === 1 ? '' : 's'} sumada${lines.length === 1 ? '' : 's'} al stock.`, 'ok', 6000);
   albStore.set(vacio());
 }
@@ -191,12 +188,12 @@ function Revision() {
 }
 
 function LineaAlb({ l, i, proveedor }: { l: Linea; i: number; proveedor: string }) {
-  const E = S(), p = l.sku ? find(E, l.sku) : undefined, sn = p?.serialized ? parseSN(l.series) : [];
+  const E = S(), p = l.sku ? find(E, l.sku) : undefined;
   const q = toNum(l.cantidad) || 0;
   const est = !p ? { t: 'No catalogado', c: 'bg-amber-100 text-amber-800' } : l.confianza >= .9 ? { t: `Coincide (+${num(q)} ${UNIT[p.unit]})`, c: 'bg-tertiary-fixed/30 text-tertiary' } : { t: `Revisar · ${Math.round(l.confianza * 100)}%`, c: 'bg-amber-100 text-amber-800' };
   const alCrear = (sku: string) => { l.sku = sku; l.include = true; l.how = 'alta manual'; emit(); };
   const crearSku = () => S().rol !== 'admin' ? abrirBorrador(l.codigo, alCrear) : abrirFormProducto(undefined, { sku: l.codigo.toUpperCase(), name: l.descripcion, supplierRef: l.codigo || undefined, supplier: proveedor,
-    cat: /cargador|wallbox|mennekes|charger|conector/i.test(l.descripcion) ? 'cargadores' : 'aparamenta', serialized: /cargador|wallbox|mennekes|charger/i.test(l.descripcion) },
+    cat: /cargador|wallbox|mennekes|charger|conector/i.test(l.descripcion) ? 'cargadores' : 'aparamenta' },
     sku => { l.sku = sku; l.include = true; l.how = 'alta manual'; emit(); });
   return (
     <div className={`p-space-md border-t border-surface-container ${!p ? 'bg-amber-50' : ''} ${l.include ? '' : 'opacity-60'}`}>
@@ -211,8 +208,7 @@ function LineaAlb({ l, i, proveedor }: { l: Linea; i: number; proveedor: string 
               <option value="">— Sin correspondencia (no se ingresa) —</option>{E.products.map(x => <option key={x.sku} value={x.sku}>{x.sku} · {x.name}</option>)}</select>
             <label className={`flex items-center gap-2 ${INP} h-11`}><input value={l.cantidad} onChange={e => { l.cantidad = e.target.value; emit(); }} inputMode="decimal" className="w-full bg-transparent focus:outline-none font-semibold" aria-label="Cantidad" /><span className="text-body-sm text-secondary">{p ? UNIT[p.unit] : ''}</span></label>
           </div>
-          {p?.serialized && <label className="flex flex-col gap-1"><span className={LBL}>N.º de serie ({sn.length} de {num(q)})</span><textarea value={l.series} onChange={e => { l.series = e.target.value; emit(); }} rows={2} className={`${INP} font-mono text-body-sm ${sn.length !== q ? 'ring-2 ring-error' : ''}`} /></label>}
-          {p ? <div className="text-body-sm text-secondary">Destino <span className="font-mono text-primary">{p.loc}</span> · stock {qtyTxt(p, p.stock)} → <b className="text-on-surface">{qtyTxt(p, p.stock + q)}</b></div>
+          {p ? <div className="text-body-sm text-secondary">Entra en el almacén{contenidoTxt(p) ? ` (${contenidoTxt(p)})` : ''} · stock {qtyTxt(p, p.stock)} → <b className="text-on-surface">{qtyTxt(p, p.stock + q)}</b></div>
             : <div className="flex flex-wrap items-center gap-2 text-body-sm"><span className="text-amber-800 flex items-center gap-1"><Icon n="auto_awesome" className="ico-16" />Modelo nuevo: créalo o elige uno del catálogo.</span><button onClick={crearSku} className="px-3 h-9 rounded-lg bg-amber-600 text-white font-semibold">Crear SKU</button></div>}
         </div>
       </div>

@@ -5,6 +5,10 @@ project_id = "almacen-bufala"
 [db]
 major_version = 17
 
+# E-013: los datos de ejemplo (seed.sql) ya no se cargan por defecto. Las pruebas los cargan explícitamente (supabase/tests/pg.ts).
+[db.seed]
+enabled = false
+
 [auth]
 # Nadie se registra por su cuenta: el administrador da de alta a los usuarios (E-004)
 enable_signup = false

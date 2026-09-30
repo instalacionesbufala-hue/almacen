@@ -1,8 +1,8 @@
 /* Dotación: herramientas, EPIs y ropa de trabajo asignados a equipos y técnicos, con incidencias y reposiciones */
 import { useState } from 'react';
 import type { ClaseDotacion, Herramienta, TipoIncidencia } from '../../data/tipos';
-import { avisosDotacion, caducidad, CLASE, costeIncidencias, ESTADO_HERR, herramienta, INCIDENCIA, incidenciasPosibles } from '../../domain/herramientas';
-import { eur, fechaHora, hace, hoyISO, norm, num, toNum, uid } from '../../domain/formato';
+import { avisosDotacion, caducidad, CLASE, ESTADO_HERR, herramienta, INCIDENCIA, incidenciasPosibles } from '../../domain/herramientas';
+import { fechaHora, hace, hoyISO, norm, num, toNum, uid } from '../../domain/formato';
 import { descargarCsv } from '../../domain/csv';
 import { ejecutar, S, useAlmacen } from '../../store/almacen';
 import { nuevoId } from '../../store/ops';
@@ -35,9 +35,8 @@ export default function DotacionView() {
   const activos = E.herramientas.filter(h => h.estado !== 'baja');
   const epiVenc = activos.filter(h => ['vencido', 'proximo'].includes(caducidad(h).estado)).length;
   const averias = activos.filter(h => h.estado !== 'operativa').length;
-  const valor = activos.reduce((a, h) => a + h.valor * (h.cantidad || 1), 0);
-  const exportar = () => descargarCsv(`dotacion-${hoyISO()}.csv`, [['ID', 'Clase', 'Nombre', 'Marca/modelo', 'N.º serie/lote', 'Talla', 'Cantidad', 'Estado', 'Caducidad/revisión', 'Equipo', 'Técnico', 'Valor', 'Coste incidencias'],
-    ...E.herramientas.map(h => [h.id, CLASE[h.clase].t, h.nombre, h.marca, h.serie, h.talla || '', h.cantidad, ESTADO_HERR[h.estado].t, h.caduca || '', E.equipos.find(e => e.id === h.equipo)?.nombre || '', E.tecnicos.find(t => t.id === h.tecnico)?.nombre || '', h.valor, costeIncidencias(h)])]);
+  const exportar = () => descargarCsv(`dotacion-${hoyISO()}.csv`, [['ID', 'Clase', 'Nombre', 'Marca/modelo', 'N.º serie/lote', 'Talla', 'Cantidad', 'Estado', 'Caducidad/revisión', 'Equipo', 'Técnico'],
+    ...E.herramientas.map(h => [h.id, CLASE[h.clase].t, h.nombre, h.marca, h.serie, h.talla || '', h.cantidad, ESTADO_HERR[h.estado].t, h.caduca || '', E.equipos.find(e => e.id === h.equipo)?.nombre || '', E.tecnicos.find(t => t.id === h.tecnico)?.nombre || ''])]);
   const tab = (k: 'all' | ClaseDotacion, l: string, icon: string, n: number) =>
     <button key={k} onClick={() => setClase(k)} className={`shrink-0 flex items-center gap-2 px-4 h-11 rounded-lg font-semibold ${clase === k ? 'bg-white text-primary shadow-sm' : 'text-on-surface-variant'}`}><Icon n={icon} className="ico-20" />{l}<span className="font-mono text-label-sm px-1.5 rounded bg-surface-container-high">{n}</span></button>;
   return (
@@ -50,7 +49,6 @@ export default function DotacionView() {
         <Kpi icon="inventory" iconC="bg-surface-container-low text-primary" badge={`${E.herramientas.length - activos.length} de baja`} badgeC="text-secondary bg-surface-container-high" value={activos.length} label="Fichas activas" foot="Asignadas" footVal={`${activos.filter(h => h.equipo || h.tecnico).length}`} bar={activos.filter(h => h.equipo || h.tecnico).length / (activos.length || 1) * 100} barC="bg-primary" onClick={() => setSoloAvisos(false)} />
         <Kpi icon="build" iconC="bg-error-container text-error" badge={averias ? 'Revisar' : 'Todo bien'} badgeC={averias ? 'bg-error-container text-error' : 'bg-tertiary-fixed/30 text-tertiary'} value={averias} valueC={averias ? 'text-error' : undefined} label="Rotas, perdidas o deterioradas" foot="Pendiente de reponer" footVal={`${activos.filter(h => h.estado === 'rota' || h.estado === 'perdida').length}`} footC="text-error" bar={averias / (activos.length || 1) * 100} barC="bg-error" onClick={() => setSoloAvisos(true)} />
         <Kpi icon="health_and_safety" iconC="bg-amber-100 text-amber-800" badge="30 días" badgeC="bg-amber-100 text-amber-800" value={epiVenc} valueC={epiVenc ? 'text-amber-800' : undefined} label="EPIs vencidos o por vencer" foot="EPIs activos" footVal={`${activos.filter(h => h.clase === 'epi').length}`} bar={epiVenc / (activos.filter(h => h.clase === 'epi').length || 1) * 100} barC="bg-amber-400" onClick={() => { setClase('epi'); setSoloAvisos(true); }} />
-        {perm.verCostes && <Kpi icon="payments" iconC="bg-surface-container-low text-primary" badge="Valor" badgeC="text-secondary bg-surface-container-high" value={eur(valor)} label="Valor de la dotación" foot="Coste de incidencias" footVal={eur(E.herramientas.reduce((a, h) => a + costeIncidencias(h), 0))} bar={100} barC="bg-primary-container" />}
       </div>
       <div className="flex flex-col lg:flex-row gap-2">
         <div className="inline-flex bg-surface-container-low rounded-xl p-1 overflow-x-auto no-scrollbar">
@@ -84,9 +82,9 @@ export default function DotacionView() {
 /* ---------- Ficha con historial ---------- */
 export const abrirFichaDotacion = (id: string) => openModal(<FichaDotacion id={id} />);
 function FichaDotacion({ id }: { id: string }) {
-  const E = useAlmacen(), h = herramienta(E, id), { verCostes, gestionarFlota } = usePermisos();
+  const E = useAlmacen(), h = herramienta(E, id), { gestionarFlota } = usePermisos();
   if (!h) return <SheetHead title="Ficha no encontrada" />;
-  const datos: [string, string][] = [['Clase', CLASE[h.clase].t], ['Marca / modelo', h.marca || '—'], ['N.º serie / lote', h.serie || '—'], ['Talla', h.talla || '—'], ['Cantidad', num(h.cantidad)], ...(verCostes ? [['Valor unitario', eur(h.valor)] as [string, string]] : []), ['Caducidad / revisión', h.caduca ? new Date(h.caduca + 'T00:00:00').toLocaleDateString('es-ES') : '—'], ...(verCostes ? [['Coste de incidencias', eur(costeIncidencias(h))] as [string, string]] : [])];
+  const datos: [string, string][] = [['Clase', CLASE[h.clase].t], ['Marca / modelo', h.marca || '—'], ['N.º serie / lote', h.serie || '—'], ['Talla', h.talla || '—'], ['Cantidad', num(h.cantidad)], ['Caducidad / revisión', h.caduca ? new Date(h.caduca + 'T00:00:00').toLocaleDateString('es-ES') : '—']];
   return (<>
     <SheetHead title={h.nombre} sub={`${h.id} · ${quienTxt(h)}`} />
     <div className="p-5 flex flex-col gap-4">
@@ -96,7 +94,7 @@ function FichaDotacion({ id }: { id: string }) {
         <ol className="flex flex-col gap-0">{[...h.historial].reverse().map(i => (
           <li key={i.id} className="flex gap-3 py-2 border-b border-surface-container last:border-0">
             <span className="w-9 h-9 rounded-lg bg-surface-container-low grid place-items-center shrink-0 text-primary"><Icon n={INCIDENCIA[i.tipo].icon} className="ico-20" /></span>
-            <div className="flex-1 min-w-0"><div className="font-medium">{INCIDENCIA[i.tipo].t}{i.coste && verCostes ? ` · ${eur(i.coste)}` : ''}</div>
+            <div className="flex-1 min-w-0"><div className="font-medium">{INCIDENCIA[i.tipo].t}</div>
               <div className="text-body-sm text-secondary">{i.nota}{i.serieAnterior ? ` · retirada la unidad ${i.serieAnterior}` : ''} · {i.operator}</div></div>
             <span className="font-mono text-label-sm text-secondary shrink-0" title={fechaHora(i.ts)}>{hace(i.ts)}</span>
           </li>))}</ol></div>
@@ -113,10 +111,9 @@ function Incidencia({ id }: { id: string }) {
   const E = useAlmacen(), h = herramienta(E, id)!, { gestionarFlota } = usePermisos();
   // el almacén registra roturas, pérdidas y deterioro; reparar, reponer y dar de baja es del administrador
   const posibles = incidenciasPosibles(h).filter(t => gestionarFlota || ['deterioro', 'rotura', 'perdida'].includes(t));
-  const [tipo, setTipo] = useState<TipoIncidencia>(posibles[0]), [nota, setNota] = useState(''), [coste, setCoste] = useState(''), [serie, setSerie] = useState(''), [caduca, setCaduca] = useState('');
-  const conCoste = tipo === 'reparacion' || tipo === 'reposicion';
+  const [tipo, setTipo] = useState<TipoIncidencia>(posibles[0]), [nota, setNota] = useState(''), [serie, setSerie] = useState(''), [caduca, setCaduca] = useState('');
   const guardarInc = () => {
-    if (!ejecutar({ op: 'incidencia', args: { id: nuevoId(), dotacion: id, tipo, nota, coste: coste.trim() ? toNum(coste) : undefined, serieNueva: serie || undefined, caducaNueva: caduca || undefined } })) return;
+    if (!ejecutar({ op: 'incidencia', args: { id: nuevoId(), dotacion: id, tipo, nota, serieNueva: serie || undefined, caducaNueva: caduca || undefined } })) return;
     closeModal(); toast(`${INCIDENCIA[tipo].t} registrada en ${h.nombre}.`, 'ok');
   };
   return (<>
@@ -128,7 +125,6 @@ function Incidencia({ id }: { id: string }) {
       {tipo === 'reposicion' && <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Campo label="N.º de serie o lote de la unidad nueva"><input value={serie} onChange={e => setSerie(e.target.value)} className={`${INP} h-12 font-mono`} placeholder={h.serie || 'Opcional'} /></Campo>
         {h.clase === 'epi' && <Campo label="Nueva caducidad / revisión"><input type="date" value={caduca} onChange={e => setCaduca(e.target.value)} className={`${INP} h-12`} /></Campo>}</div>}
-      {conCoste && <Campo label={tipo === 'reparacion' ? 'Coste de la reparación (€)' : 'Coste de la unidad nueva (€)'}><input value={coste} onChange={e => setCoste(e.target.value)} inputMode="decimal" className={`${INP} h-12`} placeholder={tipo === 'reposicion' ? String(h.valor) : '0'} /></Campo>}
       {tipo === 'baja' && <p className="text-body-sm text-error">La ficha queda de baja y deja de estar asignada. Se conserva el historial.</p>}
     </div>
     <SheetFoot><button onClick={guardarInc} className={`${BTN_P} w-full h-14`}><Icon n="check_circle" className="ico-fill" />Registrar {INCIDENCIA[tipo].t.toLowerCase()}</button></SheetFoot>
@@ -145,7 +141,7 @@ function Asignar({ id }: { id: string }) {
   return (<>
     <SheetHead title="Asignar" sub={h.nombre} />
     <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
-      <Campo label="Equipo / furgoneta"><select value={eq} onChange={e => { setEq(e.target.value); setTec(''); }} className={`${INP} h-12`}><option value="">— Ninguno —</option>{E.equipos.map(e => <option key={e.id} value={e.id}>{e.nombre} ({e.matricula})</option>)}</select></Campo>
+      <Campo label="Equipo"><select value={eq} onChange={e => { setEq(e.target.value); setTec(''); }} className={`${INP} h-12`}><option value="">— Ninguno —</option>{E.equipos.map(e => <option key={e.id} value={e.id}>{e.nombre}</option>)}</select></Campo>
       <Campo label="Técnico (opcional)"><select value={tec} onChange={e => setTec(e.target.value)} className={`${INP} h-12`}><option value="">— Todo el equipo —</option>{tecs.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}</select></Campo>
       <p className="sm:col-span-2 text-body-sm text-secondary">Deja los dos vacíos para devolverla al almacén. Las herramientas suelen ir al equipo; los EPIs y la ropa, a cada técnico.</p>
     </div>
@@ -161,10 +157,9 @@ function Alta({ clase0, preset }: { clase0: ClaseDotacion; preset: { equipo?: st
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setF({ ...f, [k]: e.target.value });
   const crear = () => {
     if (!f.nombre.trim()) return toast('Indica el nombre.', 'err');
-    const cantidad = Math.max(1, Math.round(toNum(f.cantidad) || 1)), valor = toNum(f.valor) || 0;
-    if (valor < 0) return toast('El valor no puede ser negativo.', 'err');
+    const cantidad = Math.max(1, Math.round(toNum(f.cantidad) || 1));
     const pref = f.clase === 'epi' ? 'E' : f.clase === 'ropa' ? 'R' : 'H';
-    const h: Herramienta = { id: `${pref}${uid('').slice(-5).toUpperCase()}`, clase: f.clase as ClaseDotacion, nombre: f.nombre.trim(), marca: f.marca.trim(), modelo: f.clase === 'herramienta' ? (f.modelo.trim() || f.marca.trim() || undefined) : undefined, serie: f.serie.trim(), talla: f.talla.trim() || undefined, cantidad, caduca: f.caduca || undefined, valor, estado: 'operativa',
+    const h: Herramienta = { id: `${pref}${uid('').slice(-5).toUpperCase()}`, clase: f.clase as ClaseDotacion, nombre: f.nombre.trim(), marca: f.marca.trim(), modelo: f.clase === 'herramienta' ? (f.modelo.trim() || f.marca.trim() || undefined) : undefined, serie: f.serie.trim(), talla: f.talla.trim() || undefined, cantidad, caduca: f.caduca || undefined, valor: 0, estado: 'operativa',
       historial: [{ id: uid('I'), ts: Date.now(), tipo: 'alta', nota: 'Alta en la dotación', operator: E.operator }] };
     if (!ejecutar({ op: 'altaDotacion', args: h })) return;
     if (f.equipo || f.tecnico) ejecutar({ op: 'asignarDotacion', args: { id: nuevoId(), dotacion: h.id, equipo: f.equipo || undefined, tecnico: f.tecnico || undefined } });
@@ -183,7 +178,6 @@ function Alta({ clase0, preset }: { clase0: ClaseDotacion; preset: { equipo?: st
       {f.clase !== 'herramienta' && <Campo label="Talla"><input value={f.talla} onChange={set('talla')} className={`${INP} h-12`} placeholder="M, 44, 9…" /></Campo>}
       {f.clase !== 'herramienta' && <Campo label="Cantidad"><input value={f.cantidad} onChange={set('cantidad')} inputMode="numeric" className={`${INP} h-12`} /></Campo>}
       {f.clase === 'epi' && <Campo label="Caducidad / próxima revisión"><input type="date" value={f.caduca} onChange={set('caduca')} className={`${INP} h-12`} /></Campo>}
-      <Campo label="Valor unitario (€)"><input value={f.valor} onChange={set('valor')} inputMode="decimal" className={`${INP} h-12`} /></Campo>
       <Campo label="Equipo"><select value={f.equipo} onChange={e => setF({ ...f, equipo: e.target.value, tecnico: '' })} className={`${INP} h-12`}><option value="">— En almacén —</option>{E.equipos.map(e => <option key={e.id} value={e.id}>{e.nombre}</option>)}</select></Campo>
       <Campo label="Técnico"><select value={f.tecnico} onChange={set('tecnico')} className={`${INP} h-12`}><option value="">— Ninguno —</option>{tecs.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}</select></Campo>
     </div>

@@ -19,16 +19,13 @@ describe('escáner en modo seguido', () => {
     escanear(S, S.cesta, qrContenido(sku));
     expect(S.cesta.lineas[0].qty).toBe(3);
   });
-  it('un cargador suma el n.º de serie leído; el mismo QR dos veces no lo duplica', () => {
-    expect(escanear(S, S.cesta, qrContenido('WBX-PULSAR-22', 'WBX-22-899281')).ok).toBe(true);
-    const r = escanear(S, S.cesta, qrContenido('WBX-PULSAR-22', 'WBX-22-899281'));
-    expect(r).toMatchObject({ ok: false, aviso: expect.stringMatching(/ya está en la cesta/) });
-    escanear(S, S.cesta, 'WBX-22-899282');                                // el n.º de serie suelto también vale
-    expect(S.cesta.lineas[0]).toMatchObject({ sku: 'WBX-PULSAR-22', qty: 2, serials: ['WBX-22-899281', 'WBX-22-899282'] });
+  it('un cargador va por modelo y cantidad (E-013): cada lectura del QR suma uno, sin n.º de serie', () => {
+    escanear(S, S.cesta, qrContenido('WBX-PULSAR-22'));
+    escanear(S, S.cesta, 'BUF:WBX-PULSAR-22|SN:WBX-22-899281');           // un QR antiguo con serie también vale
+    expect(S.cesta.lineas[0]).toMatchObject({ sku: 'WBX-PULSAR-22', qty: 2, serials: [] });
   });
-  it('avisa de códigos desconocidos y de n.º de serie que no están en stock, sin tocar la cesta', () => {
+  it('avisa de códigos desconocidos sin tocar la cesta', () => {
     expect(escanear(S, S.cesta, 'NO-EXISTE-123').aviso).toMatch(/no está en el catálogo/);
-    expect(escanear(S, S.cesta, qrContenido('WBX-PULSAR-22', 'WBX-22-999999')).aviso).toMatch(/no está en stock/);
     expect(S.cesta.lineas).toHaveLength(0);
   });
 });
@@ -59,16 +56,21 @@ describe('líneas de la cesta', () => {
     expect(S.cesta.lineas[0].qty).toBe(p.stock);
     expect(sumar(S, S.cesta, '7501013532').aviso).toMatch(/Solo hay/);
   });
-  it('serie obligatoria en cargadores: sin sus n.º de serie no se puede entregar', () => {
-    S.cesta.lineas.push({ tipo: 'stock', sku: 'WBX-PULSAR-22', qty: 2, serials: ['WBX-22-899281'] });
-    expect(problemas(S, S.cesta)).toContain('Cargador Wallbox Pulsar Plus 22 kW T2 cable 5 m: indica los n.º de serie');
-    S.cesta.lineas = [];
-    sumar(S, S.cesta, 'WBX-PULSAR-22');                                  // desde el buscador: coge un n.º de serie libre
-    expect(S.cesta.lineas[0].serials).toHaveLength(1);
-    expect(problemas(S, S.cesta)).toEqual([]);
-    // los cuadros de protecciones no llevan serie
+  it('formatos enteros (se entrega el bote completo); cargadores y cuadros sin n.º de serie', () => {
+    sumar(S, S.cesta, 'WBX-PULSAR-22');
     sumar(S, S.cesta, 'ESM-CPVE-MONO');
     expect(problemas(S, S.cesta)).toEqual([]);
+    fijar(S, S.cesta, 'WBX-PULSAR-22', 1.5);                              // se redondea hacia abajo a un formato entero
+    expect(S.cesta.lineas.find(l => l.sku === 'WBX-PULSAR-22')!.qty).toBe(1);
+    S.cesta.lineas.push({ tipo: 'stock', sku: 'BF-FIX-SX6', qty: 0.5, serials: [] });
+    expect(problemas(S, S.cesta)).toContain('Bote 1000 tacos nylon SX 6×30 se entrega por formato entero');
+  });
+  it('el material de instalación exige que el equipo tenga vehículo; la ropa y los EPIs no', () => {
+    aplicarLocal(S, { op: 'asignarVehiculo', args: { vehiculo: 'V-F01' } });
+    sumar(S, S.cesta, 'ROPA-PANT-44');
+    expect(problemas(S, S.cesta)).toEqual([]);
+    sumar(S, S.cesta, 'CAB-RZ1K-5G6');
+    expect(problemas(S, S.cesta)[0]).toMatch(/no tiene vehículo asignado/);
   });
   it('pide receptor con equipo y cesta con material', () => {
     S.cesta = cestaVacia('F01');
@@ -101,8 +103,8 @@ describe('preparada (reserva), caducidad y firma atómica (en local)', () => {
     expect(S.herramientas.at(-1)).toMatchObject({ clase: 'ropa', talla: '44', tecnico: 'T1' });
     // atómica: si falla una línea al firmar, no se descuenta nada
     const id2 = nuevoId(), antes = find(S, 'BF-FIX-SX8')!.stock;
-    aplicarLocal(S, { op: 'prepararEntrega', args: { id: id2, equipo: 'F02', receptor: 'T3', obra: '', lineas: [{ tipo: 'stock', sku: 'BF-FIX-SX8', qty: 100, serials: [] }, { tipo: 'stock', sku: 'WBX-PULSAR-22', qty: 1, serials: ['WBX-22-899285'] }] } });
-    find(S, 'WBX-PULSAR-22')!.serials = (find(S, 'WBX-PULSAR-22')!.serials || []).filter(s => s !== 'WBX-22-899285');   // alguien lo sacó por otra vía
+    aplicarLocal(S, { op: 'prepararEntrega', args: { id: id2, equipo: 'F02', receptor: 'T3', obra: '', lineas: [{ tipo: 'stock', sku: 'BF-FIX-SX8', qty: 5, serials: [] }, { tipo: 'stock', sku: 'WBX-PULSAR-22', qty: 1, serials: [] }] } });
+    aplicarLocal(S, { op: 'asignarVehiculo', args: { vehiculo: 'V-F02' } });   // el equipo se queda sin vehículo antes de firmar
     expect(() => aplicarLocal(S, { op: 'confirmarEntrega', args: { id: id2, firma: 'f' } })).toThrow();
     expect(find(S, 'BF-FIX-SX8')!.stock).toBe(antes);
     expect(S.entregas.find(e => e.id === id2)!.estado).toBe('preparada');

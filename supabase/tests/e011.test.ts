@@ -1,4 +1,4 @@
-/* E-011 · Entregas libres: correo del técnico, copia automática al firmar, reenvío, serie obligatoria y plantillas sin uso */
+/* E-011 · Entregas libres: correo del técnico, copia automática al firmar, reenvío y plantillas sin uso (sin n.º de serie desde E-013) */
 import { beforeAll, describe, expect, it } from 'vitest';
 import { ADMIN, ALMACEN, como, falla, nuevaBD, superusuario, uuid, valor, type BD } from './pg';
 
@@ -32,7 +32,7 @@ describe('copia de la entrega por correo', () => {
   it('al firmar se encola la copia al técnico, en la misma operación (con número y fecha en el asunto)', async () => {
     await como(db, ALMACEN);
     const id = uuid();
-    await preparar(db, id, [{ tipo: 'stock', sku: 'BF-FIX-SX8', cantidad: 100 }]);
+    await preparar(db, id, [{ tipo: 'stock', sku: 'BF-FIX-SX8', cantidad: 2 }]);
     expect(await envios(db, id)).toHaveLength(0);                  // preparada: aún no hay copia
     await db.query('select confirmar_entrega($1, $2)', [id, FIRMA]);
     const [e] = await envios(db, id);
@@ -48,13 +48,13 @@ describe('copia de la entrega por correo', () => {
     await db.query('select guardar_config_avisos($1::jsonb)', [JSON.stringify({ correo_destinatarios: ['admin@bufalatech.es'], copia_entregas_admin: true })]);
     await como(db, ALMACEN);
     const a = uuid(), b = uuid();
-    await preparar(db, a, [{ tipo: 'stock', sku: 'BF-FIX-SX8', cantidad: 10 }]);
+    await preparar(db, a, [{ tipo: 'stock', sku: 'BF-FIX-SX8', cantidad: 2 }]);
     await db.query('select confirmar_entrega($1, $2)', [a, FIRMA]);
     expect((await envios(db, a))[0].destinatarios.sort()).toEqual(['admin@bufalatech.es', 'luis@bufalatech.es']);
     await como(db, ADMIN);
     await db.query('select guardar_config_avisos($1::jsonb)', [JSON.stringify({ copia_entregas_admin: false })]);
     await como(db, ALMACEN);
-    await preparar(db, b, [{ tipo: 'stock', sku: 'BF-FIX-SX8', cantidad: 10 }], 'T3', 'F02');   // Andrea: sin correo
+    await preparar(db, b, [{ tipo: 'stock', sku: 'BF-FIX-SX8', cantidad: 2 }], 'T3', 'F02');   // Andrea: sin correo
     await db.query('select confirmar_entrega($1, $2)', [b, FIRMA]);
     expect(await envios(db, b)).toHaveLength(0);
     expect(await falla(db, 'select reenviar_copia_entrega($1)', [b])).toMatch(/no tiene correo/);
@@ -67,7 +67,7 @@ describe('copia de la entrega por correo', () => {
   it('reenviar: el intento fallido deja de reintentarse y queda registrado; el nuevo sale pendiente', async () => {
     await como(db, ALMACEN);
     const id = uuid();
-    await preparar(db, id, [{ tipo: 'stock', sku: 'BF-FIX-SX8', cantidad: 5 }]);
+    await preparar(db, id, [{ tipo: 'stock', sku: 'BF-FIX-SX8', cantidad: 1 }]);
     await db.query('select confirmar_entrega($1, $2)', [id, FIRMA]);
     await superusuario(db);   // lo que hace la función "notificar" cuando Resend rechaza el envío
     await db.query("update envios_aviso set estado = 'error', error = 'Resend 403', reintentos = 5 where entrega_id = $1", [id]);
@@ -93,9 +93,9 @@ describe('cesta libre: reglas que siguen en el servidor', () => {
   let db: BD;
   beforeAll(async () => { db = await nuevaBD(); await como(db, ALMACEN); });
 
-  it('los cargadores exigen su n.º de serie; los cuadros no llevan', async () => {
-    expect(await falla(db, PREP, [uuid(), 'F01', 'T1', '', null, JSON.stringify([{ tipo: 'stock', sku: 'WBX-PULSAR-22', cantidad: 1 }])])).toMatch(/n\.º de serie/);
-    await db.query(PREP, [uuid(), 'F01', 'T1', '', null, JSON.stringify([{ tipo: 'stock', sku: 'WBX-PULSAR-22', cantidad: 1, series: ['WBX-22-899281'] }, { tipo: 'stock', sku: 'ESM-CPVE-MONO', cantidad: 1 }])]);
+  it('E-013: cargadores y cuadros por cantidad, sin n.º de serie; el almacén entrega formatos enteros', async () => {
+    await db.query(PREP, [uuid(), 'F01', 'T1', '', null, JSON.stringify([{ tipo: 'stock', sku: 'WBX-PULSAR-22', cantidad: 1 }, { tipo: 'stock', sku: 'ESM-CPVE-MONO', cantidad: 1 }])]);
+    expect(await falla(db, PREP, [uuid(), 'F01', 'T1', '', null, JSON.stringify([{ tipo: 'stock', sku: 'BF-FIX-SX6', cantidad: 0.5 }])])).toMatch(/entero/);
   });
   it('las plantillas quedan sin uso: nadie puede guardarlas', async () => {
     await como(db, ADMIN);

@@ -16,14 +16,14 @@ export const VISTAS: Record<Vista, { label: string; mob: string; icon: string }>
 };
 
 export interface UI {
-  q: string; est: string; pas: string; cat: string; page: number; catTab: string; filtros: boolean;
+  q: string; est: string; /** E-013: 'all', 'almacen' o id de vehículo */ ubi: string; cat: string; page: number; catTab: string; filtros: boolean;
   /** E-008: all | propia | custodia */
   prop: string;
   /** 'central' o id de una furgoneta */
   almacen: string;
-  eqTab: 'equipos' | 'tecnicos';
+  eqTab: 'equipos' | 'vehiculos' | 'tecnicos' | 'historial';
 }
-export const ui = crearStore<UI>({ q: '', est: 'all', pas: 'all', cat: 'all', prop: 'all', page: 1, catTab: 'cargadores', filtros: false, almacen: 'central', eqTab: 'equipos' });
+export const ui = crearStore<UI>({ q: '', est: 'all', ubi: 'all', cat: 'all', prop: 'all', page: 1, catTab: 'cargadores', filtros: false, almacen: 'central', eqTab: 'equipos' });
 export const useUI = ui.use;
 export function setUI(p: Partial<UI>) { Object.assign(ui.get(), p); ui.emit(); }
 

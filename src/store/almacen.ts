@@ -17,15 +17,15 @@ import { toast } from '../ui/toast';
 const LS = modoNube ? 'almacen-bufala-nube-cache-v1' : 'almacen-bufala-v5';
 const LS_OLD = 'almacen-bufala-v2';
 
-export const vacio = (): Estado => ({ v: 3, products: [], movements: [], albaranes: [], equipos: [], tecnicos: [], entregas: [], herramientas: [], propietarios: [], pendientes: [], perfiles: [], rol: 'almacen', avisos: [], minimosHerramienta: [], configAvisos: { ...CONFIG_AVISOS_DEFECTO }, envios: [], actas: [],
+export const vacio = (): Estado => ({ v: 3, products: [], movements: [], albaranes: [], equipos: [], tecnicos: [], entregas: [], herramientas: [], propietarios: [], pendientes: [], perfiles: [], rol: 'almacen', avisos: [], minimosHerramienta: [], configAvisos: { ...CONFIG_AVISOS_DEFECTO }, envios: [], actas: [], vehiculos: [], asignaciones: [], aBordo: [], configApp: { modoDemo: false },
   operator: '', pedidos: {}, cesta: { equipo: '', receptor: null, lineas: [], obra: '', paso: 1 }, seq: { ent: 0 } });
 
 function migrate(s: Partial<Estado>): Estado {
   const f = (modoNube ? vacio() : fresh()) as unknown as Record<string, unknown>;
   const o = s as Record<string, unknown>;
   for (const k of Object.keys(f)) if (o[k] === undefined) o[k] = f[k];
-  // E-010: el material en custodia no tiene precio (null), para que nunca salga "0,00 €"
-  for (const p of (o.products as Estado['products'])) if (p.propiedad === 'custodia') p.price = null;
+  // E-013: los datos guardados con el modelo anterior (series, estanterías, precios) se sustituyen por la demostración nueva
+  if (!modoNube && !Array.isArray(s.vehiculos)) return fresh();
   return o as unknown as Estado;
 }
 
@@ -88,7 +88,7 @@ export function avisoEstado(r: { p: Producto; before: string; after: string }) {
 export function mover(input: MovInput): boolean {
   const p = find(almacen.get(), input.sku); if (!p) { toast('Producto no encontrado', 'err'); return false; }
   const before = status(p);
-  const ok = ejecutar({ op: 'movimiento', args: { id: nuevoId(), sku: input.sku, tipo: input.type, qty: Number(input.qty), motivo: input.reason, ref: input.ref || '', series: input.serials || [], equipo: input.equipo } });
+  const ok = ejecutar({ op: 'movimiento', args: { id: nuevoId(), sku: input.sku, tipo: input.type, qty: Number(input.qty), motivo: input.reason, ref: input.ref || '', series: input.serials || [], equipo: input.equipo, vehiculo: input.vehiculo } });
   if (ok) avisoEstado({ p, before, after: status(p) });
   return ok;
 }

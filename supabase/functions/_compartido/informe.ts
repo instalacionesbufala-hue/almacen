@@ -1,8 +1,9 @@
 /* E-008 · Informe de material en custodia para el propietario (Esmove). SIN IMPORTES: no recibe precios y no los muestra.
    Módulo puro, compartido por la app (vista previa, CSV y PDF) y por la función de servidor "notificar" (envío por correo). */
 
-export interface ProductoInforme { sku: string; nombre: string; unidad: string; stock: number; minimo: number; codigoModelo?: string; conSerie: boolean }
-export interface MovimientoInforme { ts: number; sku: string; tipo: 'entrada' | 'salida' | 'merma' | 'ajuste'; cantidad: number; motivo: string; referencia: string; series: string[]; operario: string; equipo?: string }
+/** E-013: stock = en el almacén; enVehiculos = a bordo de los vehículos de los equipos. Sin n.º de serie. */
+export interface ProductoInforme { sku: string; nombre: string; unidad: string; stock: number; enVehiculos?: number; minimo: number; codigoModelo?: string; conSerie?: boolean }
+export interface MovimientoInforme { ts: number; sku: string; tipo: 'entrada' | 'salida' | 'merma' | 'ajuste' | 'traspaso' | 'devolucion' | 'consumo'; cantidad: number; motivo: string; referencia: string; series: string[]; operario: string; equipo?: string; vehiculo?: string }
 export interface ActaInforme { numero: string; ts: number; representante: string; lineas: { sku: string; sistema: number; contado: number }[] }
 export interface DatosInforme { propietario: string; desde: number; hasta: number; productos: ProductoInforme[]; movimientos: MovimientoInforme[]; actas: ActaInforme[]; generado?: number }
 
@@ -18,21 +19,25 @@ export function construirInforme(d: DatosInforme): Informe {
   const nombre = new Map(d.productos.map(p => [p.sku, p.nombre]));
   const mov = d.movimientos.filter(m => skus.has(m.sku) && m.ts >= d.desde && m.ts < d.hasta).sort((a, b) => a.ts - b.ts);
   const entradas = mov.filter(m => m.tipo === 'entrada');
-  const salidas = mov.filter(m => m.tipo === 'salida');
+  // instalado en obra: salidas del almacén y consumos desde el vehículo (cierres, E-012)
+  const salidas = mov.filter(m => m.tipo === 'salida' || m.tipo === 'consumo');
+  const traspasos = mov.filter(m => m.tipo === 'traspaso' || m.tipo === 'devolucion');
   const incidencias = mov.filter(m => m.tipo === 'merma');
   const ajustes = mov.filter(m => m.tipo === 'ajuste');
   const actas = d.actas.filter(a => a.ts >= d.desde && a.ts < d.hasta);
-  const fila = (m: MovimientoInforme, destino: string) => [fechaHora(m.ts), m.sku, nombre.get(m.sku) || m.sku, numero(Math.abs(m.cantidad)), m.series.join(' '), destino, m.operario];
+  const fila = (m: MovimientoInforme, destino: string) => [fechaHora(m.ts), m.sku, nombre.get(m.sku) || m.sku, numero(Math.abs(m.cantidad)), destino, m.operario];
   const secciones: Seccion[] = [
-    { titulo: 'Stock actual por referencia', columnas: ['Referencia', 'Descripción', 'Código modelo', 'Stock', 'Unidad', 'Mínimo', 'Situación'],
-      filas: [...d.productos].sort((a, b) => a.sku.localeCompare(b.sku)).map(p => [p.sku, p.nombre, p.codigoModelo || '', numero(p.stock), p.unidad, numero(p.minimo),
+    { titulo: 'Stock actual por referencia', columnas: ['Referencia', 'Descripción', 'Código modelo', 'En almacén', 'En vehículos', 'Unidad', 'Mínimo', 'Situación'],
+      filas: [...d.productos].sort((a, b) => a.sku.localeCompare(b.sku)).map(p => [p.sku, p.nombre, p.codigoModelo || '', numero(p.stock), numero(p.enVehiculos || 0), p.unidad, numero(p.minimo),
         p.stock < p.minimo ? 'Bajo mínimo: solicitar reposición' : p.stock < p.minimo * 1.5 ? 'Bajo' : 'Correcto']) },
-    { titulo: 'Entradas recibidas', columnas: ['Fecha', 'Referencia', 'Descripción', 'Cantidad', 'N.º de serie', 'Albarán / origen', 'Registrado por'],
+    { titulo: 'Entradas recibidas', columnas: ['Fecha', 'Referencia', 'Descripción', 'Cantidad', 'Albarán / origen', 'Registrado por'],
       filas: entradas.map(m => fila(m, m.referencia || m.motivo)) },
-    { titulo: 'Salidas por obra', columnas: ['Fecha', 'Referencia', 'Descripción', 'Cantidad', 'N.º de serie', 'Obra o destino', 'Registrado por'],
-      filas: salidas.map(m => fila(m, [m.referencia, m.equipo ? `equipo ${m.equipo}` : ''].filter(Boolean).join(' · ') || m.motivo)) },
-    { titulo: 'Incidencias (daños y pérdidas)', columnas: ['Fecha', 'Referencia', 'Descripción', 'Cantidad', 'N.º de serie', 'Motivo', 'Registrado por'],
+    { titulo: 'Instalado en obra', columnas: ['Fecha', 'Referencia', 'Descripción', 'Cantidad', 'Obra o destino', 'Registrado por'],
+      filas: salidas.map(m => fila(m, [m.referencia, m.vehiculo ? `vehículo ${m.vehiculo}` : ''].filter(Boolean).join(' · ') || m.motivo)) },
+    { titulo: 'Incidencias (daños y pérdidas)', columnas: ['Fecha', 'Referencia', 'Descripción', 'Cantidad', 'Motivo', 'Registrado por'],
       filas: incidencias.map(m => fila(m, [m.motivo, m.referencia].filter(Boolean).join(' · '))) },
+    { titulo: 'Entregado a equipos y devuelto', columnas: ['Fecha', 'Referencia', 'Descripción', 'Cantidad', 'Movimiento', 'Registrado por'],
+      filas: traspasos.map(m => fila(m, `${m.tipo === 'traspaso' ? 'Al vehículo' : 'Devuelto al almacén desde'} ${m.vehiculo || ''}${m.referencia ? ' · ' + m.referencia : ''}`)) },
     { titulo: 'Diferencias de recuento', columnas: ['Fecha', 'Referencia', 'Descripción', 'Diferencia', 'Origen', 'Detalle', 'Registrado por'],
       filas: [
         ...ajustes.map(m => [fechaHora(m.ts), m.sku, nombre.get(m.sku) || m.sku, (m.cantidad > 0 ? '+' : '−') + numero(Math.abs(m.cantidad)), 'Ajuste', m.referencia || m.motivo, m.operario]),
@@ -44,7 +49,7 @@ export function construirInforme(d: DatosInforme): Informe {
     titulo: `Informe de material en custodia · ${d.propietario}`,
     periodo: `${fecha(d.desde)} – ${fecha(d.hasta - 1)}`,
     secciones,
-    resumen: { referencias: d.productos.length, unidades: d.productos.reduce((a, p) => a + p.stock, 0), entradas: entradas.length, salidas: salidas.length,
+    resumen: { referencias: d.productos.length, unidades: d.productos.reduce((a, p) => a + p.stock + (p.enVehiculos || 0), 0), entradas: entradas.length, salidas: salidas.length,
       incidencias: incidencias.length, bajoMinimo: d.productos.filter(p => p.stock < p.minimo).length },
   };
 }

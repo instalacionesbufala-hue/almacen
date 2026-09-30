@@ -1,7 +1,7 @@
 /* Marco de la app: barra lateral y cabecera (escritorio), cabecera y barra inferior (móvil) */
 import { useEffect, useRef, useState } from 'react';
 import { MARCA } from '../../data/catalogo';
-import { aisles, critical } from '../../domain/reglas';
+import { critical } from '../../domain/reglas';
 import { avisosDotacion } from '../../domain/herramientas';
 import { useAlmacen } from '../../store/almacen';
 import { ir, setUI, useEsEscritorio, useUI, VISTAS, type Vista } from '../../store/ui';
@@ -25,7 +25,7 @@ function SelectorAlmacen({ ancho }: { ancho: string }) {
     <label className="flex items-center gap-1 bg-surface-container-low rounded-lg px-2.5 py-1.5 shrink-0"><Icon n="warehouse" className="text-primary ico-20" />
       <select value={u.almacen} onChange={e => { setUI({ almacen: e.target.value }); ir('stock'); }} aria-label="Almacén" className={`bg-transparent font-mono text-label-md focus:outline-none cursor-pointer ${ancho}`}>
         <option value="central">{desk ? 'Almacén Central' : 'NAVE'}</option>
-        {E.equipos.map(e => <option key={e.id} value={e.id}>{e.flota} ({e.matricula})</option>)}
+        {E.vehiculos.map(v => <option key={v.id} value={v.id}>{E.equipos.find(e => e.vehiculo === v.id)?.nombre || 'Sin equipo'} · {v.matricula}</option>)}
       </select></label>
   );
 }
@@ -53,7 +53,7 @@ export function Sidebar({ vista }: { vista: Vista }) {
       </div>
       <div className="p-space-md bg-surface-container-low m-space-sm rounded-xl flex items-center justify-between">
         <div className="flex items-center gap-space-sm"><span className="h-2.5 w-2.5 rounded-full bg-tertiary-container pulso" />
-          <div className="flex flex-col"><span className="font-mono text-label-md">{MARCA.nave}</span><span className="font-mono text-label-sm text-secondary">{aisles(E).length} pasillos · {E.equipos.length} furgonetas</span></div></div>
+          <div className="flex flex-col"><span className="font-mono text-label-md">{MARCA.nave}</span><span className="font-mono text-label-sm text-secondary">{E.equipos.length} equipos · {E.vehiculos.length} vehículos</span></div></div>
         <Icon n="ev_station" className="text-secondary" />
       </div>
     </aside>

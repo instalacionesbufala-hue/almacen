@@ -1,7 +1,7 @@
 /* E-008 · Material en custodia de Esmove: stock, solicitud de reposición, informe sin importes y acta de recuento firmada */
 import { useMemo, useState } from 'react';
 import { UNIT } from '../../data/catalogo';
-import { esCustodia, qtyTxt, status } from '../../domain/reglas';
+import { esCustodia, qtyTxt, status, stockTotal } from '../../domain/reglas';
 import { fechaHora, hoyISO, num, toNum } from '../../domain/formato';
 import { datosInformeCustodia, gruposReposicion } from '../../domain/custodia';
 import { descargar } from '../../domain/csv';
@@ -15,7 +15,7 @@ import { closeModal, openModal, SheetFoot, SheetHead } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 import { Firma, firmaPNG, type Trazo } from '../../ui/firma';
 import { BTN_P, BTN_S, BTN_T, CARD, Campo, FirmaImg, Icon, INP, LBL, Pill, Tag, Vacio } from '../../ui/base';
-import { abrirFicha } from '../inventario/hojas';
+import { abrirFicha, Ubicaciones } from '../inventario/hojas';
 import { abrirReposicion } from '../reposicion/Reposicion';
 import { fotosInforme } from '../fotos/servicio';
 
@@ -23,7 +23,7 @@ export default function CustodiaView() {
   const E = useAlmacen(), perm = usePermisos();
   const [prop, setProp] = useState(E.propietarios[0]?.id || 'ESMOVE');
   const o = E.propietarios.find(x => x.id === prop);
-  const prods = E.products.filter(p => esCustodia(p) && p.propietario === prop).sort((a, b) => a.loc.localeCompare(b.loc));
+  const prods = E.products.filter(p => esCustodia(p) && p.propietario === prop).sort((a, b) => a.name.localeCompare(b.name));
   const solicitud = gruposReposicion(E).find(g => g.destino === 'propietario' && g.grupo === prop);
   const rojos = prods.filter(p => status(p) === 'red').length, amarillos = prods.filter(p => status(p) === 'amber').length;
   return (
@@ -41,12 +41,12 @@ export default function CustodiaView() {
         <div className="flex items-center gap-3"><Icon n="handshake" className="text-violet-800" /><div><div className="font-semibold">{solicitud.lineas.length} referencia{solicitud.lineas.length === 1 ? '' : 's'} bajo mínimo</div><div className="text-body-sm text-secondary">La solicitud de reposición a {o?.nombre} está preparada, sin importes.</div></div></div>
         <button onClick={abrirReposicion} className={`${BTN_T} h-11 px-4`}>{perm.admin ? 'Revisar y enviar' : 'Ver solicitud'}</button></section>}
       <section className={`${CARD} overflow-x-auto`}><table className="tabla w-full min-w-[720px]">
-        <thead className="bg-surface-container-low"><tr><th>Referencia</th><th>Código modelo</th><th>Ubicación</th><th>Stock</th><th>Mínimo</th><th>Estado</th><th>N.º de serie</th></tr></thead>
+        <thead className="bg-surface-container-low"><tr><th>Referencia</th><th>Código modelo</th><th>Almacén</th><th>En vehículos</th><th>Mínimo</th><th>Estado</th><th>Dónde está</th></tr></thead>
         <tbody>{prods.length ? prods.map(p => <tr key={p.sku} onClick={() => abrirFicha(p.sku)} className="cursor-pointer">
           <td><div className="font-medium">{p.name}</div><div className="font-mono text-label-sm text-secondary">{p.sku}</div></td>
-          <td className="font-mono text-label-md">{p.supplierRef || '—'}</td><td className="font-mono text-label-md text-primary">{p.loc}</td>
-          <td className="font-semibold whitespace-nowrap">{qtyTxt(p, p.stock)}</td><td className="font-mono">{num(p.min)}</td><td><Pill p={p} /></td>
-          <td className="text-body-sm">{p.serialized ? `${(p.serials || []).length} en stock` : 'Por modelo y cantidad'}</td></tr>) : <tr><td colSpan={7}><Vacio>No hay material en custodia de este propietario.</Vacio></td></tr>}</tbody></table></section>
+          <td className="font-mono text-label-md">{p.supplierRef || '—'}</td>
+          <td className="font-semibold whitespace-nowrap">{qtyTxt(p, p.stock)}</td><td className="whitespace-nowrap text-violet-800">{qtyTxt(p, Math.round((stockTotal(E, p) - p.stock) * 1000) / 1000)}</td><td className="font-mono">{num(p.min)}</td><td><Pill p={p} /></td>
+          <td className="text-body-sm"><Ubicaciones p={p} /></td></tr>) : <tr><td colSpan={7}><Vacio>No hay material en custodia de este propietario.</Vacio></td></tr>}</tbody></table></section>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <section className={`${CARD} p-4 flex flex-col gap-2`}><h2 className="text-headline-sm font-semibold">Actas de recuento</h2>
           {E.actas.filter(a => a.propietario === prop).slice(0, 6).map(a => <button key={a.id} onClick={() => openModal(<VerActa id={a.id} />)} className="flex justify-between items-center gap-2 py-2 border-b border-surface-container text-left">
@@ -108,7 +108,7 @@ function Informe({ prop }: { prop: string }) {
 
 function Acta({ prop }: { prop: string }) {
   const E = useAlmacen(), o = E.propietarios.find(x => x.id === prop);
-  const prods = E.products.filter(p => esCustodia(p) && p.propietario === prop).sort((a, b) => a.loc.localeCompare(b.loc));
+  const prods = E.products.filter(p => esCustodia(p) && p.propietario === prop).sort((a, b) => a.name.localeCompare(b.name));
   const [cont, setCont] = useState<Record<string, string>>({}), [rep, setRep] = useState(''), [firma, setFirma] = useState<Trazo[]>([]);
   const firmar = () => {
     if (prods.some(p => (cont[p.sku] ?? '').trim() === '')) return toast('Anota lo contado en todas las referencias (0 si no hay).', 'err');
@@ -122,7 +122,7 @@ function Acta({ prop }: { prop: string }) {
     <div className="p-5 flex flex-col gap-3">
       {prods.map(p => { const d = (cont[p.sku] ?? '') === '' ? 0 : toNum(cont[p.sku]) - p.stock; return (
         <div key={p.sku} className="flex items-center gap-3 py-2 border-b border-surface-container">
-          <div className="flex-1 min-w-0"><div className="font-medium truncate">{p.name}</div><div className="font-mono text-label-sm text-secondary">{p.sku} · {p.loc} · sistema {qtyTxt(p, p.stock)}{p.serialized ? ` · S/N: ${(p.serials || []).join(', ')}` : ''}</div></div>
+          <div className="flex-1 min-w-0"><div className="font-medium truncate">{p.name}</div><div className="font-mono text-label-sm text-secondary">{p.sku} · en almacén {qtyTxt(p, p.stock)}</div></div>
           {d !== 0 && <Tag c={d < 0 ? 'bg-error-container text-error' : 'bg-tertiary-fixed/30 text-tertiary'}>{d > 0 ? '+' : ''}{num(d)}</Tag>}
           <input value={cont[p.sku] ?? ''} onChange={e => setCont({ ...cont, [p.sku]: e.target.value })} inputMode="decimal" placeholder={num(p.stock)} className={`${INP} !w-24 h-12 text-center font-mono`} aria-label={`Contado de ${p.name}`} />
         </div>); })}

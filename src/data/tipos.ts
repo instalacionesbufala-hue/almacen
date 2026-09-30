@@ -1,9 +1,11 @@
 /* Modelo de datos (ver CLAUDE.md → "Modelo de datos") */
 
 export type CatId = 'cargadores' | 'cuadros' | 'epis' | 'ropa' | 'cables' | 'tubos' | 'fijaciones' | 'aparamenta' | 'fontaneria';
-export type Unidad = 'm' | 'ud';
+/** E-013: formato de venta. En el almacén se mueven formatos enteros (salvo metros); el contenido cuenta para los consumos (E-012) */
+export type Unidad = 'm' | 'ud' | 'bote' | 'sobre' | 'bolsa' | 'pack' | 'caja';
 /** 'ajuste' lleva la cantidad con signo (+ suma, − resta) y exige motivo; solo el administrador */
-export type TipoMov = 'entrada' | 'salida' | 'merma' | 'ajuste';
+/** E-013: traspaso (almacén → vehículo), devolucion (vehículo → almacén) y consumo (en obra, desde el vehículo; E-012) */
+export type TipoMov = 'entrada' | 'salida' | 'merma' | 'ajuste' | 'traspaso' | 'devolucion' | 'consumo';
 export type Semaforo = 'red' | 'amber' | 'green';
 export type EstadoEquipo = 'ruta' | 'depot' | 'taller';
 
@@ -14,17 +16,16 @@ export interface Producto {
   name: string;
   cat: CatId;
   unit: Unidad;
-  pack: number;
-  packLabel: string;
+  /** Unidades por formato: bote de 1000 tacos → 1000 (en m y ud, 1) */
+  contenido?: number;
+  /** Descripción corta opcional ("Monofásico · 40 A") */
+  packLabel?: string;
+  /** Stock del ALMACÉN en formatos (E-013). Lo de los vehículos está en Estado.aBordo */
   stock: number;
   min: number;
-  /** Pasillo-Estantería-Nivel, p. ej. P01-E02-N1 */
-  loc: string;
+  /** false: importado sin mínimo → tarea "Completar mínimo" del administrador */
+  minimoDefinido?: boolean;
   supplier: string;
-  /** Coste neto por unidad base (m o ud). null en custodia (E-008/E-010): nunca se muestra "0,00 €" */
-  price: number | null;
-  serialized?: boolean;
-  serials?: string[];
   /** Alta rápida desde el escáner (rol almacén): el administrador debe completarla */
   borrador?: boolean;
   /** E-008: material propio o en custodia de un depositante (sin precio) */
@@ -48,7 +49,7 @@ export interface PerfilUsuario { id: string; nombre: string; email: string | nul
 /** Merma o diferencia de recuento del almacén que espera la validación del administrador (E-004) */
 export interface Pendiente {
   id: string; ts: number; tipo: 'merma' | 'recuento'; sku: string; qty: number; reason: string; ref: string; serials: string[];
-  operator: string; estado: 'pendiente' | 'aprobado' | 'rechazado'; resueltoPor?: string; nota?: string; valor?: number;
+  operator: string; estado: 'pendiente' | 'aprobado' | 'rechazado' | 'aplicada' | 'vista'; resueltoPor?: string; nota?: string; valor?: number;
   /** creado en este dispositivo y aún sin respuesta del servidor */
   provisional?: boolean;
 }
@@ -87,8 +88,12 @@ export interface Movimiento {
   ref: string;
   operator: string;
   serials: string[];
-  /** Furgoneta a la que va (entrega) o de la que vuelve (devolución) */
+  /** Equipo implicado (informativo) */
   equipo?: string;
+  /** E-013: vehículo cuyo stock cambia (traspaso, devolución, merma o ajuste a bordo, consumo) */
+  vehiculo?: string;
+  /** Efecto en el vehículo, en unidades de contenido (con signo) */
+  unidades?: number;
   /** Entrega a la que pertenece */
   entrega?: string;
 }
@@ -118,16 +123,25 @@ export interface Tecnico {
   tallas?: Tallas;
   /** E-011: correo al que se envía la copia de sus entregas (opcional) */
   email?: string;
+  /** E-013: código de empleado (E01…) y teléfono */
+  codigo?: string;
+  telefono?: string;
 }
 
+/** E-013: el equipo es solo un nombre ("Búfala 1", como lo envía el wizard); sus técnicos y su vehículo cambian con el tiempo */
 export interface Equipo {
   id: string;
   nombre: string;
-  flota: string;
-  matricula: string;
   estado: EstadoEquipo;
   tecnicos: string[];
+  /** vehículo asignado ahora */
+  vehiculo?: string;
 }
+export interface Vehiculo { id: string; matricula: string; modelo: string; equipo?: string }
+/** Historial: técnico → equipo y vehículo → equipo, con fechas */
+export interface Asignacion { tipo: 'tecnico' | 'vehiculo'; sujeto: string; equipo: string; desde: number; hasta?: number }
+/** Stock a bordo de un vehículo, en UNIDADES de contenido (puede ser negativo: discrepancia) */
+export interface StockVehiculo { vehiculo: string; sku: string; unidades: number }
 
 export interface LineaEntrega {
   sku: string;
@@ -156,6 +170,8 @@ export interface Entrega {
   estado?: 'preparada' | 'firmada' | 'anulada';
   obra?: string;
   caduca?: number;
+  /** E-013: vehículo en el que entró el material al firmar */
+  vehiculo?: string;
 }
 
 
@@ -224,6 +240,11 @@ export interface Estado {
   minimosHerramienta: MinimoHerramienta[];
   configAvisos: ConfigAvisos;
   envios: EnvioAviso[];
+  /** E-013: vehículos, historial de asignaciones, stock a bordo y estado de la instalación (demostración o datos reales) */
+  vehiculos: Vehiculo[];
+  asignaciones: Asignacion[];
+  aBordo: StockVehiculo[];
+  configApp: { modoDemo: boolean; demoBorrada?: number; demoBorradaPor?: string };
   actas: ActaCustodia[];
   /** E-011: entrega en curso (se conserva en el dispositivo si se cierra la app) */
   cesta: Cesta;

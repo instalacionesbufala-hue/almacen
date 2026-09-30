@@ -6,8 +6,6 @@ export function usePermisos() {
   const E = useAlmacen(), admin = E.rol === 'admin';
   return {
     admin,
-    /** precios, valor del inventario y costes */
-    verCostes: admin,
     /** crear referencias completas, editarlas y borrarlas; el almacén solo crea borradores */
     editarCatalogo: admin,
     /** alta y baja de equipos, técnicos y dotación */

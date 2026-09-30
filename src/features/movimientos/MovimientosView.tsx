@@ -16,7 +16,7 @@ export default function MovimientosView() {
   const ahora = Date.now(), lim = ({ hoy: new Date().setHours(0, 0, 0, 0), '7': ahora - 7 * 864e5, '30': ahora - 30 * 864e5, all: 0 } as Record<string, number>)[rango];
   const toks = norm(q).split(/\s+/).filter(Boolean);
   const lista = E.movements.filter(m => (tipo === 'all' || m.type === tipo) && m.ts >= lim
-    && (!toks.length || toks.every(t => norm([m.sku, find(E, m.sku)?.name, m.reason, m.ref, m.operator, (m.serials || []).join(' '), E.equipos.find(e => e.id === m.equipo)?.flota].join(' ')).includes(t))));
+    && (!toks.length || toks.every(t => norm([m.sku, find(E, m.sku)?.name, m.reason, m.ref, m.operator, E.equipos.find(e => e.id === m.equipo)?.nombre, E.vehiculos.find(v => v.id === m.vehiculo)?.matricula].join(' ')).includes(t))));
   const tot = (t: TipoMov) => lista.filter(m => m.type === t).length;
   const chip = (k: 'all' | TipoMov, l: string) => <button key={k} onClick={() => setTipo(k)} className={`shrink-0 px-4 h-11 rounded-full font-semibold text-body-sm ${tipo === k ? 'bg-primary text-white' : 'bg-surface-container-lowest shadow-sm'}`}>{l}</button>;
   return (
@@ -41,7 +41,7 @@ export default function MovimientosView() {
             <td><span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full font-mono text-label-sm ${t.c}`}><Icon n={t.icon} className="ico-16" />{t.t}</span></td>
             <td><button onClick={() => abrirFicha(m.sku)} className="text-left"><div className="font-medium hover:text-primary">{p ? p.name : m.sku}</div><div className="font-mono text-label-sm text-secondary">{m.sku}{m.serials?.length ? ` · S/N ${m.serials.join(', ')}` : ''}</div></button></td>
             <td className={`text-right font-semibold whitespace-nowrap ${m.type === 'entrada' ? 'text-tertiary' : m.type === 'merma' ? 'text-error' : ''}`}>{t.sign}{num(m.qty)} {p ? UNIT[p.unit] : ''}</td>
-            <td>{m.reason}</td><td className="text-body-sm">{m.ref}{m.equipo ? ` · ${E.equipos.find(e => e.id === m.equipo)?.flota || m.equipo}` : ''}</td><td>{m.operator}</td></tr>); })
+            <td>{m.reason}</td><td className="text-body-sm">{m.ref}{m.vehiculo ? ` · ${E.vehiculos.find(v => v.id === m.vehiculo)?.matricula || m.vehiculo}` : m.equipo ? ` · ${E.equipos.find(e => e.id === m.equipo)?.nombre || m.equipo}` : ''}</td><td>{m.operator}</td></tr>); })
           : <tr><td colSpan={7}><Vacio>Sin movimientos en la selección.</Vacio></td></tr>}</tbody></table></section>
         : <section className={`${CARD} px-4`}>{lista.length ? lista.slice(0, 120).map(m => <MovRow key={m.id} m={m} />) : <Vacio>Sin movimientos en la selección.</Vacio>}</section>}
     </div>

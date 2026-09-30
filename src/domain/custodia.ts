@@ -2,10 +2,11 @@
 import type { AvisoReposicion, Estado, Producto } from '../data/tipos';
 import { UNIT } from '../data/catalogo';
 import type { DatosInforme } from '../../supabase/functions/_compartido/informe';
-import { esCustodia, find, pedidoSugerido } from './reglas';
+import { esCustodia, find, nombreVehiculo, pedidoSugerido, stockTotal } from './reglas';
+import { redondea } from './formato';
 import { caducidad } from './herramientas';
 
-export interface LineaReposicion { sku?: string; modelo?: string; nombre: string; codigo: string; unidad: string; stock: number; minimo: number; sugerida: number; estado: 'abierto' | 'pedido'; pedida?: number; precio?: number }
+export interface LineaReposicion { sku?: string; modelo?: string; nombre: string; codigo: string; unidad: string; stock: number; minimo: number; sugerida: number; estado: 'abierto' | 'pedido'; pedida?: number }
 export interface GrupoReposicion { destino: 'proveedor' | 'propietario'; grupo: string; titulo: string; lineas: LineaReposicion[] }
 
 /** Avisos abiertos. En la nube vienen del servidor; en modo demo se calculan con la misma regla (stock < mínimo). */
@@ -35,7 +36,7 @@ export function gruposReposicion(S: Estado): GrupoReposicion[] {
     if (a.sku) {
       const p = find(S, a.sku); if (!p) continue;
       g.lineas.push({ sku: p.sku, nombre: p.name, codigo: p.supplierRef || p.ean || '', unidad: UNIT[p.unit], stock: p.stock, minimo: p.min, sugerida: pedidoSugerido(p), estado: a.estado === 'pedido' ? 'pedido' : 'abierto',
-        pedida: a.cantidadPedida, precio: esCustodia(p) || S.rol !== 'admin' ? undefined : p.price ?? undefined });
+        pedida: a.cantidadPedida });
     } else if (a.modeloHerramienta) {
       const modelo = a.modeloHerramienta, m = S.minimosHerramienta.find(x => x.modelo === modelo);
       const libres = S.herramientas.filter(h => h.clase === 'herramienta' && h.modelo === modelo && h.estado === 'operativa' && !h.equipo && !h.tecnico).length;
@@ -64,8 +65,8 @@ export function datosInformeCustodia(S: Estado, propietario: string, desde: numb
   const skus = new Set(prods.map(p => p.sku));
   return {
     propietario: S.propietarios.find(o => o.id === propietario)?.nombre || propietario, desde, hasta,
-    productos: prods.map(p => ({ sku: p.sku, nombre: p.name, unidad: UNIT[p.unit], stock: p.stock, minimo: p.min, codigoModelo: p.supplierRef, conSerie: !!p.serialized })),
-    movimientos: S.movements.filter(m => skus.has(m.sku)).map(m => ({ ts: m.ts, sku: m.sku, tipo: m.type, cantidad: m.qty, motivo: m.reason, referencia: m.ref, series: m.serials || [], operario: m.operator, equipo: m.equipo })),
+    productos: prods.map(p => ({ sku: p.sku, nombre: p.name, unidad: UNIT[p.unit], stock: p.stock, enVehiculos: redondea(stockTotal(S, p) - p.stock), minimo: p.min, codigoModelo: p.supplierRef, conSerie: false })),
+    movimientos: S.movements.filter(m => skus.has(m.sku)).map(m => ({ ts: m.ts, sku: m.sku, tipo: m.type, cantidad: m.qty, motivo: m.reason, referencia: m.ref, series: [], operario: m.operator, equipo: m.equipo, vehiculo: m.vehiculo ? nombreVehiculo(S, m.vehiculo) : undefined })),
     actas: S.actas.filter(a => a.propietario === propietario).map(a => ({ numero: a.numero || 'pendiente', ts: a.ts, representante: a.representante, lineas: a.lineas })),
   };
 }

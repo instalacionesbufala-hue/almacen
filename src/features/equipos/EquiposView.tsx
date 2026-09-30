@@ -1,51 +1,51 @@
-/* Equipos (cuadrillas con furgoneta), técnicos y auditoría de entregas firmadas */
+/* Equipos, vehículos y técnicos (E-013: tres entidades independientes con historial de asignaciones) y auditoría de entregas.
+   - El equipo es un nombre ("Búfala 1", como lo envía el wizard); cambia de técnicos y de vehículo con el tiempo.
+   - El material a bordo es del VEHÍCULO: si un técnico cambia de equipo no se mueve nada; si un vehículo cambia de equipo, su material va con él. */
 import { useState } from 'react';
-import type { Equipo, EstadoEquipo } from '../../data/tipos';
-import { CATS, UNIT } from '../../data/catalogo';
-import { find, numEntrega, vanStock } from '../../domain/reglas';
+import type { Equipo, EstadoEquipo, Tecnico, Vehiculo } from '../../data/tipos';
+import { CATS } from '../../data/catalogo';
+import { find, nombreVehiculo, numEntrega, qtyTxt, stockDeVehiculo } from '../../domain/reglas';
 import { fechaHora, hace, hoyISO, num, uid } from '../../domain/formato';
 import { hashEntrega } from '../../domain/hash';
 import { descargarCsv } from '../../domain/csv';
 import { avisosDotacion, herramientasDe } from '../../domain/herramientas';
-import { ejecutar, guardar, S, useAlmacen } from '../../store/almacen';
+import { ejecutar, guardar, useAlmacen } from '../../store/almacen';
 import { modoNube } from '../../store/nube/cliente';
 import { verificarEntregasServidor } from '../../store/nube/sync';
 import { usePermisos } from '../../store/permisos';
 import { ir, setUI, useEsEscritorio, useUI } from '../../store/ui';
 import { closeModal, openModal, SheetFoot, SheetHead } from '../../ui/modal';
 import { toast } from '../../ui/toast';
-import { Avatar, BTN_P, BTN_S, BTN_T, CARD, Campo, ESTADO_EQ, FirmaImg, Icon, INP, LBL, Vacio } from '../../ui/base';
+import { Avatar, BTN_P, BTN_S, CARD, Campo, ESTADO_EQ, FirmaImg, Icon, INP, LBL, Vacio } from '../../ui/base';
 import { abrirRecibo, abrirTallas } from '../entregas/Hojas';
+
+type Pestaña = 'equipos' | 'vehiculos' | 'tecnicos' | 'historial';
 
 export default function EquiposView() {
   const E = useAlmacen(), u = useUI(), { gestionarFlota } = usePermisos();
-  const enRuta = E.equipos.filter(e => e.estado === 'ruta').length;
+  const pest = (['equipos', 'vehiculos', 'tecnicos', 'historial'] as Pestaña[]).includes(u.eqTab as Pestaña) ? u.eqTab as Pestaña : 'equipos';
   const libres = E.tecnicos.filter(t => !E.equipos.some(e => e.tecnicos.includes(t.id)));
-  const tab = (k: 'equipos' | 'tecnicos', l: string, n: number, i: string) =>
-    <button onClick={() => setUI({ eqTab: k })} className={`flex items-center gap-2 px-4 h-11 rounded-lg font-semibold ${u.eqTab === k ? 'bg-white text-primary shadow-sm' : 'text-on-surface-variant'}`}><Icon n={i} className="ico-20" />{l}<span className="font-mono text-label-sm px-1.5 rounded bg-surface-container-high">{n}</span></button>;
+  const tab = (k: Pestaña, l: string, n: number | null, i: string) =>
+    <button onClick={() => setUI({ eqTab: k })} className={`flex items-center gap-2 px-3 sm:px-4 h-12 rounded-lg font-semibold ${pest === k ? 'bg-white text-primary shadow-sm' : 'text-on-surface-variant'}`}><Icon n={i} className="ico-20" /><span className="hidden sm:inline">{l}</span>{n !== null && <span className="font-mono text-label-sm px-1.5 rounded bg-surface-container-high">{n}</span>}</button>;
   return (
     <div className="px-4 lg:px-gutter py-4 lg:py-space-lg flex flex-col gap-4 lg:gap-space-lg max-w-[1600px]">
       <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-3">
-        <div><span className={LBL}>Logística &amp; flota / gestión de equipos</span><h1 className="text-headline-lg-mobile lg:text-headline-lg font-bold">Equipos de instalación &amp; despacho móvil</h1></div>
-        <div className="flex flex-wrap items-center gap-2"><span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-surface-container-high font-mono text-label-sm"><span className="w-2 h-2 rounded-full bg-tertiary-container" />{enRuta} en ruta · {E.tecnicos.length} operarios</span>
-          {gestionarFlota && <><button onClick={() => abrirFormEquipo()} className={`${BTN_P} px-4 h-11`}><Icon n="group_add" className="ico-20" />Crear equipo</button><button onClick={abrirFormTecnico} className={`${BTN_S} px-4 h-11`}><Icon n="person_add" className="ico-20" />Técnico</button></>}</div>
+        <div><span className={LBL}>Equipos de campo · vehículos · técnicos</span><h1 className="text-headline-lg-mobile lg:text-headline-lg font-bold">Equipos, vehículos y técnicos</h1></div>
+        {gestionarFlota && <div className="flex flex-wrap gap-2">
+          <button onClick={() => abrirFormEquipo()} className={`${BTN_P} px-4 h-12`}><Icon n="group_add" className="ico-20" />Equipo</button>
+          <button onClick={() => abrirFormVehiculo()} className={`${BTN_S} px-4 h-12`}><Icon n="local_shipping" className="ico-20" />Vehículo</button>
+          <button onClick={() => abrirFormTecnico()} className={`${BTN_S} px-4 h-12`}><Icon n="person_add" className="ico-20" />Técnico</button></div>}
       </div>
       <section className={`${CARD} p-4 lg:p-space-md flex gap-4 items-start`}><span className="w-11 h-11 rounded-xl bg-primary-fixed text-primary grid place-items-center shrink-0"><Icon n="alt_route" /></span>
-        <div className="flex-1"><h2 className="text-headline-sm font-semibold">Operación flexible</h2><p className="text-body-md text-secondary">Cuadrillas en pareja (2 técnicos, 1 furgoneta) o técnicos individuales. El stock a bordo de cada furgoneta se calcula con lo entregado y firmado menos lo devuelto. Cada equipo tiene además su dotación de herramientas, EPIs y ropa.</p></div></section>
-      <div className="inline-flex self-start bg-surface-container-low rounded-xl p-1">{tab('equipos', 'Equipos', E.equipos.length, 'local_shipping')}{tab('tecnicos', 'Técnicos', E.tecnicos.length, 'engineering')}</div>
-      {u.eqTab === 'equipos'
-        ? <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4 lg:gap-space-lg">{E.equipos.map(e => <CardEquipo key={e.id} e={e} />)}</div>
-        : <div className={`${CARD} overflow-hidden`}>{E.tecnicos.map(t => { const e = E.equipos.find(x => x.tecnicos.includes(t.id)), dot = herramientasDe(E, { tecnico: t.id }); return (
-          <div key={t.id} className="flex flex-wrap items-center gap-3 p-4 border-b border-surface-container"><Avatar n={t.nombre} />
-            <div className="flex-1 min-w-[160px]"><div className="font-semibold">{t.nombre}</div><div className="font-mono text-label-sm text-secondary">{t.rol} · DNI {t.dni} · {dot.length} en dotación · tallas {t.tallas ? Object.values(t.tallas).filter(Boolean).join('/') || '—' : '—'}</div>
-              <div className="text-body-sm text-secondary flex items-center gap-1"><Icon n="mail" className="ico-16" />{t.email || 'Sin correo'}</div></div>
-            {gestionarFlota && <button onClick={() => abrirTallas(t.id)} className="text-primary text-body-sm font-semibold">Tallas</button>}
-            {gestionarFlota && <button onClick={() => { const v = prompt(`Correo de ${t.nombre} (vacío para quitarlo):`, t.email || ''); if (v !== null && ejecutar({ op: 'emailTecnico', args: { tecnico: t.id, email: v } })) toast('Correo guardado.', 'ok'); }} className="text-primary text-body-sm font-semibold">Correo</button>}
-            <label className="flex items-center gap-2"><span className={LBL}>Equipo</span>
-              <select disabled={!gestionarFlota} value={e?.id || ''} onChange={ev => { if (ejecutar({ op: 'asignarTecnico', args: { tecnico: t.id, equipo: ev.target.value || undefined } })) toast('Asignación actualizada.', 'ok'); }} className={`${INP} !w-auto h-11`}>
-                <option value="">— Sin equipo —</option>{E.equipos.map(x => <option key={x.id} value={x.id}>{x.nombre} ({x.matricula})</option>)}</select></label>
-          </div>); })}
-          {libres.length > 0 && <p className="p-4 text-body-sm text-amber-800 bg-amber-50">{libres.length} técnico{libres.length === 1 ? '' : 's'} sin equipo: no podrán recibir entregas hasta asignarlos.</p>}</div>}
+        <div className="flex-1"><h2 className="text-headline-sm font-semibold">Composición variable</h2><p className="text-body-md text-secondary">Técnicos, equipos y vehículos van por separado y cada cambio queda en el historial. <b>El material a bordo es del vehículo</b>: si un técnico cambia de equipo no se mueve nada, y si un vehículo pasa a otro equipo, su material va con él. El nombre del equipo debe ser el que envía el wizard de cierres ("Búfala 1").</p></div></section>
+      <div className="inline-flex self-start bg-surface-container-low rounded-xl p-1 max-w-full overflow-x-auto no-scrollbar">
+        {tab('equipos', 'Equipos', E.equipos.length, 'groups')}{tab('vehiculos', 'Vehículos', E.vehiculos.length, 'local_shipping')}{tab('tecnicos', 'Técnicos', E.tecnicos.length, 'engineering')}{tab('historial', 'Historial', null, 'history')}</div>
+      {pest === 'equipos' && (E.equipos.length ? <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4 lg:gap-space-lg">{E.equipos.map(e => <CardEquipo key={e.id} e={e} />)}</div>
+        : <section className={`${CARD} p-6 text-center text-secondary`}>Aún no hay equipos. {gestionarFlota && <button onClick={() => abrirFormEquipo()} className="text-primary font-semibold">Crear el primero</button>}</section>)}
+      {pest === 'vehiculos' && <Vehiculos />}
+      {pest === 'tecnicos' && <div className={`${CARD} overflow-hidden`}>{E.tecnicos.length ? E.tecnicos.map(t => <FilaTecnico key={t.id} t={t} />) : <Vacio>Aún no hay técnicos.</Vacio>}
+        {libres.length > 0 && <p className="p-4 text-body-sm text-amber-800 bg-amber-50">{libres.length} técnico{libres.length === 1 ? '' : 's'} sin equipo: no podrán recibir material de instalación hasta asignarlos.</p>}</div>}
+      {pest === 'historial' && <Historial />}
       <AuditoriaEntregas />
     </div>
   );
@@ -53,60 +53,121 @@ export default function EquiposView() {
 
 function CardEquipo({ e }: { e: Equipo }) {
   const E = useAlmacen(), { gestionarFlota } = usePermisos();
-  const vs = vanStock(E, e.id), ult = E.entregas.filter(x => x.equipo === e.id).sort((a, b) => b.ts - a.ts)[0];
-  const top = [...vs].sort((a, b) => b.qty * (find(E, b.sku)?.price || 0) - a.qty * (find(E, a.sku)?.price || 0)).slice(0, 3);
+  const v = E.vehiculos.find(x => x.id === e.vehiculo), vs = v ? stockDeVehiculo(E, v.id) : [], ult = E.entregas.filter(x => x.equipo === e.id).sort((a, b) => b.ts - a.ts)[0];
   const dot = herramientasDe(E, { equipo: e.id }), avis = new Set(avisosDotacion(E).map(h => h.id)), dotAvisos = dot.filter(h => avis.has(h.id)).length;
+  const fuera = E.tecnicos.filter(t => !e.tecnicos.includes(t.id));
   const cambiarEstado = () => { const ks = Object.keys(ESTADO_EQ) as EstadoEquipo[]; ejecutar({ op: 'estadoEquipo', args: { id: e.id, estado: ks[(ks.indexOf(e.estado) + 1) % ks.length] } }); };
-  const verVan = () => { setUI({ almacen: e.id }); ir('stock'); };
-  // E-011: abre la entrega con el primer técnico del equipo ya elegido (se puede cambiar en el paso 1)
   const cargar = () => { E.cesta.equipo = e.id; E.cesta.receptor = e.tecnicos[0] ?? null; E.cesta.paso = e.tecnicos[0] ? 2 : 1; guardar(); ir('entregas'); };
+  const asignarV = (vid: string) => { if (ejecutar({ op: 'asignarVehiculo', args: { vehiculo: vid || e.vehiculo!, equipo: vid ? e.id : undefined } })) toast(vid ? `Vehículo asignado a ${e.nombre}: su material va con él.` : `${e.nombre} queda sin vehículo.`, 'ok'); };
   return (
     <article className={`${CARD} p-4 lg:p-space-md flex flex-col gap-3`}>
-      <div className="flex items-start gap-3"><span className="w-12 h-12 rounded-xl bg-surface-container-low text-primary grid place-items-center shrink-0"><Icon n={e.tecnicos.length > 1 ? 'airport_shuttle' : 'directions_car'} /></span>
-        <div className="flex-1 min-w-0"><div className={LBL}>{e.nombre} · {e.flota}</div><div className="text-headline-md font-semibold font-mono">{e.matricula}</div></div>
+      <div className="flex items-start gap-3"><span className="w-12 h-12 rounded-xl bg-surface-container-low text-primary grid place-items-center shrink-0"><Icon n="groups" /></span>
+        <div className="flex-1 min-w-0"><div className={LBL}>Equipo</div><div className="text-headline-md font-semibold">{e.nombre}</div></div>
         <button onClick={cambiarEstado} title="Cambiar estado" className={`font-mono text-label-sm px-2.5 py-1 rounded-full whitespace-nowrap ${ESTADO_EQ[e.estado].c}`}>● {ESTADO_EQ[e.estado].t}</button></div>
-      <div className="bg-surface-container-low rounded-xl p-3 flex flex-col gap-2"><div className={LBL}>Personal operativo ({e.tecnicos.length} técnico{e.tecnicos.length === 1 ? '' : 's'})</div>
+
+      <div className="bg-surface-container-low rounded-xl p-3 flex flex-col gap-2"><div className={LBL}>Vehículo</div>
+        {v ? <div className="flex items-center gap-3"><Icon n="local_shipping" className="text-primary" /><div className="flex-1 min-w-0"><div className="font-semibold font-mono">{v.matricula}</div><div className="text-body-sm text-secondary truncate">{v.modelo || '—'}</div></div></div>
+          : <span className="text-body-sm text-amber-800">Sin vehículo: no puede recibir material de instalación.</span>}
+        {gestionarFlota && <select value={e.vehiculo || ''} onChange={x => asignarV(x.target.value)} className={`${INP} h-12`} aria-label={`Vehículo de ${e.nombre}`}>
+          <option value="">— Sin vehículo —</option>{E.vehiculos.map(x => <option key={x.id} value={x.id}>{x.matricula}{x.modelo ? ` · ${x.modelo}` : ''}{x.equipo && x.equipo !== e.id ? ` (ahora en ${E.equipos.find(q => q.id === x.equipo)?.nombre})` : ''}</option>)}</select>}</div>
+
+      <div className="bg-surface-container-low rounded-xl p-3 flex flex-col gap-2"><div className={LBL}>Técnicos ({e.tecnicos.length})</div>
         {e.tecnicos.length ? e.tecnicos.map(id => E.tecnicos.find(t => t.id === id)).filter(Boolean).map(t =>
-          <div key={t!.id} className="flex items-center gap-3"><Avatar n={t!.nombre} c="bg-white text-primary" /><div className="flex-1 min-w-0"><div className="font-semibold truncate">{t!.nombre}</div><div className="font-mono text-label-sm text-secondary truncate">{t!.rol}</div></div><Icon n="verified" className="text-tertiary ico-20" /></div>)
-          : <span className="text-secondary text-body-sm">Sin técnicos asignados</span>}</div>
-      <div><div className="flex justify-between mb-2"><span className={LBL}>Stock a bordo</span><button onClick={verVan} className="font-mono text-label-sm text-primary">Ver todo ({vs.length}) →</button></div>
-        <div className="grid grid-cols-3 gap-2">{top.length ? top.map(x => { const p = find(E, x.sku)!; return (
-          <div key={x.sku} className="bg-surface-container-low rounded-lg p-2 text-center"><Icon n={CATS[p.cat].icon} className="text-primary ico-20" /><div className="font-semibold">{num(x.qty)} {UNIT[p.unit]}</div><div className="font-mono text-[9px] text-secondary truncate">{p.name}</div></div>); })
-          : <div className="col-span-3 text-body-sm text-secondary bg-surface-container-low rounded-lg p-3 text-center">Sin material cargado</div>}</div></div>
-      <button onClick={() => ir('dotacion')} className="text-left bg-surface-container-low rounded-xl p-3 flex items-center gap-3"><Icon n="construction" className="text-primary" />
+          <div key={t!.id} className="flex items-center gap-3"><Avatar n={t!.nombre} c="bg-white text-primary" /><div className="flex-1 min-w-0"><div className="font-semibold truncate">{t!.nombre}</div><div className="font-mono text-label-sm text-secondary truncate">{t!.codigo ? t!.codigo + ' · ' : ''}{t!.rol}</div></div>
+            {gestionarFlota && <button onClick={() => { if (ejecutar({ op: 'asignarTecnico', args: { tecnico: t!.id } })) toast(`${t!.nombre} sale de ${e.nombre}.`, 'ok'); }} className="w-11 h-11 grid place-items-center rounded-lg text-secondary hover:bg-white" aria-label={`Quitar a ${t!.nombre} del equipo`}><Icon n="person_remove" /></button>}</div>)
+          : <span className="text-secondary text-body-sm">Sin técnicos asignados</span>}
+        {gestionarFlota && fuera.length > 0 && <select value="" onChange={x => { if (x.target.value && ejecutar({ op: 'asignarTecnico', args: { tecnico: x.target.value, equipo: e.id } })) toast('Técnico añadido al equipo (su historial queda guardado).', 'ok'); }} className={`${INP} h-12`} aria-label={`Añadir técnico a ${e.nombre}`}>
+          <option value="">+ Añadir técnico…</option>{fuera.map(t => <option key={t.id} value={t.id}>{t.nombre}{E.equipos.find(q => q.tecnicos.includes(t.id)) ? ` (ahora en ${E.equipos.find(q => q.tecnicos.includes(t.id))!.nombre})` : ''}</option>)}</select>}</div>
+
+      {v && <div><div className="flex justify-between mb-2"><span className={LBL}>A bordo de {v.matricula}</span><button onClick={() => { setUI({ almacen: v.id }); ir('stock'); }} className="font-mono text-label-sm text-primary h-8">Ver todo ({vs.length}) →</button></div>
+        <div className="grid grid-cols-3 gap-2">{vs.length ? vs.slice(0, 3).map(x => { const p = find(E, x.sku)!; return (
+          <div key={x.sku} className="bg-surface-container-low rounded-lg p-2 text-center"><Icon n={CATS[p.cat].icon} className="text-primary ico-20" /><div className="font-semibold text-body-sm">{qtyTxt(p, x.qty)}</div><div className="font-mono text-[9px] text-secondary truncate">{p.name}</div></div>); })
+          : <div className="col-span-3 text-body-sm text-secondary bg-surface-container-low rounded-lg p-3 text-center">Sin material a bordo</div>}</div></div>}
+      <button onClick={() => ir('dotacion')} className="text-left bg-surface-container-low rounded-xl p-3 flex items-center gap-3 min-h-14"><Icon n="construction" className="text-primary" />
         <div className="flex-1 min-w-0"><div className="font-mono text-label-sm text-secondary">Dotación (herramientas, EPIs, ropa)</div><div className="font-semibold">{dot.length} fichas{dotAvisos ? <span className="text-error"> · {dotAvisos} con aviso</span> : ''}</div></div><Icon n="chevron_right" className="text-primary" /></button>
-      {ult && <button onClick={() => abrirRecibo(ult.id)} className="text-left bg-surface-container-low rounded-xl p-3 flex items-center gap-3"><Icon n="draw" className="text-tertiary" />
-        <div className="flex-1 min-w-0"><div className="font-mono text-label-sm text-secondary">Última entrega firmada</div><div className="font-semibold">{hace(ult.ts)} (#{numEntrega(ult)})</div></div><Icon n="visibility" className="text-primary" /></button>}
-      <div className="mt-auto flex flex-col gap-2">
-        {!gestionarFlota ? null : e.tecnicos.length > 1 ? <button onClick={() => abrirFormEquipo(e)} className={`${BTN_T} h-11`}><Icon n="call_split" className="ico-20" />Desdoblar en técnicos (1+1)</button>
-          : <button onClick={() => abrirEmparejar(e.id)} className={`${BTN_T} h-11`}><Icon n="call_merge" className="ico-20" />Formar pareja</button>}
-        <button onClick={cargar} className={`${BTN_P} h-12`}><Icon n="inventory" className="ico-20" />{e.estado === 'depot' ? 'Asignar material para la ruta de hoy' : 'Gestionar carga de furgoneta'}</button>
-      </div>
+      {ult && <button onClick={() => abrirRecibo(ult.id)} className="text-left bg-surface-container-low rounded-xl p-3 flex items-center gap-3 min-h-14"><Icon n="draw" className="text-tertiary" />
+        <div className="flex-1 min-w-0"><div className="font-mono text-label-sm text-secondary">Última entrega</div><div className="font-semibold">{hace(ult.ts)} (#{numEntrega(ult)})</div></div><Icon n="visibility" className="text-primary" /></button>}
+      <button onClick={cargar} className={`${BTN_P} h-14 mt-auto`}><Icon n="inventory" className="ico-20" />Entregar material a {e.nombre}</button>
+      {gestionarFlota && <div className="flex gap-3 justify-end">
+        <button onClick={() => abrirFormEquipo(e)} className="text-primary text-body-sm font-semibold h-10">Editar</button>
+        <button onClick={() => { if (confirm(`¿Retirar el equipo ${e.nombre}? Su vehículo queda sin equipo y el historial se conserva.`) && ejecutar({ op: 'retirarEquipo', args: { id: e.id } })) toast('Equipo retirado.', 'ok'); }} className="text-error text-body-sm font-semibold h-10">Retirar</button></div>}
     </article>
+  );
+}
+
+function Vehiculos() {
+  const E = useAlmacen(), { gestionarFlota } = usePermisos();
+  if (!E.vehiculos.length) return <section className={`${CARD} p-6 text-center text-secondary`}>Aún no hay vehículos. {gestionarFlota && <button onClick={() => abrirFormVehiculo()} className="text-primary font-semibold">Dar de alta el primero</button>}</section>;
+  return (
+    <div className={`${CARD} overflow-hidden`}>{E.vehiculos.map(v => { const vs = stockDeVehiculo(E, v.id); return (
+      <div key={v.id} className="flex flex-wrap items-center gap-3 p-4 border-b border-surface-container">
+        <span className="w-11 h-11 rounded-xl bg-surface-container-low text-primary grid place-items-center"><Icon n="local_shipping" /></span>
+        <div className="flex-1 min-w-[160px]"><div className="font-semibold font-mono">{v.matricula}</div><div className="text-body-sm text-secondary">{v.modelo || '—'} · {vs.length} referencias a bordo</div></div>
+        <button onClick={() => { setUI({ almacen: v.id }); ir('stock'); }} className={`${BTN_S} h-11 px-3 text-body-sm`}><Icon n="inventory_2" className="ico-18" />Ver stock</button>
+        <label className="flex items-center gap-2"><span className={LBL}>Equipo</span>
+          <select disabled={!gestionarFlota} value={v.equipo || ''} onChange={x => { if (ejecutar({ op: 'asignarVehiculo', args: { vehiculo: v.id, equipo: x.target.value || undefined } })) toast(x.target.value ? 'Vehículo asignado: su material va con él.' : 'Vehículo sin equipo (p. ej. en taller).', 'ok'); }} className={`${INP} !w-auto h-12`}>
+            <option value="">— Sin equipo —</option>{E.equipos.map(e => <option key={e.id} value={e.id}>{e.nombre}</option>)}</select></label>
+        {gestionarFlota && <button onClick={() => abrirFormVehiculo(v)} className="text-primary text-body-sm font-semibold h-10">Editar</button>}
+        {gestionarFlota && <button onClick={() => { if (confirm(`¿Dar de baja el vehículo ${v.matricula}? El historial se conserva.`) && ejecutar({ op: 'bajaVehiculo', args: { id: v.id } })) toast('Vehículo dado de baja.', 'ok'); }} className="text-error text-body-sm font-semibold h-10">Baja</button>}
+      </div>); })}</div>
+  );
+}
+
+function FilaTecnico({ t }: { t: Tecnico }) {
+  const E = useAlmacen(), { gestionarFlota } = usePermisos(), e = E.equipos.find(x => x.tecnicos.includes(t.id)), dot = herramientasDe(E, { tecnico: t.id });
+  return (
+    <div className="flex flex-wrap items-center gap-3 p-4 border-b border-surface-container"><Avatar n={t.nombre} />
+      <div className="flex-1 min-w-[180px]"><div className="font-semibold">{t.nombre}{t.codigo && <span className="font-mono text-label-sm text-secondary"> · {t.codigo}</span>}</div>
+        <div className="font-mono text-label-sm text-secondary">{t.rol} · {dot.length} en dotación · tallas {t.tallas ? Object.values(t.tallas).filter(Boolean).join('/') || '—' : '—'}</div>
+        <div className="text-body-sm text-secondary flex flex-wrap items-center gap-x-3"><span className="flex items-center gap-1"><Icon n="call" className="ico-16" />{t.telefono || 'Sin teléfono'}</span><span className="flex items-center gap-1"><Icon n="mail" className="ico-16" />{t.email || 'Sin correo'}</span></div></div>
+      {gestionarFlota && <button onClick={() => abrirFormTecnico(t)} className="text-primary text-body-sm font-semibold h-10">Editar</button>}
+      {gestionarFlota && <button onClick={() => abrirTallas(t.id)} className="text-primary text-body-sm font-semibold h-10">Tallas</button>}
+      <label className="flex items-center gap-2"><span className={LBL}>Equipo</span>
+        <select disabled={!gestionarFlota} value={e?.id || ''} onChange={ev => { if (ejecutar({ op: 'asignarTecnico', args: { tecnico: t.id, equipo: ev.target.value || undefined } })) toast('Asignación actualizada (queda en el historial).', 'ok'); }} className={`${INP} !w-auto h-12`}>
+          <option value="">— Sin equipo —</option>{E.equipos.map(x => <option key={x.id} value={x.id}>{x.nombre}</option>)}</select></label>
+      {gestionarFlota && <button onClick={() => { if (confirm(`¿Dar de baja a ${t.nombre}? Su historial y sus entregas se conservan.`) && ejecutar({ op: 'bajaTecnico', args: { id: t.id } })) toast('Técnico dado de baja.', 'ok'); }} className="text-error text-body-sm font-semibold h-10">Baja</button>}
+    </div>
+  );
+}
+
+function Historial() {
+  const E = useAlmacen();
+  const filas = [...E.asignaciones].sort((a, b) => (b.hasta ?? b.desde) - (a.hasta ?? a.desde));
+  const quien = (a: typeof filas[0]) => a.tipo === 'tecnico' ? (E.tecnicos.find(t => t.id === a.sujeto)?.nombre || a.sujeto) : `Vehículo ${E.vehiculos.find(v => v.id === a.sujeto)?.matricula || a.sujeto}`;
+  const csv = () => descargarCsv(`asignaciones-${hoyISO()}.csv`, [['Tipo', 'Quién', 'Equipo', 'Desde', 'Hasta'], ...filas.map(a => [a.tipo === 'tecnico' ? 'Técnico' : 'Vehículo', quien(a), E.equipos.find(e => e.id === a.equipo)?.nombre || a.equipo, fechaHora(a.desde), a.hasta ? fechaHora(a.hasta) : 'actual'])]);
+  return (
+    <section className={`${CARD} p-4 lg:p-space-md flex flex-col gap-1`}>
+      <div className="flex justify-between items-center mb-2"><h2 className="text-headline-sm font-semibold">Historial de asignaciones</h2><button onClick={csv} disabled={!filas.length} className={`${BTN_S} h-11 px-3 text-body-sm`}><Icon n="download" className="ico-18" />CSV</button></div>
+      {filas.length ? filas.map((a, i) => <div key={i} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5 border-t border-surface-container text-body-sm">
+        <Icon n={a.tipo === 'tecnico' ? 'engineering' : 'local_shipping'} className="text-secondary ico-20" />
+        <span className="flex-1 min-w-[200px]"><b>{quien(a)}</b> en <b>{E.equipos.find(e => e.id === a.equipo)?.nombre || a.equipo}</b></span>
+        <span className="font-mono text-label-sm text-secondary">{fechaHora(a.desde)} → {a.hasta ? fechaHora(a.hasta) : <span className="text-tertiary">actual</span>}</span></div>)
+        : <Vacio>Sin asignaciones todavía.</Vacio>}
+    </section>
   );
 }
 
 export function AuditoriaEntregas() {
   const E = useAlmacen(), desk = useEsEscritorio();
   const es = E.entregas.filter(e => (e.estado ?? 'firmada') === 'firmada').sort((a, b) => b.ts - a.ts);
-  const resumen = (e: typeof es[0]) => e.lineas.map(l => { const p = find(E, l.sku); return `${num(l.qty)}${p?.unit === 'm' ? ' m' : '×'} ${(p?.name || l.sku).split(' ').slice(0, 3).join(' ')}`; }).join(', ');
+  const resumen = (e: typeof es[0]) => e.lineas.map(l => { const p = find(E, l.sku); return p ? `${qtyTxt(p, l.qty)} ${p.name.split(' ').slice(0, 3).join(' ')}` : `${num(l.qty)} ${l.sku}`; }).join(', ');
   const verificar = async () => {
     let bad: string[] = [], total = E.entregas.length;
-    if (modoNube) { const r = await verificarEntregasServidor(); if (!r) return; total = r.length; bad = r.filter(x => !x.ok).map(x => x.numero); } // la huella se comprueba en el servidor
+    if (modoNube) { const r = await verificarEntregasServidor(); if (!r) return; total = r.length; bad = r.filter(x => !x.ok).map(x => x.numero); }
     else for (const x of E.entregas) if ((await hashEntrega(x)) !== x.hash) bad.push(numEntrega(x));
     bad.length ? toast(`${bad.length} entrega(s) no coinciden con su huella: ${bad.join(', ')}.`, 'err', 8000) : toast(`Las ${total} entregas coinciden con su huella SHA-256.`, 'ok');
   };
-  const csv = () => descargarCsv(`entregas-${hoyISO()}.csv`, [['Entrega', 'Fecha', 'Equipo', 'Vehículo', 'Receptor', 'DNI', 'SKU', 'Material', 'Cantidad', 'N.º serie', 'Huella SHA-256'],
-    ...E.entregas.flatMap(x => x.lineas.map(l => { const eq = E.equipos.find(q => q.id === x.equipo), r = E.tecnicos.find(t => t.id === x.receptor), p = find(E, l.sku); return [x.id, fechaHora(x.ts), eq?.nombre || x.equipo, eq?.matricula || '', r?.nombre || '', x.dni || r?.dni || '', l.sku, p?.name || '', l.qty, (l.serials || []).join(' '), x.hash]; }))]);
+  const csv = () => descargarCsv(`entregas-${hoyISO()}.csv`, [['Entrega', 'Fecha', 'Equipo', 'Vehículo', 'Receptor', 'DNI', 'SKU', 'Material', 'Cantidad', 'Unidad', 'Huella SHA-256'],
+    ...E.entregas.flatMap(x => x.lineas.map(l => { const eq = E.equipos.find(q => q.id === x.equipo), r = E.tecnicos.find(t => t.id === x.receptor), p = find(E, l.sku); return [numEntrega(x), fechaHora(x.ts), eq?.nombre || x.equipo, x.vehiculo ? E.vehiculos.find(v => v.id === x.vehiculo)?.matricula || x.vehiculo : '', r?.nombre || '', x.dni || r?.dni || '', l.sku, p?.name || '', l.qty, p?.unit || '', x.hash]; }))]);
   return (
     <section className={`${CARD} overflow-hidden`}>
       <div className="p-space-md flex flex-wrap items-center justify-between gap-3"><div className="flex items-center gap-3"><span className="w-11 h-11 rounded-xl bg-tertiary-fixed text-on-tertiary-fixed grid place-items-center"><Icon n="verified_user" /></span>
-        <div><h2 className="text-headline-md font-semibold">Auditoría de entregas y firmas</h2><p className="font-mono text-label-sm text-secondary">Custodia de material del almacén a furgoneta · huella SHA-256</p></div></div>
-        <div className="flex gap-2"><button onClick={verificar} className={`${BTN_S} px-3 h-10 text-body-sm`}><Icon n="fact_check" className="ico-18" />Verificar huellas</button><button onClick={csv} className={`${BTN_S} px-3 h-10 text-body-sm`}><Icon n="download" className="ico-18" />CSV</button></div></div>
+        <div><h2 className="text-headline-md font-semibold">Auditoría de entregas y firmas</h2><p className="font-mono text-label-sm text-secondary">Almacén → vehículo del equipo · huella SHA-256</p></div></div>
+        <div className="flex gap-2"><button onClick={verificar} className={`${BTN_S} px-3 h-11 text-body-sm`}><Icon n="fact_check" className="ico-18" />Verificar huellas</button><button onClick={csv} className={`${BTN_S} px-3 h-11 text-body-sm`}><Icon n="download" className="ico-18" />CSV</button></div></div>
       {desk ? <div className="overflow-x-auto"><table className="tabla w-full min-w-[900px]"><thead className="bg-surface-container-low"><tr><th>Referencia / fecha</th><th>Equipo / vehículo</th><th>Receptor</th><th>Resumen de material</th><th>Firma capturada</th><th className="text-right">Doc.</th></tr></thead>
         <tbody>{es.length ? es.map(e => { const eq = E.equipos.find(x => x.id === e.equipo), r = E.tecnicos.find(t => t.id === e.receptor); return (
           <tr key={e.id}><td><div className="font-mono text-label-md text-primary">#{numEntrega(e)}</div><div className="font-mono text-label-sm text-secondary">{hace(e.ts)}</div></td>
-            <td><div className="flex items-center gap-2"><Icon n="airport_shuttle" className="text-secondary ico-20" /><div><div>{eq ? eq.flota : e.equipo}</div><div className="font-mono text-label-sm text-secondary">{eq?.matricula}</div></div></div></td>
+            <td><div className="flex items-center gap-2"><Icon n="local_shipping" className="text-secondary ico-20" /><div><div>{eq ? eq.nombre : e.equipo}</div><div className="font-mono text-label-sm text-secondary">{e.vehiculo ? nombreVehiculo(E, e.vehiculo).split(' · ').pop() : '—'}</div></div></div></td>
             <td><div className="flex items-center gap-2"><Avatar n={r?.nombre || '?'} /><span>{r?.nombre || '—'}</span></div></td>
             <td className="max-w-[320px] text-body-sm">{resumen(e)}</td>
             <td><div className="flex items-center gap-2"><span className="bg-surface-container-low rounded-lg px-1"><FirmaImg f={e.firma} /></span><span className="font-mono text-label-sm text-tertiary">✓ {(e.hash || '').slice(0, 8)}</span></div></td>
@@ -114,76 +175,90 @@ export function AuditoriaEntregas() {
           : <tr><td colSpan={6}><Vacio>Sin entregas registradas.</Vacio></td></tr>}</tbody></table></div>
         : <div className="px-4 pb-2">{es.length ? es.map(e => { const eq = E.equipos.find(x => x.id === e.equipo), r = E.tecnicos.find(t => t.id === e.receptor); return (
           <button key={e.id} onClick={() => abrirRecibo(e.id)} className="w-full text-left flex items-center gap-3 py-3 border-t border-surface-container"><span className="bg-surface-container-low rounded-lg"><FirmaImg f={e.firma} className="h-10 w-20" /></span>
-            <div className="flex-1 min-w-0"><div className="font-mono text-label-md text-primary">#{numEntrega(e)}</div><div className="text-body-sm truncate">{eq?.flota} · {r?.nombre}</div><div className="text-body-sm text-secondary truncate">{resumen(e)}</div></div>
+            <div className="flex-1 min-w-0"><div className="font-mono text-label-md text-primary">#{numEntrega(e)}</div><div className="text-body-sm truncate">{eq?.nombre} · {r?.nombre}</div><div className="text-body-sm text-secondary truncate">{resumen(e)}</div></div>
             <span className="font-mono text-label-sm text-secondary shrink-0">{hace(e.ts)}</span></button>); }) : <Vacio>Sin entregas.</Vacio>}</div>}
     </section>
   );
 }
 
-/* ---------- Crear equipo / desdoblar ---------- */
-export const abrirFormEquipo = (desdoblar?: Equipo) => openModal(<FormEquipo desdoblar={desdoblar} />);
-function FormEquipo({ desdoblar }: { desdoblar?: Equipo }) {
-  const E = useAlmacen(), segundo = desdoblar ? E.tecnicos.find(t => t.id === desdoblar.tecnicos[1]) : undefined;
-  const [f, setF] = useState({ nombre: desdoblar ? `${desdoblar.nombre} B` : '', flota: desdoblar ? `Vehículo ${segundo?.nombre.split(' ')[0] || ''}` : `Furgoneta ${String(E.equipos.length + 1).padStart(2, '0')}`, matricula: '', estado: (desdoblar?.estado || 'depot') as EstadoEquipo });
-  const [tecs, setTecs] = useState<string[]>([]);
+/* ---------- Formularios (administrador) ---------- */
+export const abrirFormEquipo = (e?: Equipo) => openModal(<FormEquipo e={e} />);
+function FormEquipo({ e }: { e?: Equipo }) {
+  const E = useAlmacen();
+  const [f, setF] = useState({ nombre: e?.nombre || `Búfala ${E.equipos.length + 1}`, estado: (e?.estado || 'depot') as EstadoEquipo, vehiculo: e?.vehiculo || '' });
+  const [tecs, setTecs] = useState<string[]>(e?.tecnicos || []);
   const guardarEq = () => {
-    const matricula = f.matricula.trim().toUpperCase(); if (!matricula) return toast('Indica la matrícula del vehículo.', 'err');
-    const miembros = desdoblar ? [desdoblar.tecnicos[1]] : tecs; if (!miembros.length) return toast('Asigna al menos un técnico.', 'err');
-    let n = E.equipos.length + 1, id: string; do { id = 'F' + String(n++).padStart(2, '0'); } while (E.equipos.some(e => e.id === id));
-    if (!ejecutar({ op: 'equipo', args: { id, nombre: f.nombre.trim() || `Equipo ${id}`, flota: f.flota.trim() || `Vehículo ${id}`, matricula, estado: f.estado } })) return;
-    for (const t of miembros) ejecutar({ op: 'asignarTecnico', args: { tecnico: t, equipo: id } });
-    closeModal(); toast(`${f.nombre || id} creado con ${miembros.length} técnico${miembros.length === 1 ? '' : 's'}.`, 'ok');
+    if (!f.nombre.trim()) return toast('Indica el nombre del equipo.', 'err');
+    let id = e?.id; if (!id) { let n = E.equipos.length + 1; do { id = 'F' + String(n++).padStart(2, '0'); } while (E.equipos.some(x => x.id === id)); }
+    if (!ejecutar({ op: 'equipo', args: { id: id!, nombre: f.nombre.trim(), estado: f.estado } })) return;
+    for (const t of tecs.filter(t => !e?.tecnicos.includes(t))) ejecutar({ op: 'asignarTecnico', args: { tecnico: t, equipo: id } });
+    for (const t of (e?.tecnicos || []).filter(t => !tecs.includes(t))) ejecutar({ op: 'asignarTecnico', args: { tecnico: t } });
+    if ((f.vehiculo || undefined) !== (e?.vehiculo || undefined)) ejecutar({ op: 'asignarVehiculo', args: f.vehiculo ? { vehiculo: f.vehiculo, equipo: id } : { vehiculo: e!.vehiculo! } });
+    closeModal(); toast(`${f.nombre} guardado.`, 'ok');
   };
   return (<>
-    <SheetHead title={desdoblar ? 'Desdoblar equipo' : 'Crear equipo'} sub={desdoblar ? `${segundo?.nombre} sale con su propio vehículo.` : 'Cuadrilla con su vehículo'} />
+    <SheetHead title={e ? `Editar ${e.nombre}` : 'Crear equipo'} sub="El nombre debe coincidir con el que envía el wizard de cierres." />
     <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
-      <Campo label="Nombre del equipo"><input value={f.nombre} onChange={e => setF({ ...f, nombre: e.target.value })} className={`${INP} h-12`} placeholder="Equipo Delta" /></Campo>
-      <Campo label="Vehículo"><input value={f.flota} onChange={e => setF({ ...f, flota: e.target.value })} className={`${INP} h-12`} /></Campo>
-      <Campo label="Matrícula *"><input value={f.matricula} onChange={e => setF({ ...f, matricula: e.target.value })} className={`${INP} h-12 font-mono uppercase`} placeholder="0000-XXX" /></Campo>
-      <Campo label="Estado"><select value={f.estado} onChange={e => setF({ ...f, estado: e.target.value as EstadoEquipo })} className={`${INP} h-12`}>{Object.entries(ESTADO_EQ).map(([k, v]) => <option key={k} value={k}>{v.t}</option>)}</select></Campo>
-      {!desdoblar && <div className="sm:col-span-2"><span className={LBL}>Técnicos (se retiran de su equipo actual)</span>
-        <div className="flex flex-wrap gap-2 mt-1">{E.tecnicos.map(t => <label key={t.id} className="flex items-center gap-2 px-3 h-11 rounded-lg bg-surface-container-low">
-          <input type="checkbox" checked={tecs.includes(t.id)} onChange={e => setTecs(e.target.checked ? [...tecs, t.id] : tecs.filter(x => x !== t.id))} className="w-5 h-5 accent-primary" />{t.nombre}</label>)}</div></div>}
+      <Campo label="Nombre del equipo *"><input value={f.nombre} onChange={x => setF({ ...f, nombre: x.target.value })} className={`${INP} h-12`} placeholder="Búfala 4" /></Campo>
+      <Campo label="Estado"><select value={f.estado} onChange={x => setF({ ...f, estado: x.target.value as EstadoEquipo })} className={`${INP} h-12`}>{Object.entries(ESTADO_EQ).map(([k, v]) => <option key={k} value={k}>{v.t}</option>)}</select></Campo>
+      <Campo label="Vehículo" className="sm:col-span-2"><select value={f.vehiculo} onChange={x => setF({ ...f, vehiculo: x.target.value })} className={`${INP} h-12`}>
+        <option value="">— Sin vehículo —</option>{E.vehiculos.map(v => <option key={v.id} value={v.id}>{v.matricula}{v.modelo ? ` · ${v.modelo}` : ''}{v.equipo && v.equipo !== e?.id ? ` (ahora en ${E.equipos.find(q => q.id === v.equipo)?.nombre})` : ''}</option>)}</select></Campo>
+      <div className="sm:col-span-2"><span className={LBL}>Técnicos (salen de su equipo actual; queda en el historial)</span>
+        <div className="flex flex-wrap gap-2 mt-1">{E.tecnicos.map(t => <label key={t.id} className="flex items-center gap-2 px-3 h-12 rounded-lg bg-surface-container-low">
+          <input type="checkbox" checked={tecs.includes(t.id)} onChange={x => setTecs(x.target.checked ? [...tecs, t.id] : tecs.filter(y => y !== t.id))} className="w-5 h-5 accent-primary" />{t.nombre}</label>)}
+          {!E.tecnicos.length && <span className="text-body-sm text-secondary">Aún no hay técnicos: añádelos después.</span>}</div></div>
     </div>
     <SheetFoot className="flex gap-2"><button onClick={closeModal} className={`${BTN_S} h-12 px-5`}>Cancelar</button><button onClick={guardarEq} className={`${BTN_P} h-12 flex-1`}><Icon n="save" className="ico-20" />Guardar equipo</button></SheetFoot>
   </>);
 }
 
-function abrirEmparejar(id: string) {
-  const E = S(), eq = E.equipos.find(e => e.id === id)!, otros = E.equipos.filter(x => x.id !== id && x.tecnicos.length === 1);
-  if (!otros.length) return toast('No hay otro técnico individual con quien emparejar.', 'warn');
-  const nombre = (tid?: string) => E.tecnicos.find(t => t.id === tid)?.nombre || '';
-  const unir = (destino: Equipo) => {
-    if (vanStock(E, eq.id).length) { closeModal(); return toast(`${eq.flota} aún lleva material a bordo: devuélvelo antes de retirar el vehículo.`, 'warn', 7000); }
-    for (const t of [...eq.tecnicos]) ejecutar({ op: 'asignarTecnico', args: { tecnico: t, equipo: destino.id } });
-    ejecutar({ op: 'retirarEquipo', args: { id: eq.id, destino: destino.id } }); // su dotación pasa al equipo de destino
-    closeModal(); toast(`Pareja formada en ${destino.nombre}. Su dotación pasa a ese equipo.`, 'ok');
+export const abrirFormVehiculo = (v?: Vehiculo) => openModal(<FormVehiculo v={v} />);
+function FormVehiculo({ v }: { v?: Vehiculo }) {
+  const E = useAlmacen();
+  const [f, setF] = useState({ matricula: v?.matricula || '', modelo: v?.modelo || '', equipo: v?.equipo || '' });
+  const guardarV = () => {
+    const id = v?.id || uid('V');
+    if (!ejecutar({ op: 'vehiculo', args: { id, matricula: f.matricula, modelo: f.modelo } })) return;
+    if ((f.equipo || undefined) !== (v?.equipo || undefined)) ejecutar({ op: 'asignarVehiculo', args: { vehiculo: id, equipo: f.equipo || undefined } });
+    closeModal(); toast('Vehículo guardado.', 'ok');
   };
-  openModal(<>
-    <SheetHead title="Formar pareja" sub={`${nombre(eq.tecnicos[0])} se une a otro técnico individual. El vehículo de ${eq.nombre} queda libre.`} />
-    <div className="p-4 flex flex-col gap-2">{otros.map(o => <button key={o.id} onClick={() => unir(o)} className="flex items-center gap-3 p-3 rounded-xl bg-surface-container-low text-left"><Avatar n={nombre(o.tecnicos[0])} /><span className="flex-1"><b>{nombre(o.tecnicos[0])}</b><br /><span className="text-body-sm text-secondary">{o.nombre} · {o.matricula}</span></span><Icon n="chevron_right" /></button>)}</div>
+  return (<>
+    <SheetHead title={v ? `Editar ${v.matricula}` : 'Nuevo vehículo'} sub="Un equipo lleva un vehículo; el material a bordo es del vehículo." />
+    <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <Campo label="Matrícula *"><input autoFocus value={f.matricula} onChange={x => setF({ ...f, matricula: x.target.value })} className={`${INP} h-12 font-mono uppercase`} placeholder="0000-XXX" /></Campo>
+      <Campo label="Modelo"><input value={f.modelo} onChange={x => setF({ ...f, modelo: x.target.value })} className={`${INP} h-12`} placeholder="Furgoneta" /></Campo>
+      <Campo label="Equipo" className="sm:col-span-2"><select value={f.equipo} onChange={x => setF({ ...f, equipo: x.target.value })} className={`${INP} h-12`}><option value="">— Sin equipo (p. ej. en taller) —</option>{E.equipos.map(e => <option key={e.id} value={e.id}>{e.nombre}</option>)}</select></Campo>
+    </div>
+    <SheetFoot className="flex gap-2"><button onClick={closeModal} className={`${BTN_S} h-12 px-5`}>Cancelar</button><button onClick={guardarV} className={`${BTN_P} h-12 flex-1`}><Icon n="save" className="ico-20" />Guardar vehículo</button></SheetFoot>
   </>);
 }
 
-/* ---------- Nuevo técnico ---------- */
-const abrirFormTecnico = () => openModal(<FormTecnico />);
-function FormTecnico() {
-  const [f, setF] = useState({ nombre: '', rol: 'Técnico electricista', dni: '', email: '' });
-  const crear = () => {
+export const abrirFormTecnico = (t?: Tecnico) => openModal(<FormTecnico t={t} />);
+function FormTecnico({ t }: { t?: Tecnico }) {
+  const E = useAlmacen();
+  const [f, setF] = useState({ nombre: t?.nombre || '', codigo: t?.codigo || '', rol: t?.rol || 'Técnico electricista', telefono: t?.telefono || '', email: t?.email || '', dni: '', equipo: E.equipos.find(e => t && e.tecnicos.includes(t.id))?.id || '' });
+  const guardarT = () => {
     if (!f.nombre.trim()) return toast('Indica el nombre.', 'err');
     const d = f.dni.replace(/\W/g, '').toUpperCase();
     // el DNI completo nunca sale del navegador: solo se guarda enmascarado
-    if (!ejecutar({ op: 'tecnico', args: { id: uid('T'), nombre: f.nombre.trim(), rol: f.rol.trim() || 'Técnico', dni: d.length >= 5 ? `***${d.slice(-5, -1)}-${d.slice(-1)}` : (d || '—'), email: f.email.trim() } })) return;
-    closeModal(); setUI({ eqTab: 'tecnicos' }); toast('Técnico añadido. Asígnale un equipo.', 'ok');
+    const dni = d ? (d.length >= 5 ? `***${d.slice(-5, -1)}-${d.slice(-1)}` : d) : (t?.dni || '—');
+    const id = t?.id || uid('T');
+    if (!ejecutar({ op: 'tecnico', args: { id, nombre: f.nombre.trim(), rol: f.rol.trim() || 'Técnico', dni, email: f.email.trim(), codigo: f.codigo, telefono: f.telefono } })) return;
+    const antes = E.equipos.find(e => e.tecnicos.includes(id))?.id || '';
+    if (f.equipo !== antes) ejecutar({ op: 'asignarTecnico', args: { tecnico: id, equipo: f.equipo || undefined } });
+    closeModal(); setUI({ eqTab: 'tecnicos' }); toast(t ? 'Técnico actualizado.' : 'Técnico añadido.', 'ok');
   };
   return (<>
-    <SheetHead title="Nuevo técnico" sub="Solo se guardan los 4 últimos dígitos y la letra del DNI." />
-    <div className="p-5 grid grid-cols-1 gap-3">
-      <Campo label="Nombre y apellidos *"><input autoFocus value={f.nombre} onChange={e => setF({ ...f, nombre: e.target.value })} className={`${INP} h-12`} /></Campo>
-      <Campo label="Puesto"><input value={f.rol} onChange={e => setF({ ...f, rol: e.target.value })} className={`${INP} h-12`} /></Campo>
-      <Campo label="DNI (se enmascara)"><input value={f.dni} onChange={e => setF({ ...f, dni: e.target.value })} className={`${INP} h-12`} /></Campo>
-      <Campo label="Correo (opcional: le llega la copia de sus entregas)"><input value={f.email} onChange={e => setF({ ...f, email: e.target.value })} type="email" inputMode="email" className={`${INP} h-12`} placeholder="nombre@empresa.es" /></Campo>
+    <SheetHead title={t ? `Editar a ${t.nombre}` : 'Nuevo técnico'} sub="Datos personales: se guardan solo en tu base de datos, nunca en el repositorio. Del DNI solo los 4 últimos dígitos y la letra." />
+    <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <Campo label="Nombre y apellidos *" className="sm:col-span-2"><input autoFocus value={f.nombre} onChange={x => setF({ ...f, nombre: x.target.value })} className={`${INP} h-12`} /></Campo>
+      <Campo label="Código de empleado"><input value={f.codigo} onChange={x => setF({ ...f, codigo: x.target.value })} className={`${INP} h-12 font-mono uppercase`} placeholder="E01" /></Campo>
+      <Campo label="Categoría"><input value={f.rol} onChange={x => setF({ ...f, rol: x.target.value })} className={`${INP} h-12`} /></Campo>
+      <Campo label="Teléfono"><input value={f.telefono} onChange={x => setF({ ...f, telefono: x.target.value })} type="tel" inputMode="tel" className={`${INP} h-12`} placeholder="+34 600 000 000" /></Campo>
+      <Campo label="Correo (le llega la copia de sus entregas)"><input value={f.email} onChange={x => setF({ ...f, email: x.target.value })} type="email" inputMode="email" className={`${INP} h-12`} placeholder="nombre@empresa.es" /></Campo>
+      <Campo label={t ? `DNI (actual ${t.dni}; vacío = no cambiar)` : 'DNI (se enmascara)'}><input value={f.dni} onChange={x => setF({ ...f, dni: x.target.value })} className={`${INP} h-12`} /></Campo>
+      <Campo label="Equipo"><select value={f.equipo} onChange={x => setF({ ...f, equipo: x.target.value })} className={`${INP} h-12`}><option value="">— Sin equipo —</option>{E.equipos.map(e => <option key={e.id} value={e.id}>{e.nombre}</option>)}</select></Campo>
     </div>
-    <SheetFoot><button onClick={crear} className={`${BTN_P} h-12 w-full`}><Icon n="person_add" className="ico-20" />Añadir técnico</button></SheetFoot>
+    <SheetFoot><button onClick={guardarT} className={`${BTN_P} h-12 w-full`}><Icon n="person_add" className="ico-20" />{t ? 'Guardar cambios' : 'Añadir técnico'}</button></SheetFoot>
   </>);
 }

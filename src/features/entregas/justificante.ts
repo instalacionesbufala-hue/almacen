@@ -21,7 +21,7 @@ export async function justificantePdf(e: Entrega): Promise<Blob> {
       : { nombre: p?.name || l.sku, codigo: l.sku, cantidad: p ? qtyTxt(p, l.qty) : num(l.qty), series: l.serials, foto };
   }));
   const pdf = construirJustificante(jsPDF as unknown as ConstructorPdf, {
-    numero: numEntrega(e), fecha: e.ts, equipo: eq ? `${eq.nombre} · ${eq.flota} (${eq.matricula})` : e.equipo,
+    numero: numEntrega(e), fecha: e.ts, equipo: `${eq ? eq.nombre : e.equipo}${e.vehiculo ? ' · vehículo ' + (E.vehiculos.find(v => v.id === e.vehiculo)?.matricula || e.vehiculo) : ''}`,
     receptor: t?.nombre || e.receptor, dni: e.dni || t?.dni, obra: e.obra, lineas, firma: e.firma, hash: e.hash, operador: e.operator,
   });
   return new Blob([pdf], { type: 'application/pdf' });

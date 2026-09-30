@@ -3,14 +3,13 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import type { Entrega, LineaEntrega, Tallas, TipoTalla } from '../../data/tipos';
 import { MARCA } from '../../data/catalogo';
-import { find, numEntrega, qtyTxt, valorProducto } from '../../domain/reglas';
-import { eur, fechaHora, num } from '../../domain/formato';
+import { find, nombreVehiculo, numEntrega, qtyTxt } from '../../domain/reglas';
+import { fechaHora, num } from '../../domain/formato';
 import { hashEntrega } from '../../domain/hash';
 import { descargarCsv } from '../../domain/csv';
 import { emailValido, NOMBRE_TALLA } from '../../domain/entregas';
 import { estadoCopia } from '../../../supabase/functions/_compartido/envios';
 import { ejecutar, guardar, S, useAlmacen } from '../../store/almacen';
-import { usePermisos } from '../../store/permisos';
 import { modoNube } from '../../store/nube/cliente';
 import { procesarAhora } from '../../store/nube/avisos';
 import { closeModal, openModal, SheetFoot, SheetHead } from '../../ui/modal';
@@ -81,7 +80,7 @@ function FirmaPreparada({ id }: { id: string }) {
   if (!e) return <SheetHead title="Entrega no encontrada" />;
   const t = E.tecnicos.find(x => x.id === e.receptor);
   return (<>
-    <SheetHead title={`Entrega para ${t?.nombre}`} sub={`${numEntrega(e)} · ${E.equipos.find(q => q.id === e.equipo)?.flota || ''}`} />
+    <SheetHead title={`Entrega para ${t?.nombre}`} sub={`${numEntrega(e)} · ${E.equipos.find(q => q.id === e.equipo)?.nombre || ''}`} />
     <PanelFirma lineas={e.lineas} receptor={e.receptor} obra={e.obra} onFirmar={async (firma, email) => {
       if (!(await confirmarFirma(id, firma, email, e.receptor))) return false;
       closeModal(); toast(`Entrega firmada por ${t?.nombre}. Stock descontado.`, 'ok', 6000); abrirRecibo(id);
@@ -100,7 +99,7 @@ export function Preparadas() {
       <h2 className="font-semibold flex items-center gap-2"><Icon n="inventory" className="text-amber-800" />Preparadas: el stock está reservado hasta que el técnico firme</h2>
       {lista.map(e => { const caducada = (e.caduca ?? 0) <= Date.now(), t = E.tecnicos.find(x => x.id === e.receptor); return (
         <div key={e.id} className="flex flex-wrap items-center gap-3 bg-white rounded-lg p-3">
-          <div className="flex-1 min-w-[200px]"><div className="font-semibold">{numEntrega(e)} · {t?.nombre} · {E.equipos.find(q => q.id === e.equipo)?.flota}</div>
+          <div className="flex-1 min-w-[200px]"><div className="font-semibold">{numEntrega(e)} · {t?.nombre} · {E.equipos.find(q => q.id === e.equipo)?.nombre || ''}</div>
             <div className="text-body-sm text-secondary">{e.lineas.length} líneas{e.obra ? ` · ${e.obra}` : ''} · {caducada ? <span className="text-error">reserva caducada: anúlala y prepárala de nuevo</span> : `reserva hasta ${fechaHora(e.caduca!)}`}</div></div>
           <button onClick={() => { if (ejecutar({ op: 'anularEntrega', args: { id: e.id } })) toast('Entrega anulada: el stock vuelve a estar libre.', 'ok'); }} className={`${BTN_S} h-14 px-4`}>Anular</button>
           {!caducada && <button onClick={() => abrirFirma(e.id)} className={`${BTN_P} h-14 px-5`}><Icon n="draw" className="ico-20" />Firmar</button>}
@@ -136,7 +135,7 @@ function Recibo({ id }: { id: string }) {
     <div id="impresion" className="p-5 flex flex-col gap-3 bg-white">
       <div className="flex justify-between"><div><div className="font-bold">{MARCA.nombre}</div><div className="text-body-sm text-secondary">{MARCA.nave}</div></div><div className="text-right font-mono text-label-md">{numEntrega(e)}<br />{fechaHora(e.ts)}</div></div>
       <div className="grid grid-cols-2 gap-2 text-body-sm">
-        <div className="bg-surface-container-low rounded-lg p-2.5"><div className={LBL}>Equipo / vehículo</div>{eq ? `${eq.nombre} · ${eq.flota} (${eq.matricula})` : e.equipo}</div>
+        <div className="bg-surface-container-low rounded-lg p-2.5"><div className={LBL}>Equipo / vehículo</div>{eq ? eq.nombre : e.equipo}{e.vehiculo ? ` · ${nombreVehiculo(E, e.vehiculo).split(' · ').pop()}` : ''}</div>
         <div className="bg-surface-container-low rounded-lg p-2.5"><div className={LBL}>Recibe</div>{rec?.nombre} · DNI {e.dni || rec?.dni}</div></div>
       <table className="w-full text-body-sm"><thead><tr className={`text-left ${LBL}`}><th className="py-1">Material</th><th>S/N</th><th className="text-right">Cant.</th></tr></thead>
         <tbody>{e.lineas.map((l, i) => { const p = find(E, l.sku), h = E.herramientas.find(x => x.id === l.dotacion); return <tr key={i} className="border-t border-surface-container"><td className="py-1.5">
@@ -200,29 +199,28 @@ function EditarTallas({ tecnico }: { tecnico: string }) {
 /* ---------- Informe: qué se ha entregado a cada técnico en un mes ---------- */
 export const abrirInformeEntregas = () => openModal(<InformeEntregas />, { ancha: true });
 function InformeEntregas() {
-  const E = useAlmacen(), { verCostes } = usePermisos();
+  const E = useAlmacen();
   const hoy = new Date();
   const [mes, setMes] = useState(`${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}`);
   const [a, m] = mes.split('-').map(Number), desde = new Date(a, m - 1, 1).getTime(), hasta = new Date(a, m, 1).getTime();
   const filas = useMemo(() => {
-    const g = new Map<string, { tecnico: string; entregas: Set<string>; lineas: number; valor: number; obras: Set<string> }>();
+    const g = new Map<string, { tecnico: string; entregas: Set<string>; lineas: number; obras: Set<string> }>();
     for (const e of E.entregas) {
       if ((e.estado ?? 'firmada') !== 'firmada' || e.ts < desde || e.ts >= hasta) continue;
-      const f = g.get(e.receptor) || { tecnico: E.tecnicos.find(t => t.id === e.receptor)?.nombre || e.receptor, entregas: new Set<string>(), lineas: 0, valor: 0, obras: new Set<string>() };
+      const f = g.get(e.receptor) || { tecnico: E.tecnicos.find(t => t.id === e.receptor)?.nombre || e.receptor, entregas: new Set<string>(), lineas: 0, obras: new Set<string>() };
       f.entregas.add(e.id); f.lineas += e.lineas.length; if (e.obra) f.obras.add(e.obra);
-      for (const l of e.lineas) { const p = find(E, l.sku); if (p) f.valor += valorProducto({ ...p, stock: l.qty }); }
       g.set(e.receptor, f);
     }
     return [...g.values()].sort((x, y) => x.tecnico.localeCompare(y.tecnico));
   }, [E, desde, hasta]);
-  const csv = () => descargarCsv(`entregas-por-tecnico-${mes}.csv`, [['Técnico', 'Entregas', 'Líneas', 'Obras', ...(verCostes ? ['Coste material propio'] : [])],
-    ...filas.map(f => [f.tecnico, f.entregas.size, f.lineas, [...f.obras].join(' | '), ...(verCostes ? [Math.round(f.valor * 100) / 100] : [])])]);
+  const csv = () => descargarCsv(`entregas-por-tecnico-${mes}.csv`, [['Técnico', 'Entregas', 'Líneas', 'Obras'],
+    ...filas.map(f => [f.tecnico, f.entregas.size, f.lineas, [...f.obras].join(' | ')])]);
   return (<>
-    <SheetHead title="Entregas por técnico" sub="Útil para repartir costes por obra. El material en custodia no suma importe." />
+    <SheetHead title="Entregas por técnico" sub="Qué se ha entregado a cada técnico en el mes, y para qué obras." />
     <div className="p-5 flex flex-col gap-3">
       <Campo label="Mes"><input type="month" value={mes} onChange={e => setMes(e.target.value)} className={`${INP} h-11 !w-48`} /></Campo>
-      {filas.length ? <table className="tabla w-full text-body-sm"><thead><tr><th>Técnico</th><th>Entregas</th><th>Líneas</th><th>Obras</th>{verCostes && <th className="text-right">Coste</th>}</tr></thead>
-        <tbody>{filas.map((f, i) => <tr key={i}><td>{f.tecnico}</td><td>{f.entregas.size}</td><td>{f.lineas}</td><td>{[...f.obras].join(', ') || '—'}</td>{verCostes && <td className="text-right">{eur(f.valor)}</td>}</tr>)}</tbody></table>
+      {filas.length ? <table className="tabla w-full text-body-sm"><thead><tr><th>Técnico</th><th>Entregas</th><th>Líneas</th><th>Obras</th></tr></thead>
+        <tbody>{filas.map((f, i) => <tr key={i}><td>{f.tecnico}</td><td>{f.entregas.size}</td><td>{f.lineas}</td><td>{[...f.obras].join(', ') || '—'}</td></tr>)}</tbody></table>
         : <Vacio>No hay entregas firmadas en ese mes.</Vacio>}
     </div>
     <SheetFoot><button onClick={csv} disabled={!filas.length} className={`${BTN_S} w-full h-12`}><Icon n="table" className="ico-20" />Descargar CSV</button></SheetFoot>

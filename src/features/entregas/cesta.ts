@@ -12,7 +12,6 @@ export const anadirACesta = (sku: string) => hecho(D.anadir(S(), cesta(), sku));
 export const sumarUno = (sku: string) => hecho(D.sumar(S(), cesta(), sku));
 export const quitarDeCesta = (sku: string) => { D.restar(S(), cesta(), sku); guardar(); };
 export const fijarCantidad = (sku: string, q: number) => hecho(D.fijar(S(), cesta(), sku, q));
-export const alternarSerie = (sku: string, serie: string) => hecho(D.alternarSerie(S(), cesta(), sku, serie));
 export const cambiarTalla = (sku: string, nuevo: string) => hecho(D.cambiarTalla(S(), cesta(), sku, nuevo));
 /** Lectura del escáner seguido: devuelve el resultado para que la pantalla lo muestre en su registro */
 export const escanearEnCesta = (raw: string) => hecho(D.escanear(S(), cesta(), raw), true);

@@ -1,10 +1,10 @@
-/* Escáner: cámara real (BarcodeDetector o jsQR) + entrada manual y códigos de prueba */
+/* Escáner: cámara real (BarcodeDetector o jsQR) + entrada manual y códigos de prueba. E-013: sin n.º de serie, QR BUF:<SKU> */
 import { useCamara } from './camara';
 import { useState } from 'react';
-import type { Producto, TipoMov } from '../../data/tipos';
+import type { TipoMov } from '../../data/tipos';
 import { REASONS, UNIT } from '../../data/catalogo';
-import { find, qrContenido, qtyTxt, resolveCode } from '../../domain/reglas';
-import { hace, num, parseSN, redondea, toNum } from '../../domain/formato';
+import { contenidoTxt, find, formatoEntero, qrContenido, qtyTxt, resolveCode, unidadTxt } from '../../domain/reglas';
+import { hace, num, redondea, toNum } from '../../domain/formato';
 import { mover, S, useAlmacen } from '../../store/almacen';
 import { toast } from '../../ui/toast';
 import { BTN_BASE, BTN_P, BTN_S, BTN_T, Icon, INP, LBL, Pill, TagCustodia, Tile } from '../../ui/base';
@@ -14,32 +14,25 @@ import { FotoGrande } from '../../ui/foto';
 import { fotoDe } from '../../domain/fotos';
 
 type Modo = 'entrada' | 'salida' | 'consulta';
-interface Hit { code: string; sku: string | null; serial: string; via: string }
+interface Hit { code: string; sku: string | null; via: string }
 
-const PRUEBAS: [string, string][] = [['BUF:BF-FIX-SX8', 'Caja tacos SX 8'], ['4006209700985', 'EAN tacos SX 6'], [qrContenido('WBX-PULSAR-22', 'WBX-22-899281'), 'QR Wallbox 22 kW'], [qrContenido('WBX-PULSAR-22', 'WBX-22-899399'), 'QR Wallbox nuevo'], ['CAB-RZ1K-5G6', 'Bobina 5G6'], ['A9F74240', 'Ref. Schneider iC60N']];
+const PRUEBAS: [string, string][] = [['BUF:BF-FIX-SX8', 'Caja tacos SX 8'], ['4006209700985', 'EAN tacos SX 6'], [qrContenido('WBX-PULSAR-22'), 'QR Wallbox 22 kW'], ['CP-VE-1F-40', 'Pegatina cuadro Esmove'], ['CAB-RZ1K-5G6', 'Bobina 5G6'], ['A9F74240', 'Ref. Schneider iC60N']];
 
 
 export default function ScanView() {
   const E = useAlmacen();
   const [modo, setModo] = useState<Modo>('entrada');
   const [hit, setHit] = useState<Hit | null>(null);
-  const [qty, setQty] = useState('1'), [snTxt, setSnTxt] = useState(''), [sel, setSel] = useState<string[]>([]);
+  const [qty, setQty] = useState('1');
   const [reason, setReason] = useState(REASONS.entrada[0]), [ref, setRef] = useState(''), [manual, setManual] = useState('');
   const [log, setLog] = useState<{ ts: number; type: TipoMov; txt: string }[]>([]);
   const p = hit?.sku ? find(E, hit.sku) : undefined;
 
-  const prepararSerie = (h: Hit, prod?: Producto) => { setSel([]); setSnTxt(''); if (prod?.serialized && h.serial) { setSnTxt(h.serial); if ((prod.serials || []).includes(h.serial)) setSel([h.serial]); } };
   /* Se recrea en cada render; la cámara siempre llama a la última versión */
   const alLeer = (raw: string, via: string) => {
-    const r = resolveCode(S(), raw), pPrev = hit?.sku ? find(S(), hit.sku) : undefined;
+    const r = resolveCode(S(), raw);
     navigator.vibrate?.(r ? 60 : [40, 60, 40]);
-    if (pPrev?.serialized && modo === 'entrada' && r && r.p.sku === pPrev.sku && r.serial) { // cajas seguidas del mismo modelo: se acumulan
-      const sn = parseSN(snTxt);
-      if (!sn.includes(r.serial)) { sn.push(r.serial); setSnTxt(sn.join('\n')); toast(`S/N ${r.serial} añadido (${sn.length}).`, 'ok', 2000); }
-      return;
-    }
-    const h: Hit = { code: raw.trim(), sku: r ? r.p.sku : null, serial: r ? r.serial : '', via };
-    setHit(h); setQty('1'); setRef(''); setReason(REASONS[modo === 'consulta' ? 'salida' : modo][0]); prepararSerie(h, r?.p);
+    setHit({ code: raw.trim(), sku: r ? r.p.sku : null, via }); setQty('1'); setRef(''); setReason(REASONS[modo === 'consulta' ? 'salida' : modo][0]);
   };
   const cam = useCamara(true, c => alLeer(c, 'cámara'));
   const [leyendo, setLeyendo] = useState(false);
@@ -55,16 +48,14 @@ export default function ScanView() {
     setLeyendo(false);
   };
 
-  const cambiarModo = (m: Modo) => { setModo(m); setReason(REASONS[m === 'consulta' ? 'salida' : m][0]); if (hit) prepararSerie(hit, p); };
+  const cambiarModo = (m: Modo) => { setModo(m); setReason(REASONS[m === 'consulta' ? 'salida' : m][0]); };
   const siguiente = () => { setHit(null); if (!cam.estado.on) cam.arrancar(); };
-  const serialIn = !!p?.serialized && modo === 'entrada', serialOut = !!p?.serialized && modo === 'salida';
-  const q = p?.serialized ? (serialIn ? parseSN(snTxt).length : sel.length) : toNum(qty) || 0;
-  const bad = !!p && modo === 'salida' && q > p.stock;
-  const yaEnStock = !!p && serialIn && parseSN(snTxt).some(s => (p.serials || []).includes(s));
+  const q = toNum(qty) || 0;
+  const malEntero = !!p && formatoEntero(p) && q !== Math.trunc(q);
+  const bad = !!p && ((modo === 'salida' && q > p.stock) || malEntero);
   const confirmar = () => {
     if (!p || modo === 'consulta') return;
-    const serials = p.serialized ? (modo === 'entrada' ? parseSN(snTxt) : sel) : [];
-    const r = mover({ sku: p.sku, type: modo, qty: q, reason, ref: ref.trim(), serials });
+    const r = mover({ sku: p.sku, type: modo, qty: q, reason, ref: ref.trim() });
     if (!r) return;
     setLog(l => [{ ts: Date.now(), type: modo, txt: `${qtyTxt(p, q)} ${p.name}` }, ...l]);
     toast(`${modo === 'entrada' ? 'Entrada' : 'Salida'} registrada: ${qtyTxt(p, q)} · stock ${qtyTxt(p, p.stock)}.`, 'ok');
@@ -75,7 +66,7 @@ export default function ScanView() {
   return (
     <div className="lg:px-gutter lg:py-space-lg lg:grid lg:grid-cols-12 lg:gap-space-lg lg:items-start max-w-[1500px]">
       <section className="lg:col-span-7 flex flex-col">
-        <div className="hidden lg:block mb-4"><span className={LBL}>Lectura QR · EAN · n.º de serie</span><h1 className="text-headline-lg font-bold">Escanear stock con cámara</h1></div>
+        <div className="hidden lg:block mb-4"><span className={LBL}>Lectura QR · EAN · código del proveedor</span><h1 className="text-headline-lg font-bold">Escanear stock con cámara</h1></div>
         <div className="px-4 pt-3 lg:px-0 lg:pt-0"><div className="grid grid-cols-3 bg-inverse-surface rounded-xl p-1 gap-1">{([['entrada', 'Entrada stock', 'move_to_inbox'], ['salida', 'Salida', 'outbox'], ['consulta', 'Consulta', 'search']] as [Modo, string, string][]).map(([k, l, i]) =>
           <button key={k} onClick={() => cambiarModo(k)} className={`h-14 rounded-lg flex flex-col items-center justify-center gap-0.5 text-body-sm font-semibold ${modo === k ? 'bg-primary-container text-white' : 'text-white/70'}`}><Icon n={i} className="ico-20" />{l}</button>)}</div></div>
         <div className="cam mt-3 h-[44vh] min-h-[280px] lg:h-[520px] lg:rounded-2xl">
@@ -90,7 +81,7 @@ export default function ScanView() {
           {hit && <div className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 ${p ? 'bg-inverse-surface/85' : 'bg-error/90'} backdrop-blur text-white rounded-xl px-4 py-3 text-center shadow-xl max-w-[80%]`}>
             <div className="font-mono text-label-md text-tertiary-fixed flex items-center justify-center gap-1.5">{p ? <><Icon n="verified" className="ico-18" />CÓDIGO RECONOCIDO</> : <span className="text-white">CÓDIGO DESCONOCIDO</span>}</div><div className="font-mono text-label-lg mt-1 break-all">{hit.code}</div></div>}
           {!cam.estado.on && !hit && <div className="absolute inset-0 grid place-items-center p-6"><div className="text-center text-white flex flex-col items-center gap-3"><Icon n="photo_camera" className="ico-40 text-tertiary-fixed" />
-            <p className="text-body-md max-w-xs text-white/85">{cam.estado.msg || 'Activa la cámara para leer QR de cargadores, EAN de cajas o etiquetas de estantería.'}</p>
+            <p className="text-body-md max-w-xs text-white/85">{cam.estado.msg || 'Activa la cámara para leer el QR de la etiqueta, el EAN de la caja o el código del proveedor.'}</p>
             <button onClick={cam.arrancar} className={`${BTN_BASE} bg-tertiary-fixed text-on-tertiary-fixed h-12 px-5`}><Icon n="videocam" />Activar cámara</button></div></div>}
           <div className="absolute bottom-3 inset-x-4 flex justify-between font-mono text-label-sm text-white/70"><span>{cam.estado.on ? 'Enfoque continuo' : ''}</span><span>{log.length ? `${log.length} bulto${log.length === 1 ? '' : 's'} en esta sesión` : ''}</span></div>
         </div>
@@ -121,8 +112,8 @@ export default function ScanView() {
                   <div className="text-headline-sm font-semibold mt-1 leading-snug">{p.name}</div>{p.propiedad === 'custodia' && <div className="mt-1"><TagCustodia p={p} /></div>}
                   <div className="font-mono text-label-sm text-primary mt-0.5">SKU: {p.sku} <span className="text-secondary">· Stock {qtyTxt(p, p.stock)}</span></div></div></div>
               <div className="grid grid-cols-2 gap-3">
-                <div className="bg-surface-container-low rounded-xl p-3"><div className={`${LBL} flex justify-between`}>{p.serialized ? 'S/N leído' : 'Código leído'}<Icon n="check_circle" className="ico-18 text-tertiary" /></div><div className="font-mono text-label-lg mt-1 break-all">{hit.serial || hit.code}</div></div>
-                <div className="bg-primary-fixed/50 rounded-xl p-3"><div className={`${LBL} flex justify-between`}>Ubicación<Icon n="location_on" className="ico-18 text-primary" /></div><div className="font-mono text-label-lg text-primary mt-1">{p.loc}</div></div>
+                <div className="bg-surface-container-low rounded-xl p-3"><div className={`${LBL} flex justify-between`}>Código leído<Icon n="check_circle" className="ico-18 text-tertiary" /></div><div className="font-mono text-label-lg mt-1 break-all">{hit.code}</div></div>
+                <div className="bg-primary-fixed/50 rounded-xl p-3"><div className={`${LBL} flex justify-between`}>Formato<Icon n="inventory_2" className="ico-18 text-primary" /></div><div className="font-mono text-label-lg text-primary mt-1">{contenidoTxt(p) || unidadTxt(p.unit, 2)}</div></div>
               </div>
               {modo === 'consulta' ? <>
                 <div className="flex items-center justify-between bg-surface-container-low rounded-xl p-3"><Pill p={p} /><span className="text-body-sm text-secondary">Mín. {qtyTxt(p, p.min)} · {p.supplier}</span></div>
@@ -130,22 +121,17 @@ export default function ScanView() {
                 <div className="grid grid-cols-2 gap-2"><button onClick={() => cambiarModo('entrada')} className={`${BTN_T} h-12 !text-tertiary`}><Icon n="move_to_inbox" className="ico-20" />Dar entrada</button><button onClick={() => cambiarModo('salida')} className={`${BTN_T} h-12`}><Icon n="outbox" className="ico-20" />Dar salida</button></div>
                 <button onClick={() => abrirFicha(p.sku)} className={`${BTN_S} h-12`}><Icon n="description" className="ico-20" />Ver ficha completa</button>
               </> : <>
-                {serialIn ? <label className="flex flex-col gap-1 bg-surface-container-low rounded-xl p-3"><span className={LBL}>N.º de serie que entran · uno por línea</span>
-                  <textarea value={snTxt} onChange={e => setSnTxt(e.target.value)} rows={3} className={`${INP} font-mono !bg-white`} />
-                  {yaEnStock ? <span className="text-body-sm text-error">Alguno de estos n.º de serie ya está en stock.</span> : <span className="text-body-sm text-secondary">{q} unidad{q === 1 ? '' : 'es'}. Escanea la siguiente caja para añadir más.</span>}</label>
-                  : serialOut ? <div className="bg-surface-container-low rounded-xl p-3"><div className={`${LBL} mb-2`}>Unidades que salen ({q})</div>
-                    <div className="flex flex-wrap gap-2">{(p.serials || []).length ? p.serials!.map(s => <button key={s} onClick={() => setSel(sel.includes(s) ? sel.filter(x => x !== s) : [...sel, s])} className={`px-3 h-11 rounded-lg font-mono text-label-md ${sel.includes(s) ? 'bg-primary text-white' : 'bg-white'}`}>{sel.includes(s) ? '✓ ' : ''}{s}</button>) : <span className="text-error">No quedan unidades en stock.</span>}</div></div>
-                    : <div className="bg-surface-container-low rounded-xl p-3"><div className="flex justify-between items-center mb-2"><span className={LBL}>{modo === 'entrada' ? 'Unidades recibidas' : 'Cantidad que sale'}</span>{p.pack > 1 && <span className="font-mono text-label-sm text-primary">Formato: {p.packLabel}</span>}</div>
-                      <div className="flex gap-2"><div className="flex items-center bg-white rounded-xl flex-1 min-w-0">
-                        <button onClick={() => paso(-1)} className="w-12 h-14 grid place-items-center" aria-label="Menos"><Icon n="remove" /></button>
-                        <input value={qty} onChange={e => setQty(e.target.value)} inputMode="decimal" className="w-full min-w-0 text-center text-headline-md font-bold bg-transparent focus:outline-none" aria-label="Cantidad" /><span className="text-body-sm text-secondary pr-1">{UNIT[p.unit]}</span>
-                        <button onClick={() => paso(1)} className="w-12 h-14 grid place-items-center" aria-label="Más"><Icon n="add" /></button></div>
-                        {(p.pack > 1 ? [p.pack, p.pack * 5] : [5, 10]).map(s => <button key={s} onClick={() => paso(s)} className="w-14 h-14 shrink-0 rounded-xl bg-primary-fixed/70 text-primary font-semibold text-body-sm">+{num(s)}</button>)}</div></div>}
+                <div className="bg-surface-container-low rounded-xl p-3"><div className="flex justify-between items-center mb-2"><span className={LBL}>{modo === 'entrada' ? 'Recibido' : 'Sale'} ({unidadTxt(p.unit, 2)})</span>{contenidoTxt(p) && <span className="font-mono text-label-sm text-primary">{contenidoTxt(p)}</span>}</div>
+                  <div className="flex gap-2"><div className="flex items-center bg-white rounded-xl flex-1 min-w-0">
+                    <button onClick={() => paso(-1)} className="w-12 h-14 grid place-items-center" aria-label="Menos"><Icon n="remove" /></button>
+                    <input value={qty} onChange={e => setQty(e.target.value)} inputMode="decimal" className="w-full min-w-0 text-center text-headline-md font-bold bg-transparent focus:outline-none" aria-label="Cantidad" /><span className="text-body-sm text-secondary pr-1">{UNIT[p.unit]}</span>
+                    <button onClick={() => paso(1)} className="w-12 h-14 grid place-items-center" aria-label="Más"><Icon n="add" /></button></div>
+                    {(p.unit === 'm' ? [10, 50] : [5, 10]).map(n => <button key={n} onClick={() => paso(n)} className="w-14 h-14 shrink-0 rounded-xl bg-primary-fixed/70 text-primary font-semibold text-body-sm">+{num(n)}</button>)}</div></div>
                 <div className="grid grid-cols-2 gap-2">
                   <select value={reason} onChange={e => setReason(e.target.value)} className={`${INP} h-12`} aria-label="Motivo">{REASONS[modo].map(r => <option key={r}>{r}</option>)}</select>
                   <input value={ref} onChange={e => setRef(e.target.value)} className={`${INP} h-12`} placeholder={modo === 'entrada' ? 'Albarán' : 'Obra'} aria-label="Referencia" /></div>
-                {bad && <div className="bg-error-container text-error rounded-xl p-3 text-body-sm">Solo quedan {qtyTxt(p, p.stock)}.</div>}
-                <button onClick={confirmar} disabled={!(q > 0) || bad || yaEnStock} className={`${BTN_P} h-14 text-headline-sm`}><Icon n={modo === 'entrada' ? 'library_add_check' : 'outbox'} className="ico-fill" />{modo === 'entrada' ? `Añadir al almacén (+${qtyTxt(p, q)})` : `Registrar salida (−${qtyTxt(p, q)})`}</button>
+                {bad && <div className="bg-error-container text-error rounded-xl p-3 text-body-sm">{malEntero ? `En el almacén se mueven ${unidadTxt(p.unit, 2)} enteros.` : `Solo quedan ${qtyTxt(p, p.stock)} en el almacén.`}</div>}
+                <button onClick={confirmar} disabled={!(q > 0) || bad} className={`${BTN_P} h-14 text-headline-sm`}><Icon n={modo === 'entrada' ? 'library_add_check' : 'outbox'} className="ico-fill" />{modo === 'entrada' ? `Añadir al almacén (+${qtyTxt(p, q)})` : `Registrar salida (−${qtyTxt(p, q)})`}</button>
               </>}
               <button onClick={siguiente} className={`${BTN_T} h-14 text-body-lg`}><Icon n="skip_next" />Escanear siguiente</button>
               <Registro log={log} />

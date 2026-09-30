@@ -21,13 +21,14 @@ import { modoNube, urlSupabase } from '../../store/nube/cliente';
 import { verificarEntregasServidor } from '../../store/nube/sync';
 import { numEntrega } from '../../domain/reglas';
 import { abrirImportarFotos } from '../fotos/ImportarFotos';
+import { DatosReales } from './Datos';
 
 const Bloque = ({ icon, t, children }: { icon: string; t: string; children: ReactNode }) =>
   <section className={`${CARD} p-4 lg:p-space-md flex flex-col gap-3`}><h2 className="text-headline-sm font-semibold flex items-center gap-2"><Icon n={icon} className="text-primary" />{t}</h2>{children}</section>;
 
 export default function ConfigView() {
   const E = useAlmacen(), archivo = useRef<HTMLInputElement>(null), perm = usePermisos();
-  const nPend = E.pendientes.filter(p => p.estado === 'pendiente').length;
+  const nPend = E.pendientes.filter(p => p.estado === 'pendiente' || p.estado === 'aplicada').length;
   const verificar = async () => { let ok = 0; const bad: string[] = [];
     if (modoNube) { const r = await verificarEntregasServidor(); if (!r) return; r.forEach(x => x.ok ? ok++ : bad.push(x.numero)); }
     else for (const x of E.entregas) (await hashEntrega(x)) === x.hash ? ok++ : bad.push(numEntrega(x)); bad.length ? toast(`${bad.length} entrega(s) no coinciden con su huella: ${bad.join(', ')}.`, 'err', 8000) : toast(`Las ${ok} entregas coinciden con su huella SHA-256.`, 'ok'); };
@@ -44,14 +45,15 @@ export default function ConfigView() {
     <div className="px-4 lg:px-gutter py-4 lg:py-space-lg flex flex-col gap-4 max-w-5xl">
       <div><span className="font-mono text-label-sm uppercase tracking-wider text-secondary">Sistema</span><h1 className="text-headline-lg-mobile lg:text-headline-lg font-bold">Configuración &amp; auditoría</h1></div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {modoNube && perm.configurar && <div className="lg:col-span-2"><Bloque icon="group" t="Usuarios"><p className="text-body-sm text-secondary">Almacén: operativa diaria sin precios; sus mermas de más de 50 € y sus recuentos quedan pendientes de validar. Administrador: todo. Al desactivar a alguien deja de poder entrar y su historial se conserva.</p><Usuarios /></Bloque></div>}
+        {perm.configurar && <div className="lg:col-span-2"><Bloque icon="swap_horiz" t="Pasar a datos reales"><DatosReales /></Bloque></div>}
+        {modoNube && perm.configurar && <div className="lg:col-span-2"><Bloque icon="group" t="Usuarios"><p className="text-body-sm text-secondary">Almacén: operativa diaria; sus mermas se aplican al momento y te llega el aviso, y sus recuentos quedan pendientes de validar. Administrador: todo. Al desactivar a alguien deja de poder entrar y su historial se conserva.</p><Usuarios /></Bloque></div>}
         {perm.validar && <Bloque icon="pending_actions" t="Pendientes de validar"><p className="text-body-sm text-secondary">{nPend ? `Hay ${nPend} pendiente${nPend === 1 ? '' : 's'} de validar.` : 'No hay nada pendiente.'}</p><button onClick={abrirPendientes} className={`${BTN_S} h-12`}><Icon n="pending_actions" className="ico-20" />Abrir la bandeja</button></Bloque>}
         <Bloque icon="person" t={modoNube ? 'Mi usuario' : 'Operario activo'}><p className="text-body-sm text-secondary">Cada entrada, salida, merma e incidencia queda a su nombre.</p>
           <button onClick={abrirPerfil} className="flex items-center gap-3 bg-surface-container-low rounded-xl p-3 text-left"><Avatar n={E.operator} /><span className="flex-1 font-semibold">{E.operator}</span><span className="text-primary text-body-sm">Cambiar</span></button></Bloque>
-        {perm.configurar && <div className="lg:col-span-2"><Bloque icon="notifications" t="Avisos de reposición"><div className="flex flex-wrap gap-2"><button onClick={abrirReposicion} className={`${BTN_S} h-11 px-4`}><Icon n="inventory" className="ico-20" />Bandeja de reposición</button><button onClick={abrirMinimos} className={`${BTN_S} h-11 px-4`}><Icon n="tune" className="ico-20" />Mínimos y objetivos</button></div><ConfigAvisosPanel /></Bloque></div>}
+        {perm.configurar && <div className="lg:col-span-2"><Bloque icon="notifications" t="Avisos de reposición"><div className="flex flex-wrap gap-2"><button onClick={abrirReposicion} className={`${BTN_S} h-11 px-4`}><Icon n="inventory" className="ico-20" />Bandeja de reposición</button><button onClick={() => abrirMinimos()} className={`${BTN_S} h-11 px-4`}><Icon n="tune" className="ico-20" />Mínimos y objetivos</button></div><ConfigAvisosPanel /></Bloque></div>}
         <Bloque icon="traffic" t="Semáforo de stock">
           <ul className="text-body-sm flex flex-col gap-2">
-            <li className="flex gap-2"><span className="w-3 h-3 mt-1 rounded-full bg-error shrink-0" /><span><b>Rojo</b>: stock por debajo del mínimo (p. ej. tacos &lt; 100 ud, cargadores &lt; 2 ud). Salta un aviso al instante.</span></li>
+            <li className="flex gap-2"><span className="w-3 h-3 mt-1 rounded-full bg-error shrink-0" /><span><b>Rojo</b>: stock del almacén por debajo del mínimo (p. ej. menos de 2 cajas de tacos o de 2 cargadores). Salta un aviso al instante.</span></li>
             <li className="flex gap-2"><span className="w-3 h-3 mt-1 rounded-full bg-amber-400 shrink-0" /><span><b>Amarillo</b>: por debajo de 1,5 × el mínimo.</span></li>
             <li className="flex gap-2"><span className="w-3 h-3 mt-1 rounded-full bg-tertiary-container shrink-0" /><span><b>Verde</b>: nivel correcto.</span></li></ul>
           <p className="text-body-sm text-secondary">El mínimo se edita en la ficha de cada referencia.</p></Bloque>

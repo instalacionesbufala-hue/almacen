@@ -23,71 +23,78 @@ describe('contrato de operaciones', () => {
   let db: BD;
   beforeAll(async () => { db = await nuevaBD(); });
 
-  it('movimiento, entrega, albarán, pedido e incidencia llegan al servidor con los parámetros correctos', async () => {
+  it('movimiento (almacén y vehículo), albarán e incidencia llegan al servidor con los parámetros correctos', async () => {
     await como(db, ALMACEN);
-    await rpc(db, { op: 'movimiento', args: { id: nuevoId(), sku: 'BF-FIX-SX8', tipo: 'salida', qty: 100, motivo: 'Obra / instalación', ref: 'C/ Eros 10', series: [] } });
-    const ent = await rpc(db, { op: 'entrega', args: { id: nuevoId(), ts: Date.now(), equipo: 'F01', receptor: 'T1', dni: '', firma: 'data:image/png;base64,AA',
-      lineas: [{ sku: 'WBX-PULSAR-22', qty: 1, serials: ['WBX-22-899281'] }, { sku: 'CAB-RZ1K-5G6', qty: 25, serials: [] }] } }) as { numero: string };
-    expect(ent.numero).toMatch(/^ENT-/);
+    await rpc(db, { op: 'movimiento', args: { id: nuevoId(), sku: 'BF-FIX-SX8', tipo: 'salida', qty: 2, motivo: 'Obra / instalación', ref: 'C/ Eros 10', series: [] } });
+    await rpc(db, { op: 'movimiento', args: { id: nuevoId(), sku: 'BF-FIX-SX8', tipo: 'traspaso', qty: 1, motivo: 'Carga del vehículo', ref: '', series: [], vehiculo: 'V-F02' } });
     await rpc(db, { op: 'albaran', args: { id: nuevoId(), cabecera: { numero: 'A-1', proveedor: 'Esmove', cif: '', fecha: '', confianza: .9, modo: 'sim' },
       lineas: [{ sku: 'ESM-CPVE-TRI', cantidad: 2, series: [] }] } });
     await rpc(db, { op: 'incidencia', args: { id: nuevoId(), dotacion: 'H001', tipo: 'deterioro', nota: 'Pantalla rayada' } });
 
     const E = await estado(db);
-    expect(E.products.find(p => p.sku === 'BF-FIX-SX8')!.stock).toBe(1100);
+    expect(E.products.find(p => p.sku === 'BF-FIX-SX8')!.stock).toBe(9);
+    expect(E.aBordo.find(b => b.vehiculo === 'V-F02' && b.sku === 'BF-FIX-SX8')!.unidades).toBe(100);   // en unidades de contenido
+    expect(E.movements.find(m => m.type === 'traspaso')).toMatchObject({ vehiculo: 'V-F02', qty: 1 });
     expect(E.products.find(p => p.sku === 'ESM-CPVE-TRI')!.stock).toBe(3);
-    expect(E.products.find(p => p.sku === 'WBX-PULSAR-22')!.serials).not.toContain('WBX-22-899281');
-    const e = E.entregas[0];
-    expect(e).toMatchObject({ numero: ent.numero, equipo: 'F01', receptor: 'T1' });
-    expect(e.lineas).toEqual([{ sku: 'WBX-PULSAR-22', qty: 1, serials: ['WBX-22-899281'], tipo: 'stock' }, { sku: 'CAB-RZ1K-5G6', qty: 25, serials: [], tipo: 'stock' }]);
-    expect(E.avisos.find(a => a.sku === 'BF-FIX-SX6' && a.estado === 'abierto')).toBeTruthy();
+    expect(E.avisos.find(a => a.sku === 'SCH-IC60N-40' && a.estado === 'abierto')).toBeTruthy();
     expect(E.herramientas.find(h => h.id === 'H001')!.estado).toBe('deteriorada');
     expect(E.movements[0].operator).toBe('Operario Pruebas');
   });
 
-  it('el almacén recibe el estado sin precios ni costes; el administrador con ellos', async () => {
-    await como(db, ALMACEN);
-    let E = await estado(db);
-    expect(E.products.every(p => !p.price)).toBe(true);
-    expect(E.herramientas.every(h => h.valor === 0)).toBe(true);
-    await como(db, ADMIN);
-    E = await estado(db);
-    expect(E.products.find(p => p.sku === 'BF-FIX-SX8')!.price).toBeCloseTo(0.052);
-    expect(E.products.find(p => p.sku === 'WBX-PULSAR-22')).toMatchObject({ propiedad: 'custodia', propietario: 'ESMOVE', price: null });
+  it('E-013: el estado no trae precios; sí vehículos, asignaciones, stock a bordo y modo demo', async () => {
+    for (const quien of [ALMACEN, ADMIN]) {
+      await como(db, quien);
+      const E = await estado(db);
+      expect(JSON.stringify(E.products)).not.toMatch(/"price"/);
+      expect(E.herramientas.every(h => !h.valor)).toBe(true);
+      expect(E.vehiculos.map(v => v.id).sort()).toEqual(['V-F01', 'V-F02', 'V-F03']);
+      expect(E.equipos.find(e => e.id === 'F01')!.vehiculo).toBe('V-F01');
+      expect(E.asignaciones.some(a => a.tipo === 'vehiculo' && a.sujeto === 'V-F01' && a.equipo === 'F01' && !a.hasta)).toBe(true);
+      expect(E.configApp.modoDemo).toBe(true);
+    }
+    const E = await estado(db);
+    expect(E.products.find(p => p.sku === 'BF-FIX-SX6')).toMatchObject({ unit: 'bote', contenido: 1000 });
+    expect(E.products.find(p => p.sku === 'WBX-PULSAR-22')).toMatchObject({ propiedad: 'custodia', propietario: 'ESMOVE' });
     expect(E.propietarios.map(o => o.nombre)).toEqual(['Esmove']);
   });
 
-  it('equipos, técnicos, alta de referencia y dotación (administrador)', async () => {
+  it('equipos, vehículos, técnicos, alta de referencia y dotación (administrador)', async () => {
     await como(db, ADMIN);
-    await rpc(db, { op: 'equipo', args: { id: 'F09', nombre: 'Equipo Delta', flota: 'Furgoneta 09', matricula: '1111-ABC', estado: 'depot' } });
-    await rpc(db, { op: 'tecnico', args: { id: 'T9', nombre: 'Nuevo Técnico', rol: 'Técnico', dni: '***1234-Z' } });
+    await rpc(db, { op: 'equipo', args: { id: 'F09', nombre: 'Búfala 9', estado: 'depot' } });
+    await rpc(db, { op: 'vehiculo', args: { id: 'V-09', matricula: '0000-XYZ', modelo: 'Furgoneta de pruebas' } });
+    await rpc(db, { op: 'asignarVehiculo', args: { vehiculo: 'V-09', equipo: 'F09' } });
+    await rpc(db, { op: 'tecnico', args: { id: 'T9', nombre: 'Nuevo Técnico', rol: 'Técnico', dni: '***1234-Z', codigo: 'X-9', telefono: '600000000' } });
     await rpc(db, { op: 'asignarTecnico', args: { tecnico: 'T9', equipo: 'F09' } });
     await rpc(db, { op: 'estadoEquipo', args: { id: 'F09', estado: 'ruta' } });
-    await rpc(db, { op: 'producto', args: { nuevo: true, stockInicial: 50, producto: { sku: 'NUEVA-REF', name: 'Regleta 6 tomas', cat: 'aparamenta', unit: 'ud', pack: 1, packLabel: 'unidad', stock: 0, min: 5, loc: 'P04-E03-N1', supplier: 'Saltoki Móstoles', price: 4.2 } } });
-    await rpc(db, { op: 'altaDotacion', args: { id: 'H099', clase: 'herramienta', nombre: 'Detector de tensión', marca: 'Fluke', serie: 'FL-1', cantidad: 1, valor: 60, estado: 'operativa', historial: [] } });
+    await rpc(db, { op: 'producto', args: { nuevo: true, stockInicial: 5, producto: { sku: 'NUEVA-REF', name: 'Bolsa 50 bridas', cat: 'fijaciones', unit: 'bolsa', contenido: 50, stock: 0, min: 2, supplier: 'Saltoki Móstoles' } } });
+    await rpc(db, { op: 'altaDotacion', args: { id: 'H099', clase: 'herramienta', nombre: 'Detector de tensión', marca: 'Fluke', serie: 'FL-1', cantidad: 1, valor: 0, estado: 'operativa', historial: [] } });
     await rpc(db, { op: 'asignarDotacion', args: { id: nuevoId(), dotacion: 'H099', tecnico: 'T9' } });
     const E = await estado(db);
-    expect(E.equipos.find(e => e.id === 'F09')).toMatchObject({ estado: 'ruta', tecnicos: ['T9'] });
-    expect(E.products.find(p => p.sku === 'NUEVA-REF')).toMatchObject({ stock: 50, price: 4.2 });
-    expect(E.herramientas.find(h => h.id === 'H099')).toMatchObject({ equipo: 'F09', tecnico: 'T9', valor: 60 });
+    expect(E.equipos.find(e => e.id === 'F09')).toMatchObject({ nombre: 'Búfala 9', estado: 'ruta', tecnicos: ['T9'], vehiculo: 'V-09' });
+    expect(E.tecnicos.find(t => t.id === 'T9')).toMatchObject({ codigo: 'X-9', telefono: '600000000' });
+    expect(E.products.find(p => p.sku === 'NUEVA-REF')).toMatchObject({ stock: 5, unit: 'bolsa', contenido: 50 });
+    expect(E.herramientas.find(h => h.id === 'H099')).toMatchObject({ equipo: 'F09', tecnico: 'T9' });
   });
 
-  it('operaciones de E-004: borrador, recuento, validación, perfil y borrado', async () => {
+  it('operaciones de E-004/E-013: borrador, recuento, merma con aviso, validación, perfil y borrado', async () => {
     await como(db, ALMACEN);
     await rpc(db, { op: 'borrador', args: { sku: '', ean: '8412345678905', nombre: 'Caja estanca', cat: 'aparamenta' } });
-    await rpc(db, { op: 'recuento', args: { id: nuevoId(), pasillo: 'P03', lineas: [{ sku: 'BF-FIX-SX6', contado: 70 }] } });
+    await rpc(db, { op: 'recuento', args: { id: nuevoId(), pasillo: 'fijaciones', lineas: [{ sku: 'BF-FIX-SX6', contado: 2 }] } });
     await rpc(db, { op: 'movimiento', args: { id: nuevoId(), sku: '6040615316', tipo: 'merma', qty: 10, motivo: 'Corte sobrante', ref: '', series: [] } });
     let E = await estado(db);
-    expect(E.pendientes.filter(p => p.estado === 'pendiente')).toHaveLength(2);
+    expect(E.pendientes.filter(p => p.estado === 'pendiente')).toHaveLength(1);
+    expect(E.products.find(p => p.sku === '6040615316')!.stock).toBe(295);   // la merma ya está aplicada
     expect(E.products.find(p => p.sku === 'BORR-8412345678905')!.borrador).toBe(true);
     await como(db, ADMIN);
     E = await estado(db);
-    for (const p of E.pendientes) await rpc(db, { op: 'validarPendiente', args: { id: p.id, aprobar: true, nota: 'ok' } });
+    const merma = E.pendientes.find(p => p.estado === 'aplicada')!;
+    await rpc(db, { op: 'mermaVista', args: { id: merma.id } });
+    for (const p of E.pendientes.filter(x => x.estado === 'pendiente')) await rpc(db, { op: 'validarPendiente', args: { id: p.id, aprobar: true, nota: 'ok' } });
     await rpc(db, { op: 'perfil', args: { id: ALMACEN, nombre: 'Operario Renombrado', rol: 'almacen', activo: true } });
     await rpc(db, { op: 'borrarProducto', args: { sku: 'BORR-8412345678905' } });
     E = await estado(db);
-    expect(E.products.find(p => p.sku === 'BF-FIX-SX6')!.stock).toBe(70);
-    expect(E.products.find(p => p.sku === '6040615316')!.stock).toBe(295);
+    expect(E.products.find(p => p.sku === 'BF-FIX-SX6')!.stock).toBe(2);
+    expect(E.pendientes.find(p => p.id === merma.id)!.estado).toBe('vista');
     expect(E.products.find(p => p.sku === 'BORR-8412345678905')).toBeUndefined();
     expect(E.perfiles.find(p => p.id === ALMACEN)!.nombre).toBe('Operario Renombrado');
   });
@@ -109,7 +116,7 @@ describe('contrato de operaciones', () => {
     expect(E.avisos.find(a => a.modeloHerramienta === 'Fluke 376 FC')).toBeTruthy();   // la única está asignada: 0 de repuesto
     expect(E.configAvisos).toMatchObject({ correoHora: '07:30', diasRecordatorio: 5, informeCustodia: 'semanal' });
     expect(E.propietarios[0]).toMatchObject({ contacto: 'Ana', correosReposicion: ['r@esmove.es'] });
-    expect(E.products.find(p => p.sku === '8909080510')).toMatchObject({ propiedad: 'custodia', price: null });
+    expect(E.products.find(p => p.sku === '8909080510')).toMatchObject({ propiedad: 'custodia', propietario: 'ESMOVE' });
     expect(E.envios.some(e => e.tipo === 'prueba')).toBe(true);
     expect(E.actas[0]).toMatchObject({ representante: 'Ana', lineas: [{ sku: 'ESM-CPVE-TRI', sistema: E.products.find(p => p.sku === 'ESM-CPVE-TRI')!.stock, contado: 1 }] });
   });
@@ -120,7 +127,7 @@ describe('contrato de operaciones', () => {
     await como(db, ALMACEN);
     const e1 = nuevoId(), e2 = nuevoId();
     await rpc(db, { op: 'prepararEntrega', args: { id: e1, equipo: 'F01', receptor: 'T2', obra: 'C/ Eros 10', lineas: [{ tipo: 'stock', sku: 'ROPA-POLO-M', qty: 2, serials: [] }] } });
-    await rpc(db, { op: 'prepararEntrega', args: { id: e2, equipo: 'F01', receptor: 'T2', obra: '', lineas: [{ tipo: 'stock', sku: 'BF-FIX-SX8', qty: 50, serials: [] }] } });
+    await rpc(db, { op: 'prepararEntrega', args: { id: e2, equipo: 'F01', receptor: 'T2', obra: '', lineas: [{ tipo: 'stock', sku: 'BF-FIX-SX8', qty: 1, serials: [] }] } });
     let E = await estado(db);
     expect(E.entregas.find(e => e.id === e1)).toMatchObject({ estado: 'preparada', obra: 'C/ Eros 10' });
     expect(E.tecnicos.find(t => t.id === 'T2')!.tallas).toMatchObject({ camiseta: 'M', pantalon: '42' });

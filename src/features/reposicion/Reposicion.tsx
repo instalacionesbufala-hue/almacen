@@ -1,7 +1,7 @@
 /* E-006 · Bandeja "Reposición": avisos agrupados por proveedor y, para la custodia (E-008), por propietario.
    Genera el borrador del pedido o de la solicitud a Esmove (sin importes): copiar, PDF o correo. */
 import { useState } from 'react';
-import { eur, fechaHora, hoyISO, num } from '../../domain/formato';
+import { fechaHora, hoyISO, num } from '../../domain/formato';
 import { episARenovar, gruposReposicion, textoBorrador, type GrupoReposicion } from '../../domain/custodia';
 import { caducidad } from '../../domain/herramientas';
 import { critical } from '../../domain/reglas';
@@ -29,8 +29,8 @@ function Reposicion() {
   return (<>
     <SheetHead title="Reposición" sub={`${grupos.reduce((a, g) => a + g.lineas.length, 0)} artículos bajo mínimo · ${epis.length} EPIs por renovar. El aviso nace solo al bajar del mínimo y se cierra al reponer.`} />
     <div className="p-5 flex flex-col gap-4">
-      {perm.editarCatalogo && <button onClick={abrirMinimos} className={`${BTN_T} self-start px-4 h-11`}><Icon n="tune" className="ico-20" />Mínimos y objetivos</button>}
-      {grupos.length ? grupos.map(g => <Grupo key={g.destino + g.grupo} g={g} admin={perm.admin} verCostes={perm.verCostes} />) : <Vacio>Nada bajo mínimo. Todo el stock está repuesto.</Vacio>}
+      {perm.editarCatalogo && <button onClick={() => abrirMinimos()} className={`${BTN_T} self-start px-4 h-11`}><Icon n="tune" className="ico-20" />Mínimos y objetivos</button>}
+      {grupos.length ? grupos.map(g => <Grupo key={g.destino + g.grupo} g={g} admin={perm.admin} />) : <Vacio>Nada bajo mínimo. Todo el stock está repuesto.</Vacio>}
       {epis.length > 0 && <section className="rounded-xl bg-amber-50 p-4 flex flex-col gap-2">
         <h3 className="font-semibold flex items-center gap-2"><Icon n="health_and_safety" className="text-amber-800" />EPIs que caducan o hay que revisar (30 días)</h3>
         {epis.map(h => { const c = caducidad(h); return <div key={h.id} className="flex justify-between gap-2 text-body-sm border-b border-amber-100 py-1.5">
@@ -41,7 +41,7 @@ function Reposicion() {
   </>);
 }
 
-function Grupo({ g, admin, verCostes }: { g: GrupoReposicion; admin: boolean; verCostes: boolean }) {
+function Grupo({ g, admin }: { g: GrupoReposicion; admin: boolean }) {
   const E = useAlmacen(), custodia = g.destino === 'propietario';
   const [cant, setCant] = useState<Record<string, string>>({});
   const clave = (l: GrupoReposicion['lineas'][0]) => l.sku || 'h:' + l.modelo;
@@ -50,7 +50,6 @@ function Grupo({ g, admin, verCostes }: { g: GrupoReposicion; admin: boolean; ve
   const texto = textoBorrador(conCantidades);
   const propietario = custodia ? E.propietarios.find(o => o.id === g.grupo) : undefined;
   const destinatarios = propietario?.correosReposicion || [];
-  const total = !custodia && verCostes ? g.lineas.reduce((a, l) => a + (l.precio || 0) * qty(l), 0) : 0;
 
   const copiar = async () => { try { await navigator.clipboard.writeText(texto); toast('Borrador copiado.', 'ok'); } catch { toast('No se ha podido copiar: selecciónalo a mano.', 'warn'); } };
   const pdf = () => {
@@ -86,7 +85,7 @@ function Grupo({ g, admin, verCostes }: { g: GrupoReposicion; admin: boolean; ve
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="font-semibold flex items-center gap-2"><Icon n={custodia ? 'handshake' : 'local_shipping'} className={custodia ? 'text-violet-800' : 'text-primary'} />{g.titulo}</h3>
         {custodia ? <Tag c="bg-violet-100 text-violet-800">Sin importes · envío {E.configAvisos.custodiaEnvio === 'automatico' ? 'automático' : 'revisado por el administrador'}</Tag>
-          : verCostes && total > 0 ? <Tag>≈ {eur(total)} a precio de coste</Tag> : null}
+          : null}
       </div>
       <div className="flex flex-col">{g.lineas.map(l => (
         <div key={clave(l)} className="flex flex-wrap items-center gap-3 py-2 border-b border-white/70">

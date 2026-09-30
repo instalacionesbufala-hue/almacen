@@ -1,6 +1,6 @@
 /* Estado inicial de demostración (movimientos, entregas y albaranes de ejemplo) */
-import type { Albaran, Entrega, Estado, Herramienta, Movimiento, TipoMov } from './tipos';
-import { CONFIG_AVISOS_DEFECTO, FIRMAS_DEMO, OFICINA, SEED_EQUIPOS, SEED_PRODUCTS, SEED_PROPIETARIOS, SEED_TECNICOS } from './catalogo';
+import type { Albaran, Asignacion, Entrega, Estado, Herramienta, Movimiento, StockVehiculo, TipoMov } from './tipos';
+import { CONFIG_AVISOS_DEFECTO, FIRMAS_DEMO, OFICINA, SEED_EQUIPOS, SEED_PRODUCTS, SEED_PROPIETARIOS, SEED_TECNICOS, SEED_VEHICULOS } from './catalogo';
 
 const clone = <T,>(o: T): T => JSON.parse(JSON.stringify(o));
 
@@ -10,33 +10,34 @@ export function seedTs(days: number, h: number, m: number): number {
 
 export function seedMovements(): Movimiento[] {
   let i = 0;
-  const M = (ts: number, sku: string, type: TipoMov, qty: number, reason: string, ref: string, operator: string, serials: string[] = [], equipo?: string): Movimiento =>
-    ({ id: 'S' + (++i), ts, sku, type, qty, reason, ref, operator, serials, equipo });
+  // E-013: las entregas a un equipo son traspasos al vehículo; sin n.º de serie
+  const M = (ts: number, sku: string, type: TipoMov, qty: number, reason: string, ref: string, operator: string, vehiculo?: string, equipo?: string): Movimiento =>
+    ({ id: 'S' + (++i), ts, sku, type, qty, reason, ref, operator, serials: [], vehiculo, equipo, unidades: vehiculo ? qty : undefined });
   return [
-    M(seedTs(0, 8, 30), 'WBX-PULSAR-22', 'salida', 2, 'Entrega a equipo', 'ENT-2026-0412', OFICINA, ['WBX-22-899279', 'WBX-22-899280'], 'F01'),
-    M(seedTs(0, 8, 30), 'CAB-RZ1K-5G6', 'salida', 150, 'Entrega a equipo', 'ENT-2026-0412', OFICINA, [], 'F01'),
-    M(seedTs(0, 7, 50), 'BF-VE-VIA74', 'salida', 1, 'Entrega a equipo', 'ENT-2026-0410', OFICINA, ['OB-VU-26A0104'], 'F03'),
-    M(seedTs(0, 7, 50), 'BF-TUB-CM20', 'salida', 80, 'Entrega a equipo', 'ENT-2026-0410', OFICINA, [], 'F03'),
-    M(seedTs(0, 9, 5), 'BF-VE-POL74', 'salida', 1, 'Obra / instalación', 'Garaje C/ Eros 10', 'Jorge Ruiz', ['PCH74-26-0398']),
-    M(seedTs(0, 10, 40), 'BF-FIX-SX6', 'salida', 120, 'Obra / instalación', 'Av. Monasterio de Silos 38', 'Andrea Pardo'),
-    M(seedTs(1, 17, 45), 'CIR-ENEXT-S', 'salida', 2, 'Entrega a equipo', 'ENT-2026-0409', OFICINA, ['CC-9910', 'CC-9911'], 'F02'),
+    M(seedTs(0, 8, 30), 'WBX-PULSAR-22', 'traspaso', 2, 'Entrega a equipo', 'ENT-2026-0412', OFICINA, 'V-F01', 'F01'),
+    M(seedTs(0, 8, 30), 'CAB-RZ1K-5G6', 'traspaso', 150, 'Entrega a equipo', 'ENT-2026-0412', OFICINA, 'V-F01', 'F01'),
+    M(seedTs(0, 7, 50), 'BF-VE-VIA74', 'traspaso', 1, 'Entrega a equipo', 'ENT-2026-0410', OFICINA, 'V-F03', 'F03'),
+    M(seedTs(0, 7, 50), 'BF-TUB-CM20', 'traspaso', 80, 'Entrega a equipo', 'ENT-2026-0410', OFICINA, 'V-F03', 'F03'),
+    M(seedTs(0, 9, 5), 'BF-VE-POL74', 'salida', 1, 'Obra / instalación', 'Garaje C/ Eros 10', 'Jorge Ruiz'),
+    M(seedTs(0, 10, 40), 'BF-FIX-SX6', 'salida', 1, 'Obra / instalación', 'Av. Monasterio de Silos 38', 'Andrea Pardo'),
+    M(seedTs(1, 17, 45), 'CIR-ENEXT-S', 'traspaso', 2, 'Entrega a equipo', 'ENT-2026-0409', OFICINA, 'V-F02', 'F02'),
     M(seedTs(1, 17, 20), '6000650604', 'merma', 6, 'Corte sobrante', 'Final de rollo', 'Luis Martín'),
     M(seedTs(1, 12, 2), '7270020010', 'entrada', 305, 'Compra a proveedor', 'Alb. 2.793.496', OFICINA),
-    M(seedTs(1, 8, 30), '7280040020', 'salida', 25, 'Obra / instalación', 'C/ Pilar Bardem 5', 'Jorge Ruiz'),
-    M(seedTs(2, 16, 45), 'BF-VE-WBX74', 'salida', 1, 'Obra / instalación', 'Chalet Alcobendas', 'Andrea Pardo', ['WBX-PP-883118']),
+    M(seedTs(1, 8, 30), '7280040020', 'salida', 1, 'Obra / instalación', 'C/ Pilar Bardem 5', 'Jorge Ruiz'),
+    M(seedTs(2, 16, 45), 'BF-VE-WBX74', 'salida', 1, 'Obra / instalación', 'Chalet Alcobendas', 'Andrea Pardo'),
     M(seedTs(2, 11, 0), '6201020032', 'salida', 120, 'Obra / instalación', 'C/ Eros 10', 'Luis Martín'),
     M(seedTs(3, 9, 15), '7501013532', 'entrada', 2, 'Compra a proveedor', 'Alb. 2.790.456', OFICINA),
     M(seedTs(4, 13, 30), '6040615316', 'entrada', 305, 'Compra a proveedor', 'Alb. 2.795.060', OFICINA),
     M(seedTs(5, 10, 10), 'BF-FON-MC16', 'salida', 60, 'Obra / instalación', 'Reforma baño C/ Zubeldia 8', 'Jorge Ruiz'),
-    M(seedTs(6, 18, 0), '5301012054', 'merma', 50, 'Pérdida o extravío', 'Recuento semanal', 'Andrea Pardo'),
+    M(seedTs(6, 18, 0), '5301012054', 'merma', 1, 'Pérdida o extravío', 'Recuento semanal', 'Andrea Pardo'),
   ];
 }
 
 export function seedEntregas(): Entrega[] {
   return [
-    { id: 'ENT-2026-0412', ts: seedTs(0, 8, 30), equipo: 'F01', receptor: 'T1', lineas: [{ sku: 'WBX-PULSAR-22', qty: 2, serials: ['WBX-22-899279', 'WBX-22-899280'] }, { sku: 'CAB-RZ1K-5G6', qty: 150, serials: [] }], firma: FIRMAS_DEMO[0], operator: OFICINA },
-    { id: 'ENT-2026-0410', ts: seedTs(0, 7, 50), equipo: 'F03', receptor: 'T5', lineas: [{ sku: 'BF-VE-VIA74', qty: 1, serials: ['OB-VU-26A0104'] }, { sku: 'BF-TUB-CM20', qty: 80, serials: [] }], firma: FIRMAS_DEMO[1], operator: OFICINA },
-    { id: 'ENT-2026-0409', ts: seedTs(1, 17, 45), equipo: 'F02', receptor: 'T3', lineas: [{ sku: 'CIR-ENEXT-S', qty: 2, serials: ['CC-9910', 'CC-9911'] }], firma: FIRMAS_DEMO[2], operator: OFICINA },
+    { id: 'ENT-2026-0412', ts: seedTs(0, 8, 30), equipo: 'F01', vehiculo: 'V-F01', receptor: 'T1', lineas: [{ sku: 'WBX-PULSAR-22', qty: 2, serials: [] }, { sku: 'CAB-RZ1K-5G6', qty: 150, serials: [] }], firma: FIRMAS_DEMO[0], operator: OFICINA },
+    { id: 'ENT-2026-0410', ts: seedTs(0, 7, 50), equipo: 'F03', vehiculo: 'V-F03', receptor: 'T5', lineas: [{ sku: 'BF-VE-VIA74', qty: 1, serials: [] }, { sku: 'BF-TUB-CM20', qty: 80, serials: [] }], firma: FIRMAS_DEMO[1], operator: OFICINA },
+    { id: 'ENT-2026-0409', ts: seedTs(1, 17, 45), equipo: 'F02', vehiculo: 'V-F02', receptor: 'T3', lineas: [{ sku: 'CIR-ENEXT-S', qty: 2, serials: [] }], firma: FIRMAS_DEMO[2], operator: OFICINA },
   ];
 }
 
@@ -74,10 +75,22 @@ export function seedHerramientas(): Herramienta[] {
   ];
 }
 
+/** Stock a bordo de los vehículos de ejemplo (lo entregado en las entregas sembradas), en unidades */
+export function seedABordo(): StockVehiculo[] {
+  return [{ vehiculo: 'V-F01', sku: 'WBX-PULSAR-22', unidades: 2 }, { vehiculo: 'V-F01', sku: 'CAB-RZ1K-5G6', unidades: 150 },
+    { vehiculo: 'V-F03', sku: 'BF-VE-VIA74', unidades: 1 }, { vehiculo: 'V-F03', sku: 'BF-TUB-CM20', unidades: 80 }, { vehiculo: 'V-F02', sku: 'CIR-ENEXT-S', unidades: 2 }];
+}
+export function seedAsignaciones(): Asignacion[] {
+  const desde = seedTs(90, 8, 0);
+  return [...SEED_EQUIPOS.flatMap(e => e.tecnicos.map((t): Asignacion => ({ tipo: 'tecnico', sujeto: t, equipo: e.id, desde }))),
+    ...SEED_VEHICULOS.filter(v => v.equipo).map((v): Asignacion => ({ tipo: 'vehiculo', sujeto: v.id, equipo: v.equipo!, desde }))];
+}
+
 export function fresh(): Estado {
   return {
     v: 3, products: clone(SEED_PRODUCTS), movements: seedMovements(), albaranes: seedAlbaranes(),
     equipos: clone(SEED_EQUIPOS), tecnicos: clone(SEED_TECNICOS), entregas: seedEntregas(), herramientas: seedHerramientas(), propietarios: clone(SEED_PROPIETARIOS), pendientes: [], perfiles: [], rol: 'admin', avisos: [], minimosHerramienta: [{ modelo: 'Makita DDF484', minimo: 1, proveedor: 'Saltoki Alcobendas' }], configAvisos: clone(CONFIG_AVISOS_DEFECTO), envios: [], actas: [],
+    vehiculos: clone(SEED_VEHICULOS), asignaciones: seedAsignaciones(), aBordo: seedABordo(), configApp: { modoDemo: true },
     operator: OFICINA, pedidos: {}, cesta: { equipo: 'F01', receptor: 'T1', lineas: [], obra: '', paso: 1 }, seq: { ent: 412 },
   };
 }

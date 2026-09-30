@@ -294,7 +294,7 @@ Una cesta se puede guardar como **preparada**, con el stock reservado, para que 
 - Hay pruebas de: idempotencia y versión, equivalencias con condiciones, manguitos `floor(m/3)+1`, fijaciones `ceil(m/0,5)` sin contar el corrugado, kits A, B y C, UTP según `hardware`, consumo fraccionado de formatos (sobre, bote), negativo como discrepancia, cargador sin serie, fallido sin consumo y token revocado rechazado.
 - La guía explica cómo pegar el fragmento en el Apps Script y cómo lanzar la carga del histórico.
 
-### E-013 · Simplificar y pasar a datos reales · PENDIENTE
+### E-013 · Simplificar y pasar a datos reales · HECHO
 **Decisiones del usuario (30/09).** Prevalecen sobre lo anterior de E-002, E-006, E-008 y E-009.
 1. **Fuera los precios de la app.** Las facturas se controlan por otro lado.
    - Se ocultan y dejan de pedirse precios, costes, "valor del inventario" e importes en cualquier pantalla, CSV o PDF.
@@ -860,3 +860,68 @@ Cubren también el formato de cantidades, las respuestas envueltas en ```json y 
 - El PDF del correo va **sin fotos**: el servidor no convierte WebP. El PDF de la app sí las lleva.
 - En la nube, si el que firma es administrador, la copia sale al momento. Si es del almacén, la envía la tarea programada en menos de un minuto.
 - Corregido de paso un fallo mío de ayer en Configuración → Avisos: "Enviar prueba" con cambios sin guardar partía los destinatarios por la letra "s" (a la expresión le faltaba una barra).
+
+### 30/09/2026 · E-013 · HECHO
+**1. Sin precios**
+- Fuera de todas las pantallas, CSV y PDF: precio, valor del inventario, costes de dotación e importes de incidencias. `verCostes` desaparece de los permisos.
+- Las tablas `costes_*` se conservan sin uso: `guardar_producto`, `alta_dotacion` e incidencias ignoran cualquier precio que llegue.
+- **Mermas:** se aplican al momento, las registre quien las registre. Cada una deja un aviso `aplicada` en la bandeja del administrador (quién, qué, cuánto, motivo y dónde: almacén o vehículo), con el botón **Visto** (`marcar_merma_vista`). Si la registra el almacén, además sale por los canales inmediatos de E-006 (tipo de envío `merma`). La regla de los 50 € y `valores_pendientes` quedan sin uso.
+- Las mermas de custodia siguen generando la incidencia para Esmove.
+
+**2. Formatos de venta**
+- Unidades `m`, `ud`, `bote`, `sobre`, `bolsa`, `pack` y `caja`, con `contenido` (bote de 1000 → 1000).
+- El stock del almacén va en formatos y solo se mueven formatos enteros (salida, traspaso, devolución y entrega). Los metros admiten decimales.
+- El stock de los vehículos (`stock_vehiculo.unidades`) va en unidades de contenido, para los consumos de E-012; puede quedar negativo (discrepancia).
+- "Añadir referencia" pide unidad, contenido, propiedad y mínimo (vacío = por completar), como el CSV.
+
+**3. Sin n.º de serie**
+- Restricción `productos_sin_serie`; las series que lleguen (QR antiguos `BUF:SKU|SN:…`) se ignoran. El QR de estantería es `BUF:<SKU>`.
+- Cargadores y medidores van por modelo y cantidad en entradas, entregas, escáner, custodia y el informe para Esmove (sin columna de serie).
+
+**4. Almacén + vehículos, y equipos, técnicos y vehículos con historial**
+- Tablas nuevas: `vehiculos` (matrícula y modelo), `asignaciones_tecnico`, `asignaciones_vehiculo` y `stock_vehiculo`. Las matrículas que había pasan a ser vehículos asignados a su equipo.
+- Funciones del administrador: `guardar_vehiculo`, `asignar_vehiculo` (cierra la asignación anterior; si el equipo ya tenía otro vehículo, ese queda sin equipo), `asignar_tecnico`, `baja_tecnico` y `baja_vehiculo` (no se puede con material a bordo). El historial nunca se borra.
+- `vehiculo_de_equipo(equipo, fecha)` da el vehículo de un equipo en una fecha, para los cierres de E-012.
+- Movimientos `traspaso` (almacén → vehículo) y `devolucion` (vehículo → almacén), y merma en un vehículo.
+- **Entregas:** el material de instalación entra en el vehículo que el equipo tiene en ese momento (sin vehículo, la app y el servidor lo impiden y lo explican). Ropa y EPIs siguen yendo al técnico. `registrar_entrega` (la directa antigua) queda sin permiso.
+- **Pantallas:**
+  - Inventario: "Almacén X · Búfala 1 Y" por artículo y filtro por ubicación.
+  - Equipos y técnicos: pestañas equipos, vehículos, técnicos e historial, con selectores en cada tarjeta. El técnico tiene código y teléfono.
+  - Hoja de movimiento: nuevo tipo **A vehículo** (carga) y **Devolución**, con selector de vehículo.
+- Los avisos de mínimo miran solo el almacén. Fuera pasillo, estantería y nivel: el recuento va por categoría.
+
+**5. Pasar a datos reales** (Configuración → *Pasar a datos reales*, solo administrador)
+- **Borrar datos de ejemplo:**
+  - botón rojo que explica qué se borra y qué se conserva, y pide escribir `BORRAR DEMO`;
+  - llama a `limpiar_demostracion()`, que quita los bloqueos del historial solo dentro de su transacción (marca `almacen.limpieza_demo`), borra, deja `config_app.modo_demo = false`, escribe en `auditoria` y devuelve las rutas de las fotos, que la app borra del almacenamiento;
+  - después queda la fecha y quién lo hizo. Una segunda llamada falla.
+- **Importar catálogo (CSV):**
+  - vista previa con tres listas (nuevos, ya existen, con errores: unidad, categoría o propietario desconocidos, SKU repetido, formato no entero…);
+  - "1000 ud" y "10 bolsas" se leen como 1000 y 10;
+  - el stock inicial entra como "Inventario de apertura" con la referencia "Albaranes …";
+  - idempotente por SKU y albaranes, en la app y en `importar_catalogo`.
+- **Completar mínimo (N):** abre Mínimos y objetivos filtrado a los artículos sin mínimo.
+- `seed.sql` ya no se carga por defecto (`[db.seed] enabled = false`); las pruebas lo cargan explícitamente. Una instalación nueva empieza con `modo_demo = false`; la base del usuario, que tiene la demo, empieza en `true`.
+- Guía: paso 2.4 reescrito y **paso 12 "Pasar a datos reales"** nuevo.
+
+**Pruebas:** 185 en verde (`npm test`), de ellas 115 de base de datos.
+- `supabase/tests/e013.test.ts` (17): sin importes; traspaso y devolución que no cambian el total; formatos enteros; cargador sin serie; técnico que cambia de equipo sin mover material; vehículo que cambia de equipo con su stock; `vehiculo_de_equipo` en una fecha anterior al cambio; entrega a un equipo sin vehículo; bajas; borrado de la demostración una sola vez (con fotos); historial protegido fuera del borrado; importación idempotente y sus errores.
+- `supabase/tests/actualizacion.test.ts` (5): la migración sobre una base **ya en uso** (fixture con los datos de antes y actividad hecha con las funciones antiguas: salida con serie y entrega firmada). Las huellas de las entregas siguen cuadrando y el borrado de la demostración funciona encima.
+- `src/domain/catalogoCsv.test.ts` (5): el CSV real se lee sin errores (40 artículos, mínimos por completar), errores marcados y doble importación sin duplicar.
+- Adaptadas al modelo nuevo: e002, e004, e006, e007, e011, contrato, reglas, entregas, mapeo, informe y ops.
+- `tsc -b` sin errores, `npm run build` correcto y `deno check` de las tres funciones sin errores.
+
+**Probado en el navegador (modo demostración):** borrar datos de ejemplo (escribiendo la frase) → importar `catalogo-stock-real.csv` (40 nuevos) → Completar mínimo (40 → 39 al guardar uno) → cargar 1 m de cable en un vehículo desde la hoja de movimiento.
+
+**Desplegado:** migración `20261004000100_e013_datos_reales.sql` y `notificar` (el informe de custodia lleva "En vehículos" y la matrícula; el justificante, el vehículo).
+
+**Para el usuario:** Configuración → *Pasar a datos reales*: borrar los datos de ejemplo, importar `datos/catalogo-stock-real.csv`, completar los mínimos y dar de alta vehículos, equipos y técnicos reales (guía, paso 12). Mientras no se borre, la demo sigue funcionando con el modelo nuevo.
+
+**Decisiones:**
+- El borrado en la nube se hace en directo, no por la cola: necesita conexión y así puede borrar las fotos con la respuesta del servidor. La importación va por la cola, porque es idempotente.
+- Los avisos de merma no llevan importes.
+- La tabla `series` y las columnas de serie se conservan sin uso, como las de costes.
+- Cambiar de equipo a un técnico no cambia las entregas ya firmadas; el material sigue en el vehículo al que entró.
+- Corregidos de paso dos fallos:
+  - `limpiar_demostracion` nombraba una tabla que ya no existía (`pedidos_reposicion`); lo detectó la prueba nueva;
+  - la hoja de movimiento no pasaba el vehículo al registrar (`mover()`), así que devoluciones, mermas en vehículo y cargas fallaban con "Indica el vehículo".

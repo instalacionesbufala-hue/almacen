@@ -3,16 +3,16 @@
    Nada predeterminado: el almacén elige los artículos. Se puede guardar como preparada (stock reservado) para firmar más tarde. */
 import { useEffect, useMemo, useState } from 'react';
 import { CATS, UNIT } from '../../data/catalogo';
-import { disponibleReal, find, numEntrega, qtyTxt, searchProducts, status } from '../../domain/reglas';
+import { contenidoTxt, disponibleReal, find, formatoEntero, nombreVehiculo, numEntrega, qtyTxt, searchProducts, status, vehiculoDeEquipo } from '../../domain/reglas';
 import { fechaHora, num } from '../../domain/formato';
-import { aLineas, esPrenda, problemas, seriesLibres, variantes } from '../../domain/entregas';
+import { aLineas, esPersonal, esPrenda, problemas, variantes } from '../../domain/entregas';
 import { avisoEstado, ejecutar, guardar, S, useAlmacen } from '../../store/almacen';
 import { nuevoId } from '../../store/ops';
 import { modoNube } from '../../store/nube/cliente';
 import { toast } from '../../ui/toast';
 import { Avatar, BTN_P, BTN_S, CARD, Icon, INP, LBL, TagCustodia, Tile } from '../../ui/base';
 import { useCamara } from '../escaner/camara';
-import { alternarSerie, anadirACesta, cambiarTalla, cesta, disponible, escanearEnCesta, fijarCantidad, fijarObra, irAPaso, paraQuien, quitarDeCesta, sumarUno, vaciarCesta } from './cesta';
+import { anadirACesta, cambiarTalla, cesta, disponible, escanearEnCesta, fijarCantidad, fijarObra, irAPaso, paraQuien, quitarDeCesta, sumarUno, vaciarCesta } from './cesta';
 import { abrirInformeEntregas, abrirRecibo, confirmarFirma, EtiquetaCopia, PanelFirma, Preparadas } from './Hojas';
 
 export { abrirRecibo };
@@ -49,17 +49,17 @@ function PasoQuien() {
   const [q, setQ] = useState('');
   const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
   const eqDe = (id: string) => E.equipos.find(e => e.tecnicos.includes(id));
-  const lista = E.tecnicos.filter(t => !q.trim() || norm(`${t.nombre} ${eqDe(t.id)?.nombre || ''} ${eqDe(t.id)?.flota || ''} ${eqDe(t.id)?.id || ''}`).includes(norm(q.trim())));
+  const lista = E.tecnicos.filter(t => !q.trim() || norm(`${t.nombre} ${eqDe(t.id)?.nombre || ''} ${eqDe(t.id)?.id || ''} ${eqDe(t.id)?.vehiculo ? nombreVehiculo(E, eqDe(t.id)!.vehiculo) : ''}`).includes(norm(q.trim())));
   return (
     <section className={`${CARD} p-4 lg:p-space-md flex flex-col gap-3`}>
       <h2 className="text-headline-md font-semibold flex items-center gap-2"><Icon n="person_search" className="text-primary" />¿Quién recibe el material?</h2>
       <div className="relative"><Icon n="search" className="absolute left-3 top-1/2 -translate-y-1/2 text-outline ico-20" />
-        <input value={q} onChange={e => setQ(e.target.value)} type="search" className={`${INP} pl-10 h-14`} placeholder="Buscar técnico, equipo o furgoneta" /></div>
+        <input value={q} onChange={e => setQ(e.target.value)} type="search" className={`${INP} pl-10 h-14`} placeholder="Buscar técnico, equipo o vehículo" /></div>
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">{lista.map(t => { const eq = eqDe(t.id), sel = c.receptor === t.id; return (
         <button key={t.id} disabled={!eq} onClick={() => paraQuien(t.id)} className={`text-left min-h-16 rounded-xl p-3 flex items-center gap-3 disabled:opacity-50 ${sel ? 'bg-primary text-white' : 'bg-surface-container-low hover:bg-surface-container'}`}>
           <Avatar n={t.nombre} c={sel ? 'bg-white/20 text-white' : undefined} />
           <span className="flex-1 min-w-0"><span className="block font-semibold truncate">{t.nombre}</span>
-            <span className={`block text-body-sm truncate ${sel ? 'text-white/80' : 'text-secondary'}`}>{eq ? `${eq.nombre} · ${eq.flota}` : 'Sin equipo: asígnalo en Equipos y técnicos'}</span></span>
+            <span className={`block text-body-sm truncate ${sel ? 'text-white/80' : 'text-secondary'}`}>{eq ? `${eq.nombre}${eq.vehiculo ? ' · ' + (E.vehiculos.find(v => v.id === eq.vehiculo)?.matricula || '') : ' · sin vehículo'}` : 'Sin equipo: asígnalo en Equipos y técnicos'}</span></span>
           {sel ? <Icon n="check_circle" className="ico-fill" /> : t.email ? <Icon n="mail" className="text-secondary ico-20" /> : null}
         </button>); })}</div>
       <label className="flex flex-col gap-1"><span className={LBL}>Obra (opcional)</span>
@@ -80,7 +80,7 @@ function PasoMaterial() {
   const leer = (raw: string) => {
     const r = escanearEnCesta(raw), p = r.sku ? find(S(), r.sku) : undefined;
     const l = p ? S().cesta.lineas.find(x => x.sku === p.sku) : undefined;
-    const texto = r.ok ? `${p?.name}${l ? ` · ${p!.serialized ? l.serials.at(-1) : qtyTxt(p!, l.qty)} en la cesta` : ''}` : r.aviso || 'No se ha podido añadir';
+    const texto = r.ok ? `${p?.name}${l ? ` · ${qtyTxt(p!, l.qty)} en la cesta` : ''}` : r.aviso || 'No se ha podido añadir';
     setLecturas(x => [{ ts: Date.now(), texto, ok: r.ok }, ...x].slice(0, 6));
     if (navigator.vibrate) navigator.vibrate(r.ok ? 40 : [60, 60, 60]);
   };
@@ -97,7 +97,7 @@ function PasoMaterial() {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-space-lg items-start">
       <section className={`${CARD} p-4 lg:p-space-md flex flex-col gap-3 lg:col-span-7`}>
-        <button onClick={() => irAPaso(1)} className="self-start flex items-center gap-2 rounded-lg bg-surface-container-low px-3 h-11 text-body-sm"><Icon n="person" className="ico-18 text-primary" /><b>{rec?.nombre}</b>{eq ? ` · ${eq.flota}` : ''}{c.obra ? ` · ${c.obra}` : ''}<Icon n="edit" className="ico-16 text-secondary" /></button>
+        <button onClick={() => irAPaso(1)} className="self-start flex items-center gap-2 rounded-lg bg-surface-container-low px-3 h-11 text-body-sm"><Icon n="person" className="ico-18 text-primary" /><b>{rec?.nombre}</b>{eq ? ` · ${eq.nombre}` : ''}{eq && vehiculoDeEquipo(E, eq.id) ? ` · ${E.vehiculos.find(v => v.id === eq.vehiculo)?.matricula}` : ''}{c.obra ? ` · ${c.obra}` : ''}<Icon n="edit" className="ico-16 text-secondary" /></button>
         <div className="flex gap-2">
           <div className="relative flex-1"><Icon n="search" className="absolute left-3 top-1/2 -translate-y-1/2 text-outline ico-20" />
             <input value={q} onChange={e => setQ(e.target.value)} type="search" className={`${INP} pl-10 h-14`} placeholder="Buscar por nombre, SKU o código" /></div>
@@ -133,9 +133,8 @@ function PasoMaterial() {
 
 function LineaCesta({ sku }: { sku: string }) {
   const E = useAlmacen(), c = cesta(), l = c.lineas.find(x => x.sku === sku), p = find(E, sku);
-  const [ver, setVer] = useState(false);
   if (!l || !p) return null;
-  const disp = Math.max(0, disponibleReal(E, p)), falta = p.serialized && l.serials.length !== l.qty, excede = l.qty > disp;
+  const disp = Math.max(0, disponibleReal(E, p)), falta = formatoEntero(p) && l.qty !== Math.trunc(l.qty), excede = l.qty > disp;
   const tallas = esPrenda(p) ? variantes(E, p) : [];
   return (
     <div className={`rounded-xl p-3 flex flex-col gap-2 ${excede || falta ? 'bg-amber-50 ring-1 ring-amber-300' : 'bg-surface-container-low'}`}>
@@ -145,7 +144,7 @@ function LineaCesta({ sku }: { sku: string }) {
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex items-center bg-white rounded-lg">
           <button onClick={() => quitarDeCesta(sku)} className="w-14 h-14 grid place-items-center" aria-label={`Menos ${p.name}`}><Icon n="remove" /></button>
-          {p.serialized ? <span className="w-12 text-center font-bold text-body-lg">{l.qty}</span> : <Cantidad sku={sku} qty={l.qty} />}
+          <Cantidad sku={sku} qty={l.qty} />
           <button onClick={() => sumarUno(sku)} className="w-14 h-14 grid place-items-center bg-primary text-white rounded-r-lg" aria-label={`Más ${p.name}`}><Icon n="add" /></button>
         </div>
         <span className="text-body-sm text-secondary">{UNIT[p.unit]}</span>
@@ -153,14 +152,10 @@ function LineaCesta({ sku }: { sku: string }) {
           <select value={sku} onChange={e => cambiarTalla(sku, e.target.value)} className={`${INP} !w-auto h-14 font-semibold`} aria-label={`Talla de ${p.name}`}>
             {tallas.map(v => <option key={v.sku} value={v.sku} disabled={v.sku !== sku && Math.max(0, disponibleReal(E, v)) <= 0}>{v.talla || v.sku}{v.sku !== sku ? ` (${num(Math.max(0, disponibleReal(E, v)))})` : ''}</option>)}</select></label>}
       </div>
-      {p.serialized && <>
-        <div className="flex flex-wrap gap-1.5">{l.serials.map(s => <button key={s} onClick={() => alternarSerie(sku, s)} className="px-2.5 h-10 rounded-lg font-mono text-label-sm bg-primary text-white flex items-center gap-1" aria-label={`Quitar ${s}`}>{s}<Icon n="close" className="ico-16" /></button>)}</div>
-        <button onClick={() => setVer(!ver)} className="self-start font-mono text-label-sm text-primary h-10">{ver ? 'Ocultar' : 'Elegir otro n.º de serie (o escanéalo)'}</button>
-        {ver && <div className="flex flex-wrap gap-1.5">{seriesLibres(E, c, p).map(s => <button key={s} onClick={() => alternarSerie(sku, s)} className="px-2.5 h-10 rounded-lg font-mono text-label-sm bg-white">{s}</button>)}
-          {!seriesLibres(E, c, p).length && <span className="text-body-sm text-secondary">No quedan más libres.</span>}</div>}
-      </>}
       {excede && <p className="text-body-sm text-amber-800">Solo hay {qtyTxt(p, disp)} disponibles: ajusta la cantidad.</p>}
-      {falta && <p className="text-body-sm text-amber-800">Indica los n.º de serie ({l.serials.length} de {l.qty}).</p>}
+      {falta && <p className="text-body-sm text-amber-800">Se entrega por {p.unit} entero.</p>}
+      {!esPersonal(p) && contenidoTxt(p) && <p className="text-body-sm text-secondary">{contenidoTxt(p)} · entra en el vehículo del equipo</p>}
+      {esPersonal(p) && <p className="text-body-sm text-secondary">Dotación personal: pasa a {E.tecnicos.find(t => t.id === c.receptor)?.nombre || 'el técnico'}, no al vehículo.</p>}
     </div>
   );
 }
@@ -214,7 +209,7 @@ function PasoFirma() {
   return (
     <section className={`${CARD} overflow-hidden max-w-3xl w-full mx-auto`}>
       <div className="px-4 lg:px-5 pt-4 flex flex-wrap items-center justify-between gap-2">
-        <div><h2 className="text-headline-md font-semibold">Entrega para {rec?.nombre}</h2><p className="text-body-sm text-secondary">{eq?.nombre} · {eq?.flota} ({eq?.matricula}) · comprueba el material y firma</p></div>
+        <div><h2 className="text-headline-md font-semibold">Entrega para {rec?.nombre}</h2><p className="text-body-sm text-secondary">{eq?.nombre}{eq?.vehiculo ? ` · el material entra en ${nombreVehiculo(E, eq.vehiculo).split(' · ').pop()}` : ''} · comprueba el material y firma</p></div>
         <button onClick={() => irAPaso(2)} className={`${BTN_S} h-11 px-3`}><Icon n="edit" className="ico-18" />Cambiar</button>
       </div>
       <PanelFirma enPagina lineas={aLineas(c)} receptor={c.receptor!} obra={c.obra} onFirmar={firmar} />

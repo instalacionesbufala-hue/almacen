@@ -20,10 +20,14 @@ export const ADMIN = '00000000-0000-4000-8000-000000000001';
 export const ALMACEN = '00000000-0000-4000-8000-000000000002';
 export const INACTIVO = '00000000-0000-4000-8000-000000000003';
 
-export async function nuevaBD({ seed = true } = {}) {
+/** intercalar: ejecuta un SQL (p. ej. datos de una versión anterior) justo antes de la primera migración >= antesDe,
+    para probar una migración sobre una base que ya estaba en uso */
+export async function nuevaBD({ seed = true, intercalar }: { seed?: boolean; intercalar?: { antesDe: string; sql: string } } = {}) {
   const db = new PGlite({ extensions: { pgcrypto } });
   await db.exec(AUTH_SUPABASE);
+  let pendiente = intercalar;
   for (const f of readdirSync(new URL('migrations/', DIR)).filter(f => f.endsWith('.sql')).sort()) {
+    if (pendiente && f >= pendiente.antesDe) { await db.exec(pendiente.sql); pendiente = undefined; }
     try { await db.exec(leer(`migrations/${f}`)); }
     catch (e) { throw new Error(`Error en la migración ${f}: ${(e as Error).message}`); }
   }
@@ -37,6 +41,7 @@ export async function nuevaBD({ seed = true } = {}) {
 }
 
 export type BD = Awaited<ReturnType<typeof nuevaBD>>;
+export { leer };
 
 /** Actúa como un usuario con sesión (rol authenticated de Supabase) */
 export async function como(db: BD, uid: string) {

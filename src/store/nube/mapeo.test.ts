@@ -1,30 +1,35 @@
 import { describe, expect, it } from 'vitest';
 import { aEstado, TABLAS, type Tablas } from './mapeo';
-import { eur } from '../../domain/formato';
-import { valorProducto } from '../../domain/reglas';
+import { stockTotal, unidadesABordo } from '../../domain/reglas';
 
-/* E-010 · el material en custodia llega sin precio (null), aunque haya fila de coste, y nunca se pinta "0,00 €" */
+/* E-013 · la app no recibe precios; el stock está en el almacén o a bordo de un vehículo (en unidades de contenido) */
 const tablas = (): Tablas => {
   const t = Object.fromEntries(TABLAS.map(k => [k, []])) as unknown as Tablas;
   t.productos = [
-    { sku: 'PROPIO', nombre: 'Cable', categoria: 'cable', unidad: 'm', formato: 100, stock: 10, minimo: 1, ubicacion: 'P01', proveedor: 'Saltoki', propiedad: 'propia' },
-    { sku: 'CUADRO', nombre: 'Cuadro VE', categoria: 'cuadros', unidad: 'ud', formato: 1, stock: 3, minimo: 2, ubicacion: 'P06', proveedor: 'Esmove', propiedad: 'custodia', propietario_id: 'ESMOVE' },
+    { sku: 'RJ45', nombre: 'Sobre 25 conectores RJ45', categoria: 'fijaciones', unidad: 'sobre', contenido: 25, stock: 10, minimo: 4, minimo_definido: true, proveedor: 'Saltoki', propiedad: 'propia' },
+    { sku: 'V2C', nombre: 'Trydan 7,4 kW', categoria: 'cargadores', unidad: 'ud', contenido: 1, stock: 15, minimo: 0, minimo_definido: false, proveedor: 'Saltoki', propiedad: 'custodia', propietario_id: 'ESMOVE' },
   ];
-  t.costes_producto = [{ sku: 'PROPIO', precio: 0.5 }, { sku: 'CUADRO', precio: 0 }];
+  t.equipos = [{ id: 'B1', nombre: 'Búfala 1', estado: 'ruta', activo: true }];
+  t.vehiculos = [{ id: 'V1', matricula: '0000-AAA', modelo: 'Furgoneta', equipo_id: 'B1', activo: true }];
+  t.stock_vehiculo = [{ vehiculo_id: 'V1', sku: 'RJ45', unidades: 23 }];
+  t.config_app = [{ id: 1, modo_demo: true }];
   return t;
 };
 
-describe('E-010 · precio de custodia', () => {
-  it('llega como null en la app y el propio conserva su precio', () => {
+describe('E-013 · estado desde Supabase', () => {
+  it('sin precios, con unidad y contenido; tarea de mínimo si se importó sin él', () => {
     const E = aEstado(tablas(), { cesta: { equipo: '', receptor: null, lineas: [] }, seq: { ent: 0 } }, 'Prueba', 'admin');
-    const cuadro = E.products.find(p => p.sku === 'CUADRO')!, cable = E.products.find(p => p.sku === 'PROPIO')!;
-    expect(cuadro.price).toBeNull();
-    expect(cable.price).toBe(0.5);
-    expect(valorProducto(cuadro)).toBe(0);
+    const rj = E.products.find(p => p.sku === 'RJ45')!, v2c = E.products.find(p => p.sku === 'V2C')!;
+    expect(rj).not.toHaveProperty('price');
+    expect(rj).toMatchObject({ unit: 'sobre', contenido: 25, minimoDefinido: true });
+    expect(v2c.minimoDefinido).toBe(false);
+    expect(JSON.stringify(E)).not.toMatch(/precio|price|coste/i);
   });
-  it('sin precio se muestra un guion, nunca "0,00 €"', () => {
-    expect(eur(null)).toBe('—');
-    expect(eur(undefined)).toBe('—');
-    expect(eur(0)).toMatch(/0,00/);
+  it('vehículo del equipo y stock a bordo en unidades (23 RJ45 = 0,92 sobres)', () => {
+    const E = aEstado(tablas(), { cesta: { equipo: '', receptor: null, lineas: [] }, seq: { ent: 0 } }, 'Prueba', 'admin');
+    expect(E.equipos[0].vehiculo).toBe('V1');
+    expect(unidadesABordo(E, 'V1', 'RJ45')).toBe(23);
+    expect(stockTotal(E, E.products[0])).toBe(10.92);
+    expect(E.configApp.modoDemo).toBe(true);
   });
 });

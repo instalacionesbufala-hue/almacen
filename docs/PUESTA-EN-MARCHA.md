@@ -56,12 +56,8 @@ Las "migraciones" son los archivos de `supabase/migrations/`: crean las tablas, 
   ```bash
   npx.cmd supabase db push
   ```
-  Te enseña la lista de migraciones (9 archivos) y pregunta si continúa: escribe `Y` y pulsa Enter. Termina con *Finished supabase db push*.
-- [ ] 2.4. **(Opcional) Cargar los datos de demostración** (referencias, furgonetas y técnicos de ejemplo). Sirve para probar la app antes de meter lo real:
-  ```bash
-  npx.cmd supabase db push --include-seed
-  ```
-  Si prefieres empezar vacío, sáltate este paso: las referencias reales se dan de alta con la cámara o con "Añadir referencia". Los datos de ejemplo también se pueden borrar después, desde la ficha de cada referencia.
+  Te enseña la lista de migraciones (10 archivos) y pregunta si continúa: escribe `Y` y pulsa Enter. Termina con *Finished supabase db push*.
+- [ ] 2.4. **Datos de demostración: ya no se cargan.** Una instalación nueva empieza vacía y el catálogo real se importa en el paso 12. (Si en algún momento quieres probar con datos inventados, pega el contenido de `supabase/seed.sql` en **SQL Editor** → **Run**; después se borran con un botón, también en el paso 12.)
 - [ ] 2.5. Comprueba que ha ido bien: en Supabase, **Table Editor** debe listar `productos`, `movimientos`, `entregas`, `perfiles` y otras. En **Storage** deben aparecer dos espacios **privados** (con candado): `justificantes` y `fotos-articulos`. Si `fotos-articulos` saliera como *Public*, ábrelo → **Edit bucket** → desmarca *Public bucket*: las fotos de Saltoki y de fabricantes no deben quedar públicas.
 
 ## 3. Crear el primer administrador (tú)
@@ -279,6 +275,24 @@ El plan gratuito de Supabase **no hace copias** y **se pausa tras 7 días sin us
 - [ ] 11.6. En el ordenador, cambia el mínimo de una referencia. El cambio debe verse en el móvil.
 
 Si los seis pasos salen bien, la app está en marcha.
+
+## 12. Pasar a datos reales (E-013)
+
+La app deja de usar precios: solo cuenta material. El stock está en el **almacén** o a bordo del **vehículo** de cada equipo, y entregar a un equipo es pasar material del almacén a su vehículo.
+
+- [ ] 12.1. **Aplica la migración nueva y vuelve a desplegar `notificar`** (solo si tu base es anterior a E-013; Code lo hace al terminar el encargo):
+  ```bash
+  npx.cmd supabase db push
+  ```
+  ```bash
+  npx.cmd supabase functions deploy notificar
+  ```
+- [ ] 12.2. **Exporta una copia** por si acaso: **Configuración** → *Datos y copias de seguridad* → **Exportar copia**.
+- [ ] 12.3. **Borra los datos de ejemplo** (una sola vez): **Configuración** → *Pasar a datos reales* → **Borrar datos de ejemplo**. Escribe `BORRAR DEMO` y pulsa **Borrar definitivamente**. Se borran los artículos, movimientos, entregas, equipos, técnicos, vehículos y fichas de dotación de ejemplo, con sus fotos. **Se conservan** los usuarios, la configuración de avisos y Esmove. Después el botón desaparece y queda la fecha en que se hizo.
+- [ ] 12.4. **Importa el catálogo real**: en el mismo bloque, **Importar catálogo (CSV)** → elige `datos/catalogo-stock-real.csv`. Antes de importar ves tres listas: **Nuevos**, **Ya existen** (no se tocan) y **Con errores** (unidad o categoría desconocida, propietario que no existe…; esas filas no entran). Pulsa **Importar**. Cada artículo entra con su stock inicial como *Inventario de apertura* y la referencia de sus albaranes. Repetir la importación no duplica nada.
+- [ ] 12.5. **Completa los mínimos**: el botón **Completar mínimo (N)** abre la lista de los artículos importados sin mínimo. Escribe el mínimo de cada uno (en su formato: cajas, botes, metros…) y **Guarda**. Mientras un artículo no tenga mínimo, no genera avisos de reposición.
+- [ ] 12.6. **Da de alta los equipos, vehículos y técnicos reales** en **Equipos y técnicos**: primero los vehículos (matrícula), luego los equipos (con el nombre tal como lo envía el wizard, p. ej. *Búfala 1*) y asígnales su vehículo; por último los técnicos, con su código y teléfono. Cada cambio de equipo queda en el **historial**.
+- [ ] 12.7. **Carga los vehículos**: si un vehículo ya lleva material, regístralo como **Traspaso** al vehículo desde la ficha del artículo (o con una entrega firmada). Así el total (almacén + vehículos) cuadra desde el primer día.
 
 ---
 

@@ -3,11 +3,11 @@ import type { Estado, Producto } from '../data/tipos';
 import { claveArchivo, emparejarArchivo, fotoDe, fotoDeHerramienta, medidas, permisoFoto, planImportacion, rutasFoto } from './fotos';
 import { aplicarLocal } from '../store/ops';
 
-const prod = (x: Partial<Producto> & { sku: string }): Producto => ({ name: x.sku, cat: 'aparamenta', unit: 'ud', pack: 1, packLabel: '', stock: 5, min: 1, loc: 'P01-E01-N1', supplier: 'Saltoki', price: 1, ...x });
+const prod = (x: Partial<Producto> & { sku: string }): Producto => ({ name: x.sku, cat: 'aparamenta', unit: 'ud', stock: 5, min: 1, supplier: 'Saltoki', ...x });
 const estado = (): Estado => ({
   products: [
     prod({ sku: 'SAL-DIF-40', supplierRef: '6040615306', ean: '8420000000017' }),
-    prod({ sku: 'ESM-CPVE-MONO', supplierRef: 'CP-VE-1F-40', cat: 'cuadros', propiedad: 'custodia', propietario: 'ESMOVE', price: null }),
+    prod({ sku: 'ESM-CPVE-MONO', supplierRef: 'CP-VE-1F-40', cat: 'cuadros', propiedad: 'custodia', propietario: 'ESMOVE' }),
     prod({ sku: 'ROPA-PANT-42', cat: 'ropa', modelo: 'Pantalón multibolsillos', talla: '42' }),
     prod({ sku: 'ROPA-PANT-44', cat: 'ropa', modelo: 'Pantalón multibolsillos', talla: '44' }),
     prod({ sku: 'CON-FOTO', foto: 'productos/CON-FOTO/a.webp', fotoMini: 'productos/CON-FOTO/a-mini.webp', fotoOrigen: 'propia' }),

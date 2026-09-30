@@ -3,28 +3,35 @@
    - traducirse a su función SQL del servidor (la fuente de verdad en modo nube).
    En modo nube la operación se guarda en la cola y se reaplica en local hasta que el servidor la confirma. */
 import type { OrigenFoto, Tallas, ConfigAvisos, Propietario, Rol, CatId, EstadoEquipo, Estado, Herramienta, LineaEntrega, Producto, TipoIncidencia, TipoMov } from '../data/tipos';
-import { applyMovement, find, delta, disponibleReal, seriesReservadas } from '../domain/reglas';
+import { applyMovement, find, delta, disponibleReal, formatoEntero, vehiculoDeEquipo } from '../domain/reglas';
 import { emailValido, herramientasLibres } from '../domain/entregas';
 import { redondea } from '../domain/formato';
 import { asignarHerramienta, registrarIncidencia } from '../domain/herramientas';
 import { fotoDe, grupoFoto } from '../domain/fotos';
 
-export interface OpMovimiento { id: string; sku: string; tipo: TipoMov; qty: number; motivo: string; ref: string; series: string[]; equipo?: string }
-export interface OpEntrega { id: string; numero?: string; ts: number; equipo: string; receptor: string; dni: string; lineas: LineaEntrega[]; firma: string; hash?: string }
+export interface OpMovimiento { id: string; sku: string; tipo: TipoMov; qty: number; motivo: string; ref: string; series: string[]; equipo?: string; vehiculo?: string }
 export interface OpAlbaran { id: string; cabecera: { numero: string; proveedor: string; cif: string; fecha: string; confianza: number; modo: 'ia' | 'sim' }; lineas: { sku: string; cantidad: number; series: string[] }[] }
 export interface OpProducto { producto: Producto; nuevo: boolean; stockInicial: number }
+/** Fila del CSV del catálogo (E-013), ya interpretada */
+export interface FilaCatalogo { sku: string; ref_proveedor: string; nombre: string; categoria: CatId; propiedad: 'propia' | 'custodia'; propietario: string; proveedor: string; unidad: Producto['unit']; contenido: number; stock_inicial: number; minimo: number | null; albaranes: string }
 export interface OpIncidencia { id: string; dotacion: string; tipo: TipoIncidencia; nota: string; coste?: number; serieNueva?: string; caducaNueva?: string }
 
 export type Op =
   | { op: 'movimiento'; args: OpMovimiento }
-  | { op: 'entrega'; args: OpEntrega }
   | { op: 'albaran'; args: OpAlbaran }
   | { op: 'producto'; args: OpProducto }
   | { op: 'pedido'; args: { sku: string; qty: number; proveedor?: string } }
-  | { op: 'equipo'; args: { id: string; nombre: string; flota: string; matricula: string; estado: EstadoEquipo } }
+  | { op: 'equipo'; args: { id: string; nombre: string; estado: EstadoEquipo } }
+  | { op: 'vehiculo'; args: { id: string; matricula: string; modelo: string } }
+  | { op: 'asignarVehiculo'; args: { vehiculo: string; equipo?: string } }
+  | { op: 'bajaTecnico'; args: { id: string } }
+  | { op: 'bajaVehiculo'; args: { id: string } }
+  | { op: 'mermaVista'; args: { id: string } }
+  | { op: 'limpiarDemo'; args: Record<string, never> }
+  | { op: 'importarCatalogo'; args: { filas: FilaCatalogo[] } }
   | { op: 'estadoEquipo'; args: { id: string; estado: EstadoEquipo } }
   | { op: 'retirarEquipo'; args: { id: string; destino?: string } }
-  | { op: 'tecnico'; args: { id: string; nombre: string; rol: string; dni: string; equipo?: string; email?: string } }
+  | { op: 'tecnico'; args: { id: string; nombre: string; rol: string; dni: string; equipo?: string; email?: string; codigo?: string; telefono?: string } }
   | { op: 'asignarTecnico'; args: { tecnico: string; equipo?: string } }
   | { op: 'altaDotacion'; args: Herramienta }
   | { op: 'asignarDotacion'; args: { id: string; dotacion: string; equipo?: string; tecnico?: string } }
@@ -60,34 +67,19 @@ export const OPS: Defs = {
   movimiento: {
     local: (S, a) => {
       if (a.tipo === 'ajuste' && S.rol !== 'admin') throw new Error('Solo el administrador puede hacer ajustes');
-      if (a.tipo === 'merma' && S.rol !== 'admin') {
-        // el almacén no ve precios: el servidor decide si se aplica (≤ 50 €) o queda pendiente de validar
-        const p = find(S, a.sku); if (!p) throw new Error('Producto no encontrado');
-        if (!(a.qty > 0)) throw new Error('Indica una cantidad mayor que cero');
-        if (a.qty > p.stock) throw new Error(`Solo hay ${p.stock} de ${p.name}`);
-        if (!a.motivo.trim()) throw new Error('Indica el motivo del movimiento');
-        S.pendientes.unshift({ id: a.id, ts: Date.now(), tipo: 'merma', sku: a.sku, qty: a.qty, reason: a.motivo, ref: a.ref, serials: a.series, operator: S.operator, estado: 'pendiente', provisional: true });
-        return;
-      }
-      applyMovement(S, { id: a.id, sku: a.sku, type: a.tipo, qty: a.qty, reason: a.motivo, ref: a.ref, serials: a.series, equipo: a.equipo });
+      if ((a.tipo === 'traspaso' || a.tipo === 'devolucion') && !a.vehiculo) throw new Error('Indica el vehículo');
+      applyMovement(S, { id: a.id, sku: a.sku, type: a.tipo, qty: a.qty, reason: a.motivo, ref: a.ref, equipo: a.equipo, vehiculo: a.vehiculo });
+      // E-013: las mermas se aplican al momento y se informa al administrador (en la nube, también por sus canales)
+      if (a.tipo === 'merma') S.pendientes.unshift({ id: nuevoId(), ts: Date.now(), tipo: 'merma', sku: a.sku, qty: a.qty, reason: a.motivo,
+        ref: a.ref + (a.vehiculo ? ` · vehículo ${S.vehiculos.find(v => v.id === a.vehiculo)?.matricula || a.vehiculo}` : ''), serials: [], operator: S.operator, estado: 'aplicada' });
     },
-    rpc: a => ['registrar_movimiento', { p_id: a.id, p_sku: a.sku, p_tipo: a.tipo, p_cantidad: a.qty, p_motivo: a.motivo, p_referencia: a.ref, p_series: a.series, p_equipo: a.equipo ?? null }],
+    rpc: a => ['registrar_movimiento', { p_id: a.id, p_sku: a.sku, p_tipo: a.tipo, p_cantidad: a.qty, p_motivo: a.motivo, p_referencia: a.ref, p_series: [], p_equipo: a.equipo ?? null, p_corrige: null, p_vehiculo: a.vehiculo ?? null }],
     desc: (S, a) => `${a.tipo} de ${a.qty} · ${nombreProd(S, a.sku)}`,
-  },
-  entrega: {
-    local: (S, a) => {
-      const copia = JSON.stringify(S.products);
-      try { for (const l of a.lineas) applyMovement(S, { sku: l.sku, type: 'salida', qty: l.qty, reason: 'Entrega a equipo', ref: a.numero || 'Entrega pendiente', serials: l.serials, equipo: a.equipo, entrega: a.id }); }
-      catch (e) { S.products = JSON.parse(copia); throw e; }
-      S.entregas.unshift({ id: a.id, numero: a.numero, ts: a.ts, equipo: a.equipo, receptor: a.receptor, dni: a.dni, lineas: a.lineas, firma: a.firma, hash: a.hash, operator: S.operator });
-    },
-    rpc: a => ['registrar_entrega', { p_id: a.id, p_equipo: a.equipo, p_receptor: a.receptor, p_lineas: a.lineas.map(l => ({ sku: l.sku, cantidad: l.qty, series: l.serials })), p_firma: a.firma }],
-    desc: (S, a) => `Entrega a ${S.equipos.find(e => e.id === a.equipo)?.nombre || a.equipo} (${a.lineas.length} líneas)`,
   },
   albaran: {
     local: (S, a) => {
       const copia = JSON.stringify(S.products);
-      try { for (const l of a.lineas) applyMovement(S, { sku: l.sku, type: 'entrada', qty: l.cantidad, reason: find(S, l.sku)?.propiedad === 'custodia' ? 'Recepción en custodia' : 'Compra a proveedor', ref: `Alb. ${a.cabecera.numero || 's/n'}`, serials: l.series }); }
+      try { for (const l of a.lineas) applyMovement(S, { sku: l.sku, type: 'entrada', qty: l.cantidad, reason: find(S, l.sku)?.propiedad === 'custodia' ? 'Recepción en custodia' : 'Compra a proveedor', ref: `Alb. ${a.cabecera.numero || 's/n'}` }); }
       catch (e) { S.products = JSON.parse(copia); throw e; }
       S.albaranes.unshift({ numero: a.cabecera.numero || 's/n', proveedor: a.cabecera.proveedor || 'Proveedor', fecha: a.cabecera.fecha, lineas: a.lineas.length,
         unidades: a.lineas.reduce((s, l) => s + l.cantidad, 0), ts: Date.now(), operator: S.operator, confianza: a.cabecera.confianza, modo: a.cabecera.modo });
@@ -99,15 +91,16 @@ export const OPS: Defs = {
     local: (S, { producto: p, nuevo, stockInicial }) => {
       const actual = find(S, p.sku);
       if (nuevo && actual) throw new Error(`Ya existe una referencia con el SKU ${p.sku}`);
-      if (actual) { const { stock, serials } = actual; Object.assign(actual, p, { stock, serials: p.serialized ? (serials || []) : serials }); }
+      if (formatoEntero(p) && stockInicial !== Math.trunc(stockInicial)) throw new Error(`El stock inicial de ${p.name} va en ${p.unit} enteros`);
+      if (actual) { const { stock } = actual; Object.assign(actual, p, { stock }); }
       else {
-        S.products.push({ ...p, stock: 0, serials: p.serialized ? [] : undefined });
-        if (stockInicial > 0 && !p.serialized) applyMovement(S, { sku: p.sku, type: 'ajuste', qty: stockInicial, reason: 'Alta de referencia', ref: 'Stock inicial' });
+        S.products.push({ ...p, stock: 0 });
+        if (stockInicial > 0) applyMovement(S, { sku: p.sku, type: 'entrada', qty: stockInicial, reason: 'Alta de artículo', ref: 'Stock inicial' });
       }
     },
     rpc: ({ producto: p, nuevo, stockInicial }) => ['guardar_producto', { p_producto: {
-      sku: p.sku, nuevo, ean: p.ean ?? '', ref_proveedor: p.supplierRef ?? '', nombre: p.name, categoria: p.cat, unidad: p.unit, formato: p.pack,
-      formato_texto: p.packLabel, minimo: p.min, ubicacion: p.loc, proveedor: p.supplier, con_serie: !!p.serialized, precio: p.propiedad === 'custodia' ? null : p.price, stock_inicial: stockInicial,
+      sku: p.sku, nuevo, ean: p.ean ?? '', ref_proveedor: p.supplierRef ?? '', nombre: p.name, categoria: p.cat, unidad: p.unit, contenido: p.contenido ?? 1,
+      formato_texto: p.packLabel ?? '', minimo: p.minimoDefinido === false ? '' : p.min, proveedor: p.supplier, stock_inicial: stockInicial,
       propiedad: p.propiedad || 'propia', propietario_id: p.propiedad === 'custodia' ? p.propietario : null,
       objetivo: p.objetivo ?? '', proveedor_habitual: p.proveedorHabitual ?? '', modelo: p.modelo ?? '', talla: p.talla ?? '' } }],
     desc: (_S, a) => `${a.nuevo ? 'Alta' : 'Edición'} de ${a.producto.sku}`,
@@ -125,10 +118,11 @@ export const OPS: Defs = {
   },
   equipo: {
     local: (S, a) => {
-      if (!a.matricula.trim()) throw new Error('Indica la matrícula del vehículo');
+      if (S.rol !== 'admin') throw new Error('Solo el administrador gestiona los equipos');
+      if (!a.nombre.trim()) throw new Error('Indica el nombre del equipo (como lo envía el wizard: "Búfala 1")');
       const e = S.equipos.find(x => x.id === a.id);
-      if (e) Object.assign(e, { nombre: a.nombre, flota: a.flota, matricula: a.matricula, estado: a.estado });
-      else S.equipos.push({ ...a, tecnicos: [] });
+      if (e) Object.assign(e, { nombre: a.nombre.trim(), estado: a.estado });
+      else S.equipos.push({ id: a.id, nombre: a.nombre.trim(), estado: a.estado, tecnicos: [] });
     },
     rpc: a => ['guardar_equipo', { p_equipo: a }],
     desc: (_S, a) => `Equipo ${a.nombre}`,
@@ -142,6 +136,7 @@ export const OPS: Defs = {
     local: (S, a) => {
       const e = S.equipos.find(x => x.id === a.id); if (!e) throw new Error('Equipo no encontrado');
       if (e.tecnicos.length) throw new Error('El equipo aún tiene técnicos asignados');
+      if (e.vehiculo) OPS.asignarVehiculo.local(S, { vehiculo: e.vehiculo });
       S.herramientas.forEach(h => { if (h.equipo === a.id) h.equipo = a.destino; });
       S.equipos = S.equipos.filter(x => x !== e);
     },
@@ -153,17 +148,101 @@ export const OPS: Defs = {
       const t = S.tecnicos.find(x => x.id === a.id);
       if (a.email && !emailValido(a.email)) throw new Error(`Correo no válido: ${a.email}`);
       const email = a.email === undefined ? t?.email : a.email.trim().toLowerCase() || undefined;
-      if (t) Object.assign(t, { nombre: a.nombre, rol: a.rol, dni: a.dni, email });
-      else S.tecnicos.push({ id: a.id, nombre: a.nombre, rol: a.rol, dni: a.dni, email });
+      const extra = { ...(a.codigo !== undefined ? { codigo: a.codigo.trim().toUpperCase() || undefined } : {}), ...(a.telefono !== undefined ? { telefono: a.telefono.trim() || undefined } : {}) };
+      if (t) Object.assign(t, { nombre: a.nombre, rol: a.rol, dni: a.dni, email }, extra);
+      else S.tecnicos.push({ id: a.id, nombre: a.nombre, rol: a.rol, dni: a.dni, email, ...extra });
       if (a.equipo !== undefined) OPS.asignarTecnico.local(S, { tecnico: a.id, equipo: a.equipo });
     },
-    rpc: a => ['guardar_tecnico', { p_tecnico: { id: a.id, nombre: a.nombre, rol: a.rol, dni_mascara: a.dni, equipo_id: a.equipo ?? '', ...(a.email !== undefined ? { email: a.email } : {}) } }],
+    rpc: a => ['guardar_tecnico', { p_tecnico: { id: a.id, nombre: a.nombre, rol: a.rol, dni_mascara: a.dni, equipo_id: a.equipo ?? '', ...(a.email !== undefined ? { email: a.email } : {}), ...(a.codigo !== undefined ? { codigo: a.codigo } : {}), ...(a.telefono !== undefined ? { telefono: a.telefono } : {}) } }],
     desc: (_S, a) => `Técnico ${a.nombre}`,
   },
   asignarTecnico: {
-    local: (S, a) => { S.equipos.forEach(e => { e.tecnicos = e.tecnicos.filter(t => t !== a.tecnico); }); if (a.equipo) { const e = S.equipos.find(x => x.id === a.equipo); if (!e) throw new Error('Equipo no encontrado'); e.tecnicos.push(a.tecnico); } },
+    local: (S, a) => {
+      if (a.equipo && !S.equipos.some(x => x.id === a.equipo)) throw new Error('Equipo no encontrado');
+      const ahora = Date.now();
+      S.equipos.forEach(e => { e.tecnicos = e.tecnicos.filter(t => t !== a.tecnico); });
+      S.asignaciones.forEach(x => { if (x.tipo === 'tecnico' && x.sujeto === a.tecnico && x.hasta === undefined) x.hasta = ahora; });
+      if (a.equipo) { S.equipos.find(x => x.id === a.equipo)!.tecnicos.push(a.tecnico); S.asignaciones.push({ tipo: 'tecnico', sujeto: a.tecnico, equipo: a.equipo, desde: ahora }); }
+    },
     rpc: a => ['asignar_tecnico', { p_tecnico: a.tecnico, p_equipo: a.equipo ?? null }],
     desc: (S, a) => `Asignar ${S.tecnicos.find(t => t.id === a.tecnico)?.nombre || a.tecnico}`,
+  },
+  vehiculo: {
+    local: (S, a) => {
+      if (S.rol !== 'admin') throw new Error('Solo el administrador gestiona los vehículos');
+      const m = a.matricula.trim().toUpperCase(); if (!m) throw new Error('Indica la matrícula');
+      if (S.vehiculos.some(v => v.matricula === m && v.id !== a.id)) throw new Error(`Ya hay un vehículo con la matrícula ${m}`);
+      const v = S.vehiculos.find(x => x.id === a.id);
+      if (v) Object.assign(v, { matricula: m, modelo: a.modelo.trim() }); else S.vehiculos.push({ id: a.id, matricula: m, modelo: a.modelo.trim() });
+    },
+    rpc: a => ['guardar_vehiculo', { p_vehiculo: { id: a.id, matricula: a.matricula, modelo: a.modelo } }],
+    desc: (_S, a) => `Vehículo ${a.matricula}`,
+  },
+  asignarVehiculo: {
+    // vehículo → equipo (o sin equipo). Un equipo lleva un solo vehículo; el material va con el vehículo.
+    local: (S, a) => {
+      const v = S.vehiculos.find(x => x.id === a.vehiculo); if (!v) throw new Error('Vehículo no encontrado');
+      if (a.equipo && !S.equipos.some(x => x.id === a.equipo)) throw new Error('Equipo no encontrado');
+      if ((v.equipo || undefined) === (a.equipo || undefined)) return;
+      const ahora = Date.now(), soltar = (id: string) => {
+        const x = S.vehiculos.find(y => y.id === id)!; const e = S.equipos.find(y => y.id === x.equipo); if (e) e.vehiculo = undefined; x.equipo = undefined;
+        S.asignaciones.forEach(h => { if (h.tipo === 'vehiculo' && h.sujeto === id && h.hasta === undefined) h.hasta = ahora; });
+      };
+      const otro = S.equipos.find(e => e.id === a.equipo)?.vehiculo; if (otro && otro !== v.id) soltar(otro);
+      soltar(v.id);
+      if (a.equipo) { v.equipo = a.equipo; S.equipos.find(e => e.id === a.equipo)!.vehiculo = v.id; S.asignaciones.push({ tipo: 'vehiculo', sujeto: v.id, equipo: a.equipo, desde: ahora }); }
+    },
+    rpc: a => ['asignar_vehiculo', { p_vehiculo: a.vehiculo, p_equipo: a.equipo ?? null }],
+    desc: (S, a) => `Vehículo ${S.vehiculos.find(v => v.id === a.vehiculo)?.matricula || a.vehiculo} → ${S.equipos.find(e => e.id === a.equipo)?.nombre || 'sin equipo'}`,
+  },
+  bajaTecnico: {
+    local: (S, a) => { if (S.rol !== 'admin') throw new Error('Solo el administrador da de baja'); OPS.asignarTecnico.local(S, { tecnico: a.id }); S.tecnicos = S.tecnicos.filter(t => t.id !== a.id); },
+    rpc: a => ['baja_tecnico', { p_tecnico: a.id }],
+    desc: (S, a) => `Baja de ${S.tecnicos.find(t => t.id === a.id)?.nombre || a.id}`,
+  },
+  bajaVehiculo: {
+    local: (S, a) => {
+      if (S.rol !== 'admin') throw new Error('Solo el administrador da de baja');
+      if (S.aBordo.some(x => x.vehiculo === a.id && x.unidades > 0)) throw new Error('El vehículo aún lleva material: devuélvelo al almacén antes de darlo de baja');
+      OPS.asignarVehiculo.local(S, { vehiculo: a.id }); S.vehiculos = S.vehiculos.filter(v => v.id !== a.id);
+    },
+    rpc: a => ['baja_vehiculo', { p_vehiculo: a.id }],
+    desc: (S, a) => `Baja del vehículo ${S.vehiculos.find(v => v.id === a.id)?.matricula || a.id}`,
+  },
+  mermaVista: {
+    local: (S, a) => { const p = S.pendientes.find(x => x.id === a.id); if (p && p.estado === 'aplicada') { p.estado = 'vista'; p.resueltoPor = S.operator; } },
+    rpc: a => ['marcar_merma_vista', { p_pendiente: a.id }],
+    desc: () => 'Merma vista',
+  },
+  limpiarDemo: {
+    // E-013: una sola vez. Conserva los usuarios, la configuración de avisos y el propietario Esmove.
+    local: S => {
+      if (S.rol !== 'admin') throw new Error('Solo el administrador puede borrar los datos de ejemplo');
+      if (!S.configApp.modoDemo) throw new Error('Los datos de ejemplo ya se borraron');
+      Object.assign(S, { products: [], movements: [], albaranes: [], equipos: [], tecnicos: [], entregas: [], herramientas: [], pendientes: [], avisos: [], minimosHerramienta: [],
+        envios: [], actas: [], vehiculos: [], asignaciones: [], aBordo: [], pedidos: {}, cesta: { equipo: '', receptor: null, lineas: [], obra: '', paso: 1 }, seq: { ent: 0 } });
+      S.configApp = { modoDemo: false, demoBorrada: Date.now(), demoBorradaPor: S.operator };
+    },
+    rpc: () => ['limpiar_demostracion', {}],
+    desc: () => 'Borrar los datos de ejemplo',
+  },
+  importarCatalogo: {
+    // E-013: idempotente por SKU (no toca lo que ya existe) y por albaranes (el inventario de apertura entra una sola vez)
+    local: (S, a) => {
+      if (S.rol !== 'admin') throw new Error('Solo el administrador importa el catálogo');
+      for (const f of a.filas) {
+        const sku = f.sku.trim().toUpperCase(); if (!sku) throw new Error('Hay una fila sin SKU');
+        const prop = f.propiedad === 'custodia' ? S.propietarios.find(o => o.id.toUpperCase() === f.propietario.trim().toUpperCase() || o.nombre.toLowerCase() === f.propietario.trim().toLowerCase())?.id : undefined;
+        if (f.propiedad === 'custodia' && !prop) throw new Error(`Propietario desconocido en ${sku}: ${f.propietario}`);
+        if (!find(S, sku)) S.products.push({ sku, supplierRef: f.ref_proveedor || undefined, name: f.nombre.trim(), cat: f.categoria, unit: f.unidad, contenido: f.contenido || 1,
+          stock: 0, min: f.minimo ?? 0, minimoDefinido: f.minimo !== null, supplier: f.proveedor, propiedad: prop ? 'custodia' : 'propia', propietario: prop });
+        const ref = 'Albaranes ' + (f.albaranes.trim() || 'sin albarán');
+        if (f.stock_inicial > 0 && !S.movements.some(m => m.sku === sku && m.reason === 'Inventario de apertura' && m.ref === ref))
+          applyMovement(S, { sku, type: 'entrada', qty: f.stock_inicial, reason: 'Inventario de apertura', ref });
+      }
+    },
+    rpc: a => ['importar_catalogo', { p_filas: a.filas }],
+    desc: (_S, a) => `Importar catálogo (${a.filas.length} artículos)`,
   },
   altaDotacion: {
     local: (S, h) => { if (S.herramientas.some(x => x.id === h.id)) return; S.herramientas.push(JSON.parse(JSON.stringify(h))); },
@@ -212,8 +291,7 @@ export const OPS: Defs = {
       const sku = (a.sku || (a.ean ? 'BORR-' + a.ean : '')).trim().toUpperCase();
       if (!sku) throw new Error('Escanea o escribe el código');
       if (S.products.some(p => p.sku === sku || (a.ean && p.ean === a.ean))) throw new Error('Ya existe una referencia con ese código');
-      S.products.push({ sku, ean: a.ean || undefined, name: a.nombre.trim() || `Borrador ${sku}`, cat: a.cat, unit: 'ud', pack: 1, packLabel: '', stock: 0, min: 0, loc: 'P00-E00-N0', supplier: '', price: 0,
-        serialized: a.cat === 'cargadores', serials: a.cat === 'cargadores' ? [] : undefined, borrador: true });
+      S.products.push({ sku, ean: a.ean || undefined, name: a.nombre.trim() || `Borrador ${sku}`, cat: a.cat, unit: 'ud', stock: 0, min: 0, minimoDefinido: false, supplier: '', borrador: true });
     },
     rpc: a => ['crear_borrador_producto', { p_sku: a.sku, p_ean: a.ean, p_nombre: a.nombre, p_categoria: a.cat }],
     desc: (_S, a) => `Borrador ${a.sku || a.ean}`,
@@ -240,7 +318,7 @@ export const OPS: Defs = {
       for (const c of a.cambios) {
         if (!(c.minimo >= 0) || (c.objetivo != null && !(c.objetivo >= 0))) throw new Error('Los mínimos y objetivos no pueden ser negativos');
         const p = find(S, c.sku); if (!p) continue;
-        p.min = c.minimo; if (c.objetivo !== undefined) p.objetivo = c.objetivo ?? undefined; if (c.proveedorHabitual !== undefined) p.proveedorHabitual = c.proveedorHabitual || undefined;
+        p.min = c.minimo; p.minimoDefinido = true; if (c.objetivo !== undefined) p.objetivo = c.objetivo ?? undefined; if (c.proveedorHabitual !== undefined) p.proveedorHabitual = c.proveedorHabitual || undefined;
       }
     },
     rpc: a => ['fijar_minimos', { p_cambios: a.cambios.map(c => ({ sku: c.sku, minimo: c.minimo, ...(c.objetivo !== undefined ? { objetivo: c.objetivo } : {}), ...(c.proveedorHabitual !== undefined ? { proveedor_habitual: c.proveedorHabitual } : {}) })) }],
@@ -278,7 +356,7 @@ export const OPS: Defs = {
       if (S.rol !== 'admin') throw new Error('Solo el administrador puede cambiar la propiedad');
       const p = find(S, a.sku); if (!p) throw new Error('Producto no encontrado');
       if (a.propiedad === 'custodia' && !a.propietario) throw new Error('Indica de quién es el material');
-      p.propiedad = a.propiedad; p.propietario = a.propiedad === 'custodia' ? a.propietario : undefined; if (a.propiedad === 'custodia') p.price = null;
+      p.propiedad = a.propiedad; p.propietario = a.propiedad === 'custodia' ? a.propietario : undefined;
     },
     rpc: a => ['cambiar_propiedad', { p_sku: a.sku, p_propiedad: a.propiedad, p_propietario: a.propietario ?? null }],
     desc: (_S, a) => `Propiedad de ${a.sku}`,
@@ -340,18 +418,15 @@ export const OPS: Defs = {
         if (!(l.qty > 0)) throw new Error(`Cantidad no válida en ${p.name}`);
         const disp = disponibleReal(S, p);
         if (disp < l.qty) throw new Error(`Solo hay ${Math.max(disp, 0)} disponibles de ${p.name} (el resto está reservado o no hay stock)`);
-        if (p.serialized) {
-          if (l.serials.length !== l.qty) throw new Error(`${p.name}: indica los n.º de serie`);
-          const sr = seriesReservadas(S, p.sku), mal = l.serials.find(x => !(p.serials || []).includes(x) || sr.includes(x));
-          if (mal) throw new Error(`El n.º de serie ${mal} no está libre`);
-        }
+        if (formatoEntero(p) && l.qty !== Math.trunc(l.qty)) throw new Error(`${p.name} se entrega por ${p.unit} entero`);
+        if (p.cat !== 'ropa' && p.cat !== 'epis' && !vehiculoDeEquipo(S, eq.id)) throw new Error(`El equipo ${eq.nombre} no tiene vehículo asignado: asígnale uno en Equipos para entregarle material de instalación`);
       }
       const numero = a.numero || (/^ENT-/.test(a.id) ? a.id : undefined);
       S.entregas.unshift({ id: a.id, numero, ts: Date.now(), equipo: a.equipo, receptor: a.receptor, dni: t.dni, lineas: JSON.parse(JSON.stringify(a.lineas)), firma: '', operator: S.operator,
-        estado: 'preparada', obra: a.obra, caduca: a.caduca || Date.now() + (S.configAvisos.horasReserva || 48) * 3600e3 });
+        estado: 'preparada', obra: a.obra, vehiculo: vehiculoDeEquipo(S, eq.id), caduca: a.caduca || Date.now() + (S.configAvisos.horasReserva || 48) * 3600e3 });
     },
     rpc: a => ['preparar_entrega', { p_id: a.id, p_equipo: a.equipo, p_receptor: a.receptor, p_obra: a.obra, p_plantilla: null,
-      p_lineas: a.lineas.map(l => l.tipo === 'herramienta' ? { tipo: 'herramienta', dotacion_id: l.dotacion } : { tipo: 'stock', sku: l.sku, cantidad: l.qty, series: l.serials }) }],
+      p_lineas: a.lineas.map(l => l.tipo === 'herramienta' ? { tipo: 'herramienta', dotacion_id: l.dotacion } : { tipo: 'stock', sku: l.sku, cantidad: l.qty }) }],
     desc: (S, a) => `Preparar entrega para ${S.tecnicos.find(t => t.id === a.receptor)?.nombre || a.receptor}`,
   },
   confirmarEntrega: {
@@ -361,7 +436,8 @@ export const OPS: Defs = {
       if (e.estado === 'anulada') throw new Error('La entrega está anulada');
       if ((e.caduca ?? 0) <= Date.now()) throw new Error('La reserva ha caducado: prepárala de nuevo');
       if (!a.firma) throw new Error('Falta la firma del receptor');
-      const copia = JSON.stringify({ products: S.products, herramientas: S.herramientas, movements: S.movements });
+      const copia = JSON.stringify({ products: S.products, herramientas: S.herramientas, movements: S.movements, aBordo: S.aBordo });
+      const veh = vehiculoDeEquipo(S, e.equipo), ref = (e.numero || 'Entrega') + (e.obra ? ' · ' + e.obra : '');
       try {
         for (const l of e.lineas) {
           if (l.tipo === 'herramienta') {
@@ -371,13 +447,18 @@ export const OPS: Defs = {
             h.historial.push({ id: nuevoId(), ts: Date.now(), tipo: 'asignacion', nota: `Entregada en ${e.numero || 'entrega'}`, operator: S.operator });
             continue;
           }
-          applyMovement(S, { sku: l.sku, type: 'salida', qty: l.qty, reason: 'Entrega a equipo', ref: (e.numero || 'Entrega') + (e.obra ? ' · ' + e.obra : ''), serials: l.serials, equipo: e.equipo, entrega: e.id });
           const p = find(S, l.sku);
-          if (p && (p.cat === 'ropa' || p.cat === 'epis')) S.herramientas.push({ id: (p.cat === 'epis' ? 'E' : 'R') + nuevoId().slice(0, 6).toUpperCase(), clase: p.cat === 'epis' ? 'epi' : 'ropa', nombre: p.modelo || p.name,
-            marca: p.supplier, serie: '', talla: p.talla, cantidad: Math.ceil(l.qty), valor: p.price ?? 0, estado: 'operativa', equipo: e.equipo, tecnico: e.receptor,
+          const personal = !!p && (p.cat === 'ropa' || p.cat === 'epis');
+          // E-013: el material de instalación entra en el vehículo del equipo; la dotación personal sale del almacén y va al técnico
+          if (!personal && !veh) throw new Error('El equipo ya no tiene vehículo asignado: asígnale uno antes de firmar');
+          applyMovement(S, personal ? { sku: l.sku, type: 'salida', qty: l.qty, reason: 'Entrega de dotación personal', ref, equipo: e.equipo, entrega: e.id }
+            : { sku: l.sku, type: 'traspaso', qty: l.qty, reason: 'Entrega a equipo', ref, equipo: e.equipo, entrega: e.id, vehiculo: veh });
+          if (p && personal) S.herramientas.push({ id: (p.cat === 'epis' ? 'E' : 'R') + nuevoId().slice(0, 6).toUpperCase(), clase: p.cat === 'epis' ? 'epi' : 'ropa', nombre: p.modelo || p.name,
+            marca: p.supplier, serie: '', talla: p.talla, cantidad: Math.ceil(l.qty), valor: 0, estado: 'operativa', equipo: e.equipo, tecnico: e.receptor,
             historial: [{ id: nuevoId(), ts: Date.now(), tipo: 'alta', nota: `Entregada en ${e.numero || 'entrega'}`, operator: S.operator }] });
         }
-      } catch (err) { const c = JSON.parse(copia); S.products = c.products; S.herramientas = c.herramientas; S.movements = c.movements; throw err; }
+      } catch (err) { const c = JSON.parse(copia); S.products = c.products; S.herramientas = c.herramientas; S.movements = c.movements; S.aBordo = c.aBordo; throw err; }
+      e.vehiculo = veh;
       e.estado = 'firmada'; e.firma = a.firma; e.ts = Date.now(); e.hash = a.hash; e.caduca = undefined;
     },
     rpc: a => ['confirmar_entrega', { p_id: a.id, p_firma: a.firma }],

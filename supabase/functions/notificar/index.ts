@@ -88,20 +88,21 @@ async function adjuntoEntrega(db: SupabaseClient, id: string): Promise<Adjunto> 
   const { data: lineas } = await db.from('entrega_lineas').select('*').eq('entrega_id', id).order('n');
   const skus = (lineas || []).map(l => l.sku).filter(Boolean);
   const dots = (lineas || []).map(l => l.dotacion_id).filter(Boolean);
-  const [{ data: prods }, { data: dotacion }, { data: t }, { data: eq }] = await Promise.all([
+  const [{ data: prods }, { data: dotacion }, { data: t }, { data: eq }, { data: veh }] = await Promise.all([
     db.from('productos').select('sku, nombre, unidad').in('sku', skus.length ? skus : ['-']),
     db.from('dotacion').select('id, nombre, serie').in('id', dots.length ? dots : ['-']),
     db.from('tecnicos').select('nombre').eq('id', e.receptor_id).single(),
-    db.from('equipos').select('nombre, flota, matricula').eq('id', e.equipo_id).single(),
+    db.from('equipos').select('nombre').eq('id', e.equipo_id).single(),
+    db.from('vehiculos').select('matricula, modelo').eq('id', e.vehiculo_id || '-').maybeSingle(),
   ]);
   const p = new Map((prods || []).map(x => [x.sku, x]));
   const d = new Map((dotacion || []).map(x => [x.id, x]));
   const pdf = construirJustificante(jsPDF as unknown as ConstructorPdf, {
     numero: e.numero, fecha: new Date(e.firmada_ts || e.ts).getTime(),
-    equipo: eq ? `${eq.nombre} · ${eq.flota} (${eq.matricula})` : e.equipo_id, receptor: t?.nombre || e.receptor_id, dni: e.dni, obra: e.obra || undefined,
+    equipo: [eq?.nombre || e.equipo_id, veh ? `vehículo ${veh.matricula}${veh.modelo ? ' (' + veh.modelo + ')' : ''}` : ''].filter(Boolean).join(' · '), receptor: t?.nombre || e.receptor_id, dni: e.dni, obra: e.obra || undefined,
     lineas: (lineas || []).map(l => l.tipo === 'herramienta'
       ? { nombre: d.get(l.dotacion_id)?.nombre || l.dotacion_id, codigo: d.get(l.dotacion_id)?.serie || '', cantidad: '1 ud', series: [] }
-      : { nombre: p.get(l.sku)?.nombre || l.sku, codigo: l.sku, cantidad: `${cifra(Number(l.cantidad))} ${p.get(l.sku)?.unidad || 'ud'}`, series: l.series || [] }),
+      : { nombre: p.get(l.sku)?.nombre || l.sku, codigo: l.sku, cantidad: `${cifra(Number(l.cantidad))} ${p.get(l.sku)?.unidad || 'ud'}`, series: [] }),
     firma: e.firma, hash: e.hash, operador: e.operario,
   });
   return { filename: nombreArchivo(e.numero), content: base64(pdf) };
@@ -153,15 +154,23 @@ async function encolarInformes(db: SupabaseClient, cuerpo: Record<string, unknow
     if (cuerpo.propietario && cuerpo.propietario !== o.id) continue;
     const destinatarios = (cuerpo.destinatarios as string[] | undefined)?.length ? cuerpo.destinatarios as string[] : o.correos_informes;
     if (!destinatarios?.length) continue;
-    const { data: productos } = await db.from('productos').select('sku, nombre, unidad, stock, minimo, ref_proveedor, con_serie, foto_mini').eq('propiedad', 'custodia').eq('propietario_id', o.id);
+    const { data: productos } = await db.from('productos').select('sku, nombre, unidad, contenido, stock, minimo, ref_proveedor, foto_mini').eq('propiedad', 'custodia').eq('propietario_id', o.id);
     const skus = (productos || []).map(p => p.sku);
-    const { data: movs } = await db.from('movimientos').select('ts, sku, tipo, cantidad, motivo, referencia, series, operario, equipo_id')
+    // E-013: lo que va a bordo de los vehículos (en unidades de contenido → formatos) y la matrícula de cada vehículo
+    const [{ data: aBordo }, { data: vehiculos }] = await Promise.all([
+      db.from('stock_vehiculo').select('sku, unidades').in('sku', skus.length ? skus : ['-']),
+      db.from('vehiculos').select('id, matricula'),
+    ]);
+    const enVeh = new Map<string, number>();
+    for (const b of aBordo || []) enVeh.set(b.sku, (enVeh.get(b.sku) || 0) + Number(b.unidades));
+    const matricula = new Map((vehiculos || []).map(v => [v.id, v.matricula as string]));
+    const { data: movs } = await db.from('movimientos').select('ts, sku, tipo, cantidad, motivo, referencia, operario, equipo_id, vehiculo_id')
       .in('sku', skus.length ? skus : ['-']).gte('ts', new Date(periodo.desde).toISOString()).lt('ts', new Date(periodo.hasta).toISOString());
     const { data: actas } = await db.from('actas_custodia').select('numero, ts, representante, lineas').eq('propietario_id', o.id);
     const datos: DatosInforme = {
       propietario: o.nombre, ...periodo,
-      productos: (productos || []).map(p => ({ sku: p.sku, nombre: p.nombre, unidad: p.unidad, stock: Number(p.stock), minimo: Number(p.minimo), codigoModelo: p.ref_proveedor ?? undefined, conSerie: p.con_serie })),
-      movimientos: (movs || []).map(m => ({ ts: new Date(m.ts).getTime(), sku: m.sku, tipo: m.tipo, cantidad: Number(m.cantidad), motivo: m.motivo, referencia: m.referencia, series: m.series || [], operario: m.operario, equipo: m.equipo_id ?? undefined })),
+      productos: (productos || []).map(p => ({ sku: p.sku, nombre: p.nombre, unidad: p.unidad, stock: Number(p.stock), enVehiculos: Math.round((enVeh.get(p.sku) || 0) / Number(p.contenido || 1) * 1000) / 1000, minimo: Number(p.minimo), codigoModelo: p.ref_proveedor ?? undefined })),
+      movimientos: (movs || []).map(m => ({ ts: new Date(m.ts).getTime(), sku: m.sku, tipo: m.tipo, cantidad: Number(m.cantidad), motivo: m.motivo, referencia: m.referencia, series: [], operario: m.operario, equipo: m.equipo_id ?? undefined, vehiculo: m.vehiculo_id ? matricula.get(m.vehiculo_id) || m.vehiculo_id : undefined })),
       actas: (actas || []).map(a => ({ numero: a.numero, ts: new Date(a.ts).getTime(), representante: a.representante, lineas: a.lineas })),
     };
     const inf = construirInforme(datos);

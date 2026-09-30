@@ -71,7 +71,6 @@ export async function recargar(): Promise<void> {
   marcarConexion(true);
   const tablas = Object.fromEntries(TABLAS.map((t, i) => [t, res[i].data || []])) as unknown as Tablas;
   const rol = sesion.get().perfil?.rol || 'almacen';
-  if (rol === 'admin') { const v = await supabase.rpc('valores_pendientes'); tablas.valores_pendientes = (v.data as Tablas['perfiles']) || []; }
   const actual = obtenerEstado();
   const nuevo = aEstado(tablas, { cesta: actual.cesta, seq: actual.seq }, sesion.get().perfil?.nombre || '', rol);
   for (const it of cola.get()) if (it.estado === 'pendiente') { try { aplicarLocal(nuevo, it.op); } catch { /* se resolverá al enviarla */ } }

@@ -11,36 +11,35 @@ describe('movimientos', () => {
 
   it('una salida descuenta stock y queda a nombre del usuario con sesión', async () => {
     const id = uuid();
-    const r = await valor<{ estado: string; stock: number }>(db, MOV, [id, 'BF-FIX-SX8', 'salida', 100, 'Obra / instalación', 'C/ Eros 10', [], null]);
+    const r = await valor<{ estado: string; stock: number }>(db, MOV, [id, 'BF-FIX-SX8', 'salida', 2, 'Obra / instalación', 'C/ Eros 10', [], null]);
     expect(r.estado).toBe('aplicado');
-    expect(await stock(db, 'BF-FIX-SX8')).toBe(1100);
+    expect(await stock(db, 'BF-FIX-SX8')).toBe(10);
     expect(await valor(db, 'select operario from movimientos where id = $1', [id])).toBe('Operario Pruebas');
   });
   it('reenviar el mismo movimiento (sin cobertura) no lo duplica', async () => {
     const id = uuid();
-    await db.query(MOV, [id, 'BF-FIX-SX8', 'salida', 10, 'Obra', '', [], null]);
-    const r = await valor<{ estado: string }>(db, MOV, [id, 'BF-FIX-SX8', 'salida', 10, 'Obra', '', [], null]);
+    await db.query(MOV, [id, 'BF-FIX-SX8', 'salida', 1, 'Obra', '', [], null]);
+    const r = await valor<{ estado: string }>(db, MOV, [id, 'BF-FIX-SX8', 'salida', 1, 'Obra', '', [], null]);
     expect(r.estado).toBe('duplicado');
-    expect(await stock(db, 'BF-FIX-SX8')).toBe(1090);
+    expect(await stock(db, 'BF-FIX-SX8')).toBe(9);
   });
   it('rechaza una salida mayor que el stock con un motivo legible', async () => {
-    expect(await falla(db, MOV, [uuid(), 'BF-FIX-SX6', 'salida', 81, 'Obra', '', [], null])).toMatch(/Solo hay 80 ud de Taco nylon SX 6/);
-    expect(await stock(db, 'BF-FIX-SX6')).toBe(80);
+    expect(await falla(db, MOV, [uuid(), 'BF-FIX-SX6', 'salida', 4, 'Obra', '', [], null])).toMatch(/Solo hay 3 bote de Bote 1000 tacos/);
+    expect(await stock(db, 'BF-FIX-SX6')).toBe(3);
   });
-  it('los cargadores exigen un n.º de serie por unidad, sin duplicados', async () => {
-    expect(await falla(db, MOV, [uuid(), 'BF-VE-POL74', 'entrada', 2, 'Compra', '', ['X-1'], null])).toMatch(/n.º de serie/);
-    expect(await falla(db, MOV, [uuid(), 'BF-VE-POL74', 'entrada', 1, 'Compra', '', ['PCH74-26-0412'], null])).toMatch(/ya está en stock/);
-    expect(await falla(db, MOV, [uuid(), 'BF-VE-POL74', 'salida', 1, 'Obra', 'C/ Eros 10', ['NO-EXISTE'], null])).toMatch(/no está en stock/);
-    await db.query(MOV, [uuid(), 'BF-VE-POL74', 'salida', 1, 'Obra', 'C/ Eros 10', ['PCH74-26-0412'], null]);
+  it('E-013: los cargadores van por modelo y cantidad (sin n.º de serie) y en el almacén se mueven formatos enteros', async () => {
+    await db.query(MOV, [uuid(), 'BF-VE-POL74', 'salida', 1, 'Obra', 'C/ Eros 10', [], null]);
     expect(await stock(db, 'BF-VE-POL74')).toBe(1);
-    expect(await valor(db, "select en_stock from series where serie = 'PCH74-26-0412'")).toBe(false);
+    expect(await falla(db, MOV, [uuid(), 'BF-FIX-SX6', 'salida', 0.5, 'Obra', '', [], null])).toMatch(/bote entero/);
+    await db.query(MOV, [uuid(), 'BF-TUB-CM20', 'salida', 2.5, 'Obra', '', [], null]);   // metros: decimales sí
+    expect(await stock(db, 'BF-TUB-CM20')).toBe(597.5);
   });
   it('el almacén no puede hacer ajustes; el administrador sí, con motivo', async () => {
     expect(await falla(db, MOV, [uuid(), 'BF-FIX-SX8', 'ajuste', -5, 'Recuento', '', [], null])).toMatch(/Solo el administrador/);
     await como(db, ADMIN);
     expect(await falla(db, MOV, [uuid(), 'BF-FIX-SX8', 'ajuste', -5, '  ', '', [], null])).toMatch(/motivo/);
-    await db.query(MOV, [uuid(), 'BF-FIX-SX8', 'ajuste', -5, 'Recuento pasillo P03', '', [], null]);
-    expect(await stock(db, 'BF-FIX-SX8')).toBe(1085);
+    await db.query(MOV, [uuid(), 'BF-FIX-SX8', 'ajuste', -1, 'Recuento', '', [], null]);
+    expect(await stock(db, 'BF-FIX-SX8')).toBe(8);
     await como(db, ALMACEN);
   });
 });
@@ -66,13 +65,12 @@ describe('seguridad', () => {
     expect((await db.query('select * from productos')).rows).toHaveLength(0);
     expect(await falla(db, MOV, [uuid(), 'BF-FIX-SX8', 'salida', 1, 'x', '', [], null])).toMatch(/sin acceso o desactivado/);
   });
-  it('el almacén no ve precios ni costes; el administrador sí', async () => {
+  it('E-013: sin precios; las tablas de costes quedan sin uso y el almacén no las lee', async () => {
     await como(db, ALMACEN);
     expect((await db.query('select * from costes_producto')).rows).toHaveLength(0);
-    expect((await db.query('select * from costes_dotacion')).rows).toHaveLength(0);
     expect((await db.query('select * from productos')).rows.length).toBeGreaterThan(20);
-    await como(db, ADMIN);
-    expect((await db.query('select * from costes_producto')).rows.length).toBeGreaterThan(20);
+    await superusuario(db);
+    expect(await valor(db, 'select count(*)::int from costes_producto')).toBe(0);
   });
   it('el historial no se puede editar ni borrar, tampoco el administrador del panel', async () => {
     await como(db, ADMIN);
@@ -85,34 +83,30 @@ describe('seguridad', () => {
   });
 });
 
-describe('entregas', () => {
+describe('entregas (E-013: traspaso almacén → vehículo)', () => {
   let db: BD;
-  const ENT = 'select registrar_entrega($1, $2, $3, $4::jsonb, $5) as r';
+  const PREP = 'select preparar_entrega($1, $2, $3, $4, $5, $6::jsonb) as r';
   beforeAll(async () => { db = await nuevaBD(); await como(db, ALMACEN); });
+  const abordo = (sku: string, veh = 'V-F01') => valor<string>(db, 'select unidades::text from stock_vehiculo where vehiculo_id = $1 and sku = $2', [veh, sku]).then(Number);
 
-  it('registra la entrega, descuenta stock, mueve las series a la furgoneta y calcula la huella en el servidor', async () => {
+  it('firmar una entrega mete el material en el vehículo del equipo: el stock total no cambia', async () => {
     const id = uuid();
-    const lineas = JSON.stringify([{ sku: 'WBX-PULSAR-22', cantidad: 1, series: ['WBX-22-899281'] }, { sku: 'CAB-RZ1K-5G6', cantidad: 50, series: [] }]);
-    const r = await valor<{ estado: string; numero: string; hash: string }>(db, ENT, [id, 'F01', 'T1', lineas, 'data:image/png;base64,AAAA']);
-    expect(r.estado).toBe('aplicado');
-    expect(r.numero).toMatch(/^ENT-\d{4}-0414$/);
+    await db.query(PREP, [id, 'F01', 'T1', 'C/ Eros 10', null, JSON.stringify([{ sku: 'CAB-RZ1K-5G6', cantidad: 50 }, { sku: 'WBX-PULSAR-22', cantidad: 1 }])]);
+    const r = await valor<{ estado: string; hash: string }>(db, 'select confirmar_entrega($1, $2) as r', [id, 'data:image/png;base64,AAAA']);
     expect(r.hash).toMatch(/^[0-9a-f]{64}$/);
     expect(await stock(db, 'CAB-RZ1K-5G6')).toBe(750);
-    expect(await valor(db, "select equipo_id from series where serie = 'WBX-22-899281'")).toBe('F01');
-    expect(await valor(db, "select count(*)::int from movimientos where entrega_id = $1", [id])).toBe(2);
-    const reenvio = await valor<{ estado: string; numero: string }>(db, ENT, [id, 'F01', 'T1', lineas, 'data:image/png;base64,AAAA']);
-    expect(reenvio).toMatchObject({ estado: 'duplicado', numero: r.numero });
+    expect(await abordo('CAB-RZ1K-5G6')).toBe(200);                          // 150 que ya llevaba + 50
+    expect(await valor(db, "select count(*)::int from movimientos where entrega_id = $1 and tipo = 'traspaso' and vehiculo_id = 'V-F01'", [id])).toBe(2);
+    expect(await valor(db, 'select vehiculo_id from entregas where id = $1', [id])).toBe('V-F01');
   });
-  it('es todo o nada: si una línea falla no se aplica ninguna', async () => {
-    const antes = await stock(db, 'CAB-RZ1K-5G6');
-    const lineas = JSON.stringify([{ sku: 'CAB-RZ1K-5G6', cantidad: 10 }, { sku: 'BF-FIX-SX6', cantidad: 9999 }]);
-    expect(await falla(db, ENT, [uuid(), 'F01', 'T1', lineas, 'firma'])).toMatch(/Solo hay/);
-    expect(await stock(db, 'CAB-RZ1K-5G6')).toBe(antes);
+  it('la entrega directa antigua (sin traspaso al vehículo) ya no se puede usar', async () => {
+    expect(await falla(db, 'select registrar_entrega($1, $2, $3, $4::jsonb, $5)', [uuid(), 'F01', 'T1', '[]', 'f'])).toMatch(/permission denied/);
   });
   it('exige firma y un receptor del propio equipo', async () => {
     const l = JSON.stringify([{ sku: 'CAB-RZ1K-5G6', cantidad: 1 }]);
-    expect(await falla(db, ENT, [uuid(), 'F01', 'T1', l, ''])).toMatch(/firma/);
-    expect(await falla(db, ENT, [uuid(), 'F01', 'T3', l, 'firma'])).toMatch(/no pertenece a ese equipo/);
+    expect(await falla(db, PREP, [uuid(), 'F01', 'T3', '', null, l])).toMatch(/no pertenece a ese equipo/);
+    const id = uuid(); await db.query(PREP, [id, 'F01', 'T1', '', null, l]);
+    expect(await falla(db, 'select confirmar_entrega($1, $2)', [id, ''])).toMatch(/firma/);
   });
   it('detecta una entrega alterada a mano en la base de datos', async () => {
     expect((await db.query<{ ok: boolean }>('select * from verificar_entregas()')).rows.every(r => r.ok)).toBe(true);
@@ -131,7 +125,7 @@ describe('albaranes y catálogo', () => {
   it('aprueba el albarán: suma todas las líneas y guarda el resumen', async () => {
     const id = uuid();
     const r = await valor<{ lineas: number }>(db, ALB, [id, JSON.stringify({ numero: 'ALB-1', proveedor: 'Distribuciones Eléctricas S.L.' }),
-      JSON.stringify([{ sku: 'SCH-IC60N-40', cantidad: 25 }, { sku: 'WBX-PULSAR-22', cantidad: 1, series: ['WBX-22-900001'] }])]);
+      JSON.stringify([{ sku: 'SCH-IC60N-40', cantidad: 25 }, { sku: 'WBX-PULSAR-22', cantidad: 1 }])]);
     expect(r.lineas).toBe(2);
     expect(await stock(db, 'SCH-IC60N-40')).toBe(26);
     expect(await valor(db, 'select unidades::int from albaranes where id = $1', [id])).toBe(26);
@@ -141,12 +135,14 @@ describe('albaranes y catálogo', () => {
     expect(await stock(db, 'SCH-IC60N-40')).toBe(26);
   });
   it('solo el administrador crea o edita referencias', async () => {
-    const prod = JSON.stringify({ sku: 'nuevo-1', nuevo: true, nombre: 'Prueba', categoria: 'fijaciones', unidad: 'ud', ubicacion: 'P03-E01-N1', precio: 1.5, stock_inicial: 10 });
+    const prod = JSON.stringify({ sku: 'nuevo-1', nuevo: true, nombre: 'Bote de prueba', categoria: 'fijaciones', unidad: 'bote', contenido: 500, precio: 1.5, stock_inicial: 10 });
     expect(await falla(db, 'select guardar_producto($1::jsonb)', [prod])).toMatch(/Solo el administrador/);
     await como(db, ADMIN);
     await db.query('select guardar_producto($1::jsonb)', [prod]);
     expect(await stock(db, 'NUEVO-1')).toBe(10);
-    expect(await valor(db, "select precio::float from costes_producto where sku = 'NUEVO-1'")).toBe(1.5);
+    expect(await valor(db, "select contenido::int from productos where sku = 'NUEVO-1'")).toBe(500);
+    expect(await valor(db, "select count(*)::int from costes_producto where sku = 'NUEVO-1'")).toBe(0);    // el precio que se envíe se ignora
+    expect(await valor(db, "select motivo from movimientos where sku = 'NUEVO-1'")).toBe('Alta de artículo');
     expect(await falla(db, 'select guardar_producto($1::jsonb)', [prod])).toMatch(/Ya existe/);
   });
 });
@@ -194,7 +190,7 @@ describe('dotación', () => {
 describe('custodia de Esmove (E-008)', () => {
   let db: BD;
   beforeAll(async () => { db = await nuevaBD(); await como(db, ALMACEN); });
-  it('los artículos en custodia no tienen precio (null, no 0)', async () => {
+  it('los artículos en custodia son de Esmove y sin precio', async () => {
     await como(db, ADMIN);
     expect(await valor(db, "select count(*)::int from productos p join costes_producto c using (sku) where p.propiedad = 'custodia' and c.precio is not null")).toBe(0);
     expect(await valor(db, "select count(*)::int from productos where propiedad = 'custodia' and propietario_id = 'ESMOVE'")).toBeGreaterThan(4);
@@ -205,18 +201,20 @@ describe('custodia de Esmove (E-008)', () => {
     await db.query(MOV, [uuid(), 'ESM-CPVE-MONO', 'salida', 1, 'Instalado en obra', 'Garaje C/ Recogidas 12', [], null]);
     expect(await stock(db, 'ESM-CPVE-MONO')).toBe(2);
   });
-  it('los cargadores no pueden quedar sin n.º de serie; los cuadros se mueven por cantidad', async () => {
+  it('E-013: ningún artículo lleva n.º de serie (ni los cargadores); si llega alguno, no se guarda', async () => {
     await superusuario(db);
-    expect(await falla(db, "update productos set con_serie = false where sku = 'WBX-PULSAR-22'")).toMatch(/check constraint/);
+    expect(await falla(db, "update productos set con_serie = true where sku = 'WBX-PULSAR-22'")).toMatch(/check constraint/);
     await como(db, ALMACEN);
     await db.query(MOV, [uuid(), 'ESM-CPVE-TRI', 'entrada', 3, 'Recepción en custodia', 'Alb. Esmove 7', [], null]);
     expect(await stock(db, 'ESM-CPVE-TRI')).toBe(4);
-    expect(await falla(db, MOV, [uuid(), 'ESM-CPVE-TRI', 'salida', 1, 'Instalado en obra', 'Obra', ['X-1'], null])).toMatch(/no lleva control por n.º de serie/);
+    const id = uuid();
+    await db.query(MOV, [id, 'WBX-PULSAR-22', 'salida', 1, 'Instalado en obra', 'Obra', ['WBX-22-899281'], null]);
+    expect(await valor(db, 'select cardinality(series) from movimientos where id = $1', [id])).toBe(0);
   });
   it('al guardar un artículo en custodia el precio se guarda vacío aunque se envíe', async () => {
     await como(db, ADMIN);
-    await db.query('select guardar_producto($1::jsonb)', [JSON.stringify({ sku: 'ESM-X', nuevo: true, nombre: 'Cuadro prueba', categoria: 'cuadros', unidad: 'ud', ubicacion: 'P06-E05-N1', precio: 120, propiedad: 'custodia', propietario_id: 'ESMOVE' })]);
-    expect(await valor(db, "select precio from costes_producto where sku = 'ESM-X'")).toBeNull();
-    expect(await valor(db, "select con_serie from productos where sku = 'ESM-X'")).toBe(false); // los cuadros no llevan n.º de serie
+    await db.query('select guardar_producto($1::jsonb)', [JSON.stringify({ sku: 'ESM-X', nuevo: true, nombre: 'Cuadro prueba', categoria: 'cuadros', unidad: 'ud', precio: 120, propiedad: 'custodia', propietario_id: 'ESMOVE' })]);
+    expect(await valor(db, "select count(*)::int from costes_producto where sku = 'ESM-X'")).toBe(0);
+    expect(await valor(db, "select con_serie from productos where sku = 'ESM-X'")).toBe(false);
   });
 });
