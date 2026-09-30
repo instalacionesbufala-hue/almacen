@@ -19,7 +19,7 @@ describe('CSV del catálogo', () => {
     const v = parsearCatalogo(readFileSync('datos/catalogo-stock-real.csv', 'utf8'), S);
     expect(v.errorGeneral).toBeUndefined();
     expect(v.conError).toBe(0);
-    expect(v.nuevos).toBe(40);
+    expect(v.nuevos).toBe(39); // 39: la cinta blanca 9900101044 no se recibió (decisión del usuario)
     expect(v.filas.every(f => f.fila.minimo === null)).toBe(true);
     const bote = v.filas.find(f => f.fila.unidad === 'bote')!;
     expect(bote.fila.contenido).toBe(1000);
