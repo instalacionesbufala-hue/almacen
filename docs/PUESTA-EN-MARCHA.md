@@ -245,7 +245,7 @@ El plan gratuito de Supabase **no hace copias** y **se pausa tras 7 días sin us
   - **Repository access:** **Only select repositories** → `almacen-copias`.
   - **Permissions** → **Repository permissions** → **Contents:** **Read and write**.
   - Pulsa **Generate token** y copia el token, que empieza por `github_pat_`.
-- [ ] 10.3. **Cadena de conexión de la base de datos.** En Supabase, pulsa **Connect** (arriba) → **Session pooler** → copia la cadena `postgresql://postgres.abcdefghijkl:[YOUR-PASSWORD]@...` y sustituye `[YOUR-PASSWORD]` por la contraseña del paso 1.2.
+- [ ] 10.3. **Cadena de conexión de la base de datos.** En Supabase, pulsa **Connect** (arriba) → pestaña **Direct** (*Connection string*) → en el desplegable del método de conexión elige **Session pooler** (no *Direct connection*: GitHub no la alcanza) → copia la cadena `postgresql://postgres.abcdefghijkl:[YOUR-PASSWORD]@...` y sustituye `[YOUR-PASSWORD]` por la contraseña del paso 1.2.
 - [ ] 10.4. **Contraseña de las copias.** Inventa otra contraseña larga y **guárdala también fuera de GitHub**: sin ella las copias no se pueden abrir.
 - [ ] 10.5. En `almacen` → **Settings** → **Secrets and variables** → **Actions**:
   - Pestaña **Secrets** → **New repository secret**, tres veces:
