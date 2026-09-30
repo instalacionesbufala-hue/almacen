@@ -45,9 +45,23 @@ jobs:
           set -euo pipefail
           FECHA=$(date -u +%Y-%m-%d_%H%M)
           mkdir copia
+          # La contraseña puede llevar # @ : / ? y otros símbolos que rompen la cadena de conexión: se separa de la cadena
+          # (todo lo que hay entre "usuario:" y la ÚLTIMA @) y se pasa aparte en PGPASSWORD. Nunca se imprime.
+          eval "$(python3 - <<'PY'
+          import os, re, shlex
+          u = os.environ["DB_URL"].strip()
+          m = re.match(r"^(postgres(?:ql)?://)([^:/@]+)(?::(.*))?@([^@/]+)(/[^?]*)?(\?.*)?$", u, re.S)
+          if not m:
+              raise SystemExit("SUPABASE_DB_URL no tiene el formato postgresql://usuario:contraseña@servidor:puerto/postgres")
+          pref, user, pw, host, path, query = m.groups()
+          print("export PGPASSWORD=" + shlex.quote(pw or ""))
+          print("export DB_URL_SIN_CLAVE=" + shlex.quote(pref + user + "@" + host + (path or "/postgres") + (query or "")))
+          PY
+          )"
+          echo "::add-mask::$PGPASSWORD"
           # datos y estructura de la app + usuarios (auth.users) para poder restaurar los perfiles
-          docker run --rm --network host postgres:17 pg_dump "$DB_URL" --schema=public --no-owner --no-privileges -Fc > "copia/almacen_$FECHA.dump"
-          docker run --rm --network host postgres:17 pg_dump "$DB_URL" --data-only --table=auth.users --no-owner -Fc > "copia/usuarios_$FECHA.dump"
+          docker run --rm --network host -e PGPASSWORD postgres:17 pg_dump "$DB_URL_SIN_CLAVE" --schema=public --no-owner --no-privileges -Fc > "copia/almacen_$FECHA.dump"
+          docker run --rm --network host -e PGPASSWORD postgres:17 pg_dump "$DB_URL_SIN_CLAVE" --data-only --table=auth.users --no-owner -Fc > "copia/usuarios_$FECHA.dump"
           tar -czf "almacen_$FECHA.tar.gz" -C copia .
           # cifrada con AES-256: sin la clave COPIA_CLAVE no se puede abrir
           gpg --batch --yes --pinentry-mode loopback --passphrase "$CLAVE_COPIA" --symmetric --cipher-algo AES256 -o "almacen_$FECHA.tar.gz.gpg" "almacen_$FECHA.tar.gz"
