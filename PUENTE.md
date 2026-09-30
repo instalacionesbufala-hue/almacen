@@ -239,34 +239,153 @@ Una cesta se puede guardar como **preparada**, con el stock reservado, para que 
 - Hay pruebas de: cesta con escaneo repetido que suma, talla editable, serie obligatoria en cargadores, reserva y su caducidad, confirmación atómica, y envío con reintento y registro.
 - En la interfaz no queda ninguna referencia a plantillas.
 
-### E-012 · Consumos de los cierres de instalación y stock en furgonetas · EN ESPERA
-**Petición del usuario:** cruzar la app con los **cierres de instalación** que los técnicos hacen en **otro proyecto**, para ir descontando el material que indican haber gastado. Así se lleva un control aproximado de lo que queda en cada furgoneta.
+### E-012 · Consumos de los cierres de instalación y stock en furgonetas · PENDIENTE (después de E-013 y E-014)
+**Petición del usuario:** cruzar la app con los **cierres de instalación** que los equipos hacen con el wizard del repositorio `instalacionesbufala-hue/bufala`. El material que declaran se va descontando del stock de su furgoneta, para llevar un control aproximado.
 
-**Falta información** (el chat la pedirá al usuario): qué sistema es el otro proyecto, dónde guarda los datos, cómo se identifica el material en un cierre (códigos o texto libre) y cómo se identifica al técnico o la furgoneta.
+**Qué ha visto el chat en el wizard** (`cierre-esbrain.html`, v1.1.x):
+- **Envío:** cada cierre se manda por POST a un **Google Apps Script** (`WEB_APP_URL`), que lo guarda en la hoja "Registro". Ese mismo backend alimenta el dashboard (`?action=dashboard`).
+- **Identificación:** `numInst`, `esbrainUuid`, `cliente`, `direccion`, `fechaCierreIso`, `hardware` (modelo del cargador) y `equipo`, que es uno de `Búfala 1`, `Búfala 2` o `Búfala 3`. `despFallido` indica un desplazamiento fallido, sin consumo.
+- **El material no viene por SKU, sino por partidas:**
+  - línea: `tipoLinea` (tubo | manguera), `fase`, `seccion` (6 | 10 | 16 | 25), `metrosLinea`, `metrosUtp`, `rj45`;
+  - bornas: `bornasMono`, `bornasTrif`;
+  - canalizaciones: `pvc32`, `corr32`, `acero32`, `acero40`, `canaleta`, `sot50`, `sot90`;
+  - protecciones: `cajaReg`, `caja6`, `caja12`, `caja18`, `cerradura`, `mag1025`, `mag32`, `mag40`;
+  - kits: `pica`, `preinst`.
+- **Sin n.º de serie del cargador:** el wizard no lo pide. **Decisión del usuario:** las series las recoge Esbrain o Instant Box al hacer el cierre, y el almacén **no las gestiona**.
 
-**Diseño propuesto** (se ajustará cuando se conozca el otro proyecto):
-- **Stock a bordo por furgoneta:**
-  - suma las entregas firmadas (E-011) a ese equipo;
-  - resta los consumos de los cierres;
-  - suma o resta las devoluciones al almacén y los recuentos en furgoneta.
-- **Entrada de consumos** (una de estas vías, según el otro proyecto):
-  - **(a)** el otro proyecto llama a una función `registrar_consumo_cierre` con un token de integración propio, sin la clave de servicio;
-  - **(b)** importación de CSV o JSON;
-  - **(c)** la app lee periódicamente de la API o base de datos del otro proyecto.
-- **Idempotencia:** por `cierre_id`, de modo que un cierre enviado dos veces no descuenta dos veces.
-- **Emparejado del material:** por SKU o código de proveedor si el cierre los trae. Si no, se usa una tabla de equivalencias (texto del cierre → artículo) que el administrador mantiene. Las líneas sin emparejar van a "Pendientes de validar", sin descontar nada.
-- **Nunca por debajo de cero:** si un consumo deja la furgoneta en negativo, se registra igualmente y se marca como **discrepancia** (el técnico gastó algo que no constaba entregado), visible en un informe.
-- **Material en custodia de Esmove:** un cargador o cuadro consumido en un cierre se registra como **"Instalado en obra"**, con la obra y, en los cargadores, el n.º de serie, y aparece en el informe de custodia para Esmove.
-- **Informes:**
-  - stock teórico por furgoneta;
-  - consumo por obra, técnico y periodo;
-  - discrepancias;
-  - "recuento de furgoneta": el técnico cuenta, la app compara con lo teórico y el administrador valida los ajustes.
-- **Seguridad:** el token de integración solo puede registrar consumos. No lee precios ni datos personales y se puede revocar desde Configuración.
+**1. Cómo llegan los cierres (vía recomendada: el Apps Script empuja a Supabase)**
+- **Función de servidor** `registrar-cierre`, llamada **desde el Apps Script** (servidor a servidor, con `UrlFetchApp`). Lleva la cabecera `X-Integracion: <token>`; el token se guarda en las **Propiedades del script** y nunca en el HTML público. En Supabase solo se guarda su hash, y se revoca desde Configuración → Integraciones.
+- **Momento:** el Apps Script la llama justo después de escribir la fila en "Registro". Code debe entregar el **fragmento de Apps Script** listo para pegar (función `enviarAlAlmacen(datos)`), con reintento y registro de errores en una hoja "Almacén-log".
+- **Histórico:** acción de carga inicial de los cierres existentes. Puede ser un `?action=exportCierres` paginado en el Apps Script o un CSV exportado de "Registro"; los cierres anteriores a la fecha de apertura del inventario se ignoran.
+- **Idempotencia:** por `esbrainUuid` o, si falta, por `numInst` + `fechaCierreIso`. Reenviar un cierre no descuenta dos veces. Si un cierre se corrige, se envía de nuevo con `version` y la app aplica la diferencia.
+- **Permisos del token:** solo `registrar-cierre`. No lee nada.
+
+**2. Traducir partidas a artículos: tabla de equivalencias (administrador)**
+- **Tabla** `equivalencias_cierre` (campo del wizard + condiciones → artículo(s) + factor). Ejemplo: `metrosLinea` con tubo, mono y 6 mm² son 1 m de cada uno de 6000650603 (marrón), 6000650604 (azul) y 6000650605 (amarillo/verde).
+- **Equivalencias derivadas (estimadas), con reglas del usuario:** editables y desactivables, marcadas como "estimado" en los informes.
+  - **Manguitos:** `floor(metros / 3) + 1` por cada tramo de tubo rígido (PVC y acero). Por ejemplo, 4 m son 2 manguitos, uno en cada extremo, y 6 m son 3.
+  - **Fijaciones:** 1 cada 0,50 m, es decir `ceil(metros / 0,5)`, **solo en tubo PVC y acero**. **El corrugado no cuenta**, porque no siempre lleva (decisión del usuario). Cada fijación consume un **kit de fijación configurable**:
+    - **Kit A (por defecto, decisión del usuario):** abrazadera clip BTM 32-35 + **clavo**. El clavo aún no está dado de alta, así que hasta entonces su línea queda "sin equivalencia".
+    - **Kit B:** clip + tornillo 5x40 + taco 6x30.
+    - **Kit C:** abrazadera M6 + tirafondo M6x30 + taco.
+    - El técnico puede usar uno u otro, así que es un control aproximado que se corrige con el recuento de furgoneta.
+  - **Metros de tubo** (PVC, corrugado, acero…): **no se estiman**, los indica el técnico en el cierre.
+  - **Cable UTP según el cargador (decisión del usuario):** `metrosUtp` descuenta **Cat6 U/UTP (7270020010) si `hardware` es V2C** y **Cat6 F/UTP (7270021010) si es Policharger**. Con otro modelo, la línea va a "Pendientes". Las condiciones de las equivalencias deben poder mirar cualquier campo del cierre (`hardware`, `tipoLinea`, `fase`, `seccion`).
+  - **Canaleta:** la "canaleta" del wizard es la **moldura Hager ATEHA 30x12 (6222106082)**, confirmado por el usuario.
+- **Punto de partida:** la propuesta del chat está en `datos/equivalencias-cierres.csv` (28 reglas, ya con las respuestas del usuario). La app la importa como borrador y el administrador la confirma. Las partidas sin artículo quedan "sin equivalencia" y no descuentan hasta que se definan.
+- **Equipos:** `Búfala 1`, `Búfala 2` y `Búfala 3` se vinculan a los equipos y furgonetas de la app (Configuración → Integraciones).
+
+**3. Qué hace la app con cada cierre**
+- **Consumos:** crea movimientos de tipo **"Consumo en obra"** desde el stock **del vehículo** del equipo, nunca desde el almacén, con referencia `numInst`, cliente y dirección.
+- **Consumo de artículos por formato** (bote, sobre, bolsa, pack): el vehículo guarda internamente el **contenido en unidades**. Por ejemplo, 1 sobre de RJ45 son 25 ud, y un cierre con 2 RJ45 resta 2 ud y deja 23 ud, es decir 0,92 sobres. En el almacén se sigue contando por formatos enteros.
+- **Stock a bordo:** entregas firmadas (E-011) − consumos de cierres ± devoluciones y recuentos de furgoneta.
+- **Negativos:** si un consumo deja la furgoneta en negativo, se registra igual y se marca como **discrepancia**.
+- **Desplazamiento fallido:** no hay consumo, pero queda registrado.
+- **Cargador de Esmove:** el modelo (`hardware`) se empareja con el artículo en custodia y se descuenta **1 ud del stock del vehículo** del equipo, sin n.º de serie. Queda como **"Instalado en obra"** con `numInst`, cliente y dirección en el informe de custodia para Esmove. Si el modelo no se reconoce, va a "Pendientes".
+- **Informes:** stock teórico por furgoneta, consumo por obra, equipo y periodo, discrepancias, y **recuento de furgoneta** (el equipo cuenta, se compara y el administrador valida los ajustes).
+- **Cierres recibidos:** una vista muestra cada cierre (recibido, aplicado, parcial o con discrepancia) y sus líneas traducidas.
+
+**4. Sugerencias para el wizard** (proyecto `bufala`, fuera de este repositorio; las decide el usuario)
+- Si algún día se quiere cruzar el cargador exacto, bastaría con que el backend del wizard enviase el n.º de serie que ya recoge Esbrain. Hoy **no se necesita**.
+- Añadir un campo para el **medidor V2C**, si se instala en algunos cierres, para descontarlo de la custodia.
+- Si se añaden materiales al wizard, usar identificadores estables; la tabla de equivalencias se amplía sin tocar código.
+
+**5. Hecho cuando**
+- Hay pruebas de: idempotencia y versión, equivalencias con condiciones, manguitos `floor(m/3)+1`, fijaciones `ceil(m/0,5)` sin contar el corrugado, kits A, B y C, UTP según `hardware`, consumo fraccionado de formatos (sobre, bote), negativo como discrepancia, cargador sin serie, fallido sin consumo y token revocado rechazado.
+- La guía explica cómo pegar el fragmento en el Apps Script y cómo lanzar la carga del histórico.
+
+### E-013 · Simplificar y pasar a datos reales · PENDIENTE
+**Decisiones del usuario (30/09).** Prevalecen sobre lo anterior de E-002, E-006, E-008 y E-009.
+1. **Fuera los precios de la app.** Las facturas se controlan por otro lado.
+   - Se ocultan y dejan de pedirse precios, costes, "valor del inventario" e importes en cualquier pantalla, CSV o PDF.
+   - Las tablas `costes_*` se quedan sin uso; no se borran.
+   - **Mermas (decisión del usuario):** la regla de los 50 € desaparece. Las mermas se **aplican al momento**, las registre quien las registre, y **se informa al administrador**: aviso en la app y en sus canales de E-006 (push, correo o Telegram, según su configuración), con quién la registró, qué artículo, qué cantidad y el motivo. Ya no hay bloqueo ni validación previa.
+2. **Formatos de venta: el stock respeta la unidad de la línea del producto.**
+   - Nuevas unidades: `bote`, `sobre`, `bolsa`, `pack` y `caja`, además de `m` y `ud`, cada una con su **contenido** (bote de 1000 tacos, sobre de 25 RJ45, bolsa de 100 bridas, pack de 20 cintas).
+   - En el almacén y en las entregas se mueven **formatos enteros**: se entrega el bote completo.
+   - El contenido en unidades solo sirve para los consumos de los cierres (E-012).
+3. **Sin números de serie en los cargadores.** Los cargadores y los medidores de Esmove se controlan **por modelo y cantidad**. Las series las recoge Esbrain o Instant Box.
+   - Se quita la obligatoriedad de serie en todos los flujos: entrada, entrega, escáner, cierres y custodia.
+   - El QR de estantería es `BUF:<SKU>`.
+   - Las series existentes en la demostración desaparecen con el borrado.
+4. **Sin pasillo, estantería ni nivel.** Hay una sola nave. La ubicación que importa es **dónde está el material**:
+   - **Almacén (nave)**, o
+   - **vehículo de un equipo de campo** (Búfala 1, 2, 3…).
+   - **Entregar a un equipo es un traspaso almacén → vehículo, no una salida.** El stock total es almacén + vehículos.
+   - En el inventario, cada artículo muestra "Almacén X · Búfala 1 Y · Búfala 2 Z", y hay filtro por ubicación.
+   - Los avisos de mínimo miran **solo el stock del almacén**.
+   - Se quita el campo `loc` de las pantallas.
+
+**Equipos, técnicos y vehículos: composición variable** (decisión del usuario del 30/09)
+Hoy hay 3 equipos (Búfala 1, 2 y 3), cada uno con 2 técnicos y 1 furgoneta. **La composición va a cambiar pronto**, y en el futuro puede haber más equipos y más vehículos.
+- **Tres entidades independientes:**
+  - **técnico:** nombre, código de empleado (E01…), categoría, teléfono y correo;
+  - **equipo:** nombre, exactamente como lo envía el wizard ("Búfala 1"…);
+  - **vehículo:** matrícula y modelo.
+- **Asignaciones con historial:** técnico → equipo y vehículo → equipo, con fecha de inicio y de fin. El administrador las cambia desde la app con un selector en cada tarjeta de equipo, como en la pantalla actual.
+  - Se permiten equipos sin vehículo, vehículos sin equipo (por ejemplo, en taller) y técnicos sin equipo.
+  - Dar de baja no borra el historial.
+- **El stock "a bordo" es del vehículo**, no del equipo ni del técnico:
+  - si un técnico cambia de equipo, no se mueve material;
+  - si un vehículo pasa a otro equipo, su material va con él;
+  - el inventario muestra el stock por vehículo, con la matrícula y el equipo actual.
+- **Entregas:**
+  - **Material de instalación:** se entrega a un **equipo** y entra en el **vehículo que tiene asignado en ese momento**. Si el equipo no tiene vehículo, la app lo impide y lo explica.
+  - **Dotación personal** (ropa, EPIs, herramientas personales): se asigna al **técnico**, como hasta ahora.
+  - **Firma:** firma el técnico que recoge.
+- **Cierres (E-012):** el `equipo` del cierre se traduce al **vehículo asignado a ese equipo en la fecha del cierre** (`fechaCierreIso`), no al de hoy.
+- **Datos personales:** los nombres, códigos, teléfonos y matrículas reales **no van al repositorio**, que es público. El usuario los da de alta desde la app. La demostración y los fixtures usan datos inventados.
+
+**Borrado de la demostración (una sola vez)**
+- **Cómo:** función SQL `limpiar_demostracion()`, solo para el administrador, que se lanza desde Configuración con doble confirmación (escribir "BORRAR DEMO").
+- **Qué borra:** productos, movimientos, entregas, albaranes, dotación, equipos, técnicos, avisos, pendientes, actas y fotos de la demostración.
+- **Qué conserva:** los usuarios, la configuración de avisos y el propietario Esmove.
+- **Protección del historial:** la función desactiva los triggers de bloqueo **solo dentro de su propia transacción**. Solo funciona mientras `config.modo_demo = true`, marca que la propia función pone a `false` al terminar.
+- **Registro:** deja una fila de auditoría.
+- **`seed.sql`:** deja de cargarse por defecto.
+
+**Importador de catálogo (administrador): Configuración → Importar catálogo (CSV)**
+- **Formato:** separador `;`, UTF-8 con BOM, cabecera `sku;ref_proveedor;nombre;categoria;propiedad;propietario;proveedor;unidad;contenido_unidad;stock_inicial;minimo;albaranes`.
+- **Vista previa:** antes de confirmar se ven las filas nuevas y las ya existentes (por SKU), con aviso de las unidades desconocidas.
+- **Stock inicial:** entra en el **almacén** como movimiento "Inventario de apertura", con la referencia de los albaranes.
+- **Sin mínimo:** el artículo aparece como tarea "Completar mínimo" para el administrador.
+- **Importación repetida:** idempotente por SKU y albaranes.
+- **Fichero real:** `datos/catalogo-stock-real.csv` (40 artículos de los albaranes Saltoki 3.322.577, 3.322.832, 3.322.865 y 3.324.674 y del de Esmove 3.327.786), **sin precios**. Lo sube el chat al repositorio a petición del usuario, y el usuario lo importa desde la app. Las pruebas usan un fixture inventado, no este fichero.
+- **Equivalencias de los cierres:** `datos/equivalencias-cierres.csv` es la propuesta para E-012.
+- **Productos a mano:** el usuario dará de alta otros productos con "Añadir referencia", que debe tener los mismos campos que el CSV: unidad con contenido, propiedad y mínimo.
+
+**Hecho cuando**
+- Hay pruebas de: no aparece ningún importe; traspaso almacén → vehículo que no cambia el stock total; historial de asignaciones (técnico que cambia de equipo, vehículo que cambia de equipo con su stock, cierre con fecha anterior a un cambio); formatos enteros en el almacén; cargador sin serie; borrado de la demostración una sola vez; importación idempotente.
+- La guía tiene el paso "Pasar a datos reales".
+
+### E-014 · Portal del técnico y copia por WhatsApp · PENDIENTE
+**Decisión del usuario:** los técnicos usan Gmail, pero se prefiere **WhatsApp**. Lo importante es que el técnico **tenga un sitio donde ver sus entregas**. E-011 ya permite compartir el PDF desde el móvil; falta lo siguiente.
+- **Portal del técnico (solo lectura):** página `#/tecnico/<token>` de la propia app, sin usuario ni contraseña. Se abre con un **enlace personal y privado**: token aleatorio largo, del que solo se guarda el hash. El administrador lo revoca y regenera desde la ficha del técnico.
+  - **Qué muestra:** sus entregas firmadas, con fecha, líneas, fotos y PDF, y el **material que tiene su vehículo** (E-013/E-012).
+  - **Qué no muestra:** datos de otros técnicos. La app ya no maneja importes.
+  - **Cómo se sirve:** función de servidor `portal-tecnico`, que valida el token y devuelve URL firmadas de corta duración para los PDF.
+- **WhatsApp:** nuevo campo **teléfono** del técnico (+34) en la ficha. Si falta, se puede escribir en la pantalla de firma y se guarda.
+  - Al confirmar la firma, el botón principal **"Enviar por WhatsApp"** abre `https://wa.me/<teléfono>?text=…` con un texto breve y el enlace al portal.
+  - Se mantiene "Compartir PDF" (ya hecho en E-011) y el correo como opción secundaria.
+- **Registro:** cada copia enviada (canal y fecha) queda en el historial de la entrega, con opción de reenviar.
+- **Hecho cuando:** hay pruebas del token (hash, revocación, un técnico no ve lo de otro) y de la construcción del enlace `wa.me` con teléfonos en varios formatos.
 
 ---
 
 ## Revisión del chat
+
+### 30/09/2026 · Revisión de E-011 y nuevos encargos
+Verificado desde el chat sobre `aeb4e8a`:
+- `npm ci`, **160 pruebas en verde**, `tsc -b` sin errores y `npm run build` correcto.
+- No queda ninguna referencia a plantillas en la interfaz.
+- Ya existe compartir el PDF desde el móvil.
+
+Nuevo, tras hablar con el usuario:
+- **E-013:** sin precios, formatos de venta, sin series de cargadores, ubicación almacén o vehículo, borrado de la demostración e importación del stock real.
+- **E-014:** portal del técnico y WhatsApp.
+- **E-012:** concretado tras estudiar el wizard `bufala` y con las reglas de manguitos y fijaciones del usuario.
+
+**Orden: E-013 → E-014 → E-012.**
 
 ### 30/09/2026 · Revisión de E-009, E-010 y de la puesta en marcha
 Verificado desde el chat sobre `420c51d`:
