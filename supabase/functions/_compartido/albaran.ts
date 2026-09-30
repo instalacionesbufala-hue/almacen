@@ -1,7 +1,7 @@
 /* E-003 · Lectura de albaranes: prompt, esquema de respuesta, normalización y emparejado con el catálogo.
    Módulo puro compartido por la función de servidor "leer-albaran" (Gemini) y por la app (emparejado local). */
 
-export interface ItemCatalogo { sku: string; ref?: string; ean?: string; nombre: string; unidad: string; proveedor?: string; custodia?: boolean }
+export interface ItemCatalogo { sku: string; ref?: string; ean?: string; nombre: string; unidad: string; contenido?: number; proveedor?: string; custodia?: boolean }
 export interface LineaLeida { codigo: string; descripcion: string; cantidad: number; sku: string | null; how: string | null; series: string[]; nota: string; confianza: number }
 export interface AlbaranLeido { proveedor: string; cif: string; numero: string; fecha: string; bultos?: number; lineas: LineaLeida[] }
 
@@ -30,14 +30,15 @@ export function emparejar(cat: ItemCatalogo[], code: string | undefined, desc: s
 
 /** Instrucciones para el modelo de visión. Sin precios: el almacén no los necesita y el material en custodia no los lleva. */
 export function construirPrompt(cat: ItemCatalogo[]): string {
-  const lista = cat.map(p => `${p.sku}${p.ref ? ' / ' + p.ref : ''}${p.ean ? ' / ' + p.ean : ''} | ${p.nombre} | ${p.unidad}${p.custodia ? ' | custodia' : ''}`).join('\n');
+  const lista = cat.map(p => `${p.sku}${p.ref ? ' / ' + p.ref : ''}${p.ean ? ' / ' + p.ean : ''} | ${p.nombre} | ${p.unidad}${p.contenido && p.contenido > 1 ? ' de ' + p.contenido : ''}${p.custodia ? ' | custodia' : ''}`).join('\n');
   return `El documento es un albarán de entrega de un proveedor de material eléctrico, fontanería o movilidad eléctrica para un almacén en España.
 Extrae cada línea de material recibido. Ignora bolsas, portes y embalajes salvo que estén en el catálogo.
-Para cada línea devuelve: el código tal como aparece, la descripción, la cantidad en la unidad base del catálogo (metros para cables y tubos, unidades para el resto; si pone cajas, rollos o bobinas, multiplica y explícalo en "nota"), los números de serie si aparecen y el SKU del catálogo que corresponde (o null si no hay).
-No extraigas precios ni importes: no se usan (los artículos marcados como "custodia" no los llevan nunca).
+Para cada línea devuelve: el código tal como aparece, la descripción, la cantidad EN LA UNIDAD DEL CATÁLOGO y el SKU del catálogo que corresponde (o null si no hay).
+La unidad del catálogo es como se guarda el stock: metros para cables y tubos (un rollo de 100 m son 100); unidades sueltas si pone "ud"; y si pone bote, sobre, bolsa, pack o caja "de N", la cantidad va en esos formatos (1000 tacos de una referencia "caja de 100" son 10 cajas). Si conviertes, explícalo en "nota".
+No extraigas precios ni importes ni números de serie: no se usan (los artículos marcados como "custodia" no los llevan nunca).
 Indica en "confianza" (0 a 1) lo seguro que estás de cada línea.
 
-Catálogo (SKU / código del proveedor / EAN | nombre | unidad):
+Catálogo (SKU / código del proveedor / EAN | nombre | unidad y contenido):
 ${lista}`;
 }
 

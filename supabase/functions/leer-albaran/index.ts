@@ -6,6 +6,7 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { conCors, json } from '../_compartido/validar.ts';
 import { construirPrompt, ESQUEMA_RESPUESTA, normalizarRespuesta, type ItemCatalogo } from '../_compartido/albaran.ts';
+import { base64, llamarGemini } from '../_compartido/gemini.ts';
 
 const URL = Deno.env.get('SUPABASE_URL')!;
 const ANON = Deno.env.get('SUPABASE_ANON_KEY')!;
@@ -14,12 +15,6 @@ const CLAVE = Deno.env.get('GEMINI_API_KEY') || '';
 const MODELO = Deno.env.get('GEMINI_MODELO') || 'gemini-flash-latest';
 const RESERVA = Deno.env.get('GEMINI_MODELO_RESERVA') || 'gemini-3.5-flash-lite';  // más ligero, para cuando el principal está saturado
 const MAX_BYTES = 10 * 1024 * 1024;
-
-function base64(buf: ArrayBuffer): string {
-  const b = new Uint8Array(buf); let s = '';
-  for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode(...b.subarray(i, i + 0x8000));
-  return btoa(s);
-}
 
 Deno.serve(conCors(async (req) => {
   if (req.method !== 'POST') return json({ error: 'Método no permitido' }, 405);
@@ -37,36 +32,16 @@ Deno.serve(conCors(async (req) => {
   const mime = archivo.type || 'application/octet-stream';
   if (!/^image\/(jpeg|png|webp|heic|heif)$/.test(mime) && mime !== 'application/pdf') return json({ error: 'Formato no admitido: sube una foto (JPG, PNG) o un PDF' }, 415);
 
-  const { data: prods, error } = await db.from('productos').select('sku, ref_proveedor, ean, nombre, unidad, proveedor, propiedad').eq('borrador', false);
+  const { data: prods, error } = await db.from('productos').select('sku, ref_proveedor, ean, nombre, unidad, contenido, proveedor, propiedad').eq('borrador', false);
   if (error) return json({ error: error.message }, 500);
-  const catalogo: ItemCatalogo[] = (prods || []).map(p => ({ sku: p.sku, ref: p.ref_proveedor ?? undefined, ean: p.ean ?? undefined, nombre: p.nombre, unidad: p.unidad, proveedor: p.proveedor, custodia: p.propiedad === 'custodia' }));
+  const catalogo: ItemCatalogo[] = (prods || []).map(p => ({ sku: p.sku, ref: p.ref_proveedor ?? undefined, ean: p.ean ?? undefined, nombre: p.nombre, unidad: p.unidad, contenido: Number(p.contenido) || 1, proveedor: p.proveedor, custodia: p.propiedad === 'custodia' }));
 
-  // Gemini gratuito se satura a ratos (503) o agota el cupo de un modelo (429): se reintenta y, si sigue, se usa un modelo de reserva
-  const cuerpo = JSON.stringify({
-    contents: [{ role: 'user', parts: [{ inline_data: { mime_type: mime, data: base64(await archivo.arrayBuffer()) } }, { text: construirPrompt(catalogo) }] }],
-    generationConfig: { temperature: 0, responseMimeType: 'application/json', responseSchema: ESQUEMA_RESPUESTA },
+  const r = await llamarGemini({
+    clave: CLAVE, modelo: MODELO, reserva: RESERVA, funcion: 'leer-albaran', esquema: ESQUEMA_RESPUESTA,
+    partes: [{ inline_data: { mime_type: mime, data: base64(await archivo.arrayBuffer()) } }, { text: construirPrompt(catalogo) }],
   });
-  const intentos: [string, number][] = [[MODELO, 0], [MODELO, 2500], [RESERVA, 1000], [RESERVA, 4000]];
-  let r: Response | null = null, usado = MODELO;
-  for (const [modelo, espera] of intentos) {
-    if (espera) await new Promise(ok => setTimeout(ok, espera));
-    r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': CLAVE }, body: cuerpo,
-    });
-    usado = modelo;
-    if (r.ok) break;
-    if (r.status === 404 && modelo === RESERVA) continue;            // la reserva también retirada: se prueba el siguiente intento
-    if (![429, 500, 503, 504].includes(r.status) && !(r.status === 404 && modelo !== MODELO)) break;
-  }
-  r = r!;
-  if (r.status === 503 || r.status === 500 || r.status === 504) return json({ error: 'Gemini está saturado ahora mismo (le pasa a ratos al nivel gratuito). Espera un minuto y vuelve a subir el albarán.' }, 503);
-  if (r.status === 429) return json({ error: 'Se ha alcanzado el límite gratuito de lecturas de Gemini. Prueba más tarde.' }, 429);
-  if (r.status === 404) return json({ error: `Gemini no reconoce el modelo "${usado}" (Google lo habrá retirado). Quita el secreto GEMINI_MODELO o pon uno vigente, y vuelve a desplegar leer-albaran.` }, 502);
-  if (r.status === 400 || r.status === 403) return json({ error: `Gemini rechaza la petición (${r.status}): revisa que GEMINI_API_KEY sea correcta y esté activa en Google AI Studio.` }, 502);
-  if (!r.ok) return json({ error: `Gemini ha respondido ${r.status}` }, 502);
-  const g = await r.json();
-  const texto = g?.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text || '').join('') || '';
-  if (!texto) return json({ error: 'La IA no ha devuelto nada: prueba con una foto más nítida y de frente' }, 422);
+  if (!r.ok) return json({ error: r.error.replace('vuelve a intentarlo', 'vuelve a subir el albarán') }, r.status);
+  const texto = r.texto, usado = r.modelo;
   try {
     return json({ ...normalizarRespuesta(texto, catalogo), modelo: usado });
   } catch {

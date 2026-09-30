@@ -5,6 +5,7 @@
 import type { AlbaranIA, Estado } from '../../data/tipos';
 import { DEMOS, UNIT } from '../../data/catalogo';
 import { claveAnon, supabase } from '../../store/nube/cliente';
+import type { PropuestaIA } from '../../domain/altaCamara';
 
 export const URL_IA = (import.meta.env.VITE_ALBARANES_URL as string | undefined)?.trim() || '';
 export const iaReal = () => !!URL_IA;
@@ -34,3 +35,19 @@ export function demoPara(nombre: string): string {
   return 'dist';
 }
 export { DEMOS };
+
+/* E-015 · Alta de artículos con la cámara: la función "leer-articulo" (misma IA y misma clave, solo en el servidor).
+   Su URL sale de VITE_ARTICULOS_URL o, si no está, de la de albaranes cambiando el nombre de la función. */
+export const URL_ARTICULO = (import.meta.env.VITE_ARTICULOS_URL as string | undefined)?.trim() || (URL_IA ? URL_IA.replace(/leer-albaran\/?$/, 'leer-articulo') : '');
+export const iaArticulo = () => !!URL_ARTICULO && URL_ARTICULO !== URL_IA;
+
+export async function leerArticuloConIA(foto: Blob, codigo: string): Promise<PropuestaIA> {
+  const fd = new FormData();
+  fd.append('foto', foto, 'articulo.' + (foto.type.split('/')[1] || 'jpg'));
+  if (codigo) fd.append('codigo', codigo);
+  const token = supabase ? (await supabase.auth.getSession()).data.session?.access_token : undefined;
+  const r = await fetch(URL_ARTICULO, { method: 'POST', body: fd, headers: token ? { Authorization: 'Bearer ' + token, apikey: claveAnon } : {} });
+  const cuerpo = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(cuerpo.error || 'El servidor de IA ha respondido ' + r.status);
+  return cuerpo as PropuestaIA;
+}

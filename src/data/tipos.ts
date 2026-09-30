@@ -28,6 +28,9 @@ export interface Producto {
   supplier: string;
   /** Alta rápida desde el escáner (rol almacén): el administrador debe completarla */
   borrador?: boolean;
+  /** E-015: stock que contó el almacén al crear el borrador; entra como "Alta de artículo" cuando el administrador lo aprueba */
+  stockPropuesto?: number;
+  propuestoPor?: string;
   /** E-008: material propio o en custodia de un depositante (sin precio) */
   propiedad?: 'propia' | 'custodia';
   propietario?: string;

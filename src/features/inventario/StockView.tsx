@@ -13,6 +13,7 @@ import { usePermisos } from '../../store/permisos';
 import { abrirBorrador, abrirConteo, abrirFicha, abrirFormProducto, abrirMovimiento, pedir, Ubicaciones } from './hojas';
 import { anadirACesta } from '../entregas/cesta';
 import { iaEtiqueta } from '../albaranes/lector';
+import { abrirAltaCamara } from '../altaCamara/AltaCamara';
 
 export function exportarStockCsv(E: Estado = S()) {
   descargarCsv(`stock-${hoyISO()}.csv`, [['SKU', 'Nombre', 'Categoría', 'Propiedad', 'Almacén', 'En vehículos', 'Total', 'Unidad', 'Contenido', 'Mínimo almacén', 'Estado', 'Proveedor', 'Código proveedor', 'EAN'],
@@ -74,7 +75,8 @@ function StockDesk() {
         <div className="flex items-center gap-space-sm flex-wrap">
           <button onClick={() => ir('scan')} className={`${BTN_S} px-space-md py-2.5`}><Icon n="barcode_scanner" className="text-secondary ico-20" />Escanear</button>
           {perm.configurar && <button onClick={() => exportarStockCsv()} className={`${BTN_S} px-space-md py-2.5`}><Icon n="file_download" className="text-secondary ico-20" />Exportar CSV</button>}
-          <button onClick={() => perm.editarCatalogo ? abrirFormProducto() : abrirBorrador()} className={`${BTN_P} px-space-md py-2.5`}><Icon n="add_circle" className="ico-20" />{perm.editarCatalogo ? 'Añadir referencia' : 'Nueva referencia (borrador)'}</button>
+          <button onClick={() => abrirAltaCamara()} className={`${BTN_P} px-space-md h-14`}><Icon n="add_a_photo" className="ico-20" />Nuevo con la cámara</button>
+          <button onClick={() => perm.editarCatalogo ? abrirFormProducto() : abrirBorrador()} className={`${BTN_S} px-space-md py-2.5`}><Icon n="add_circle" className="ico-20" />{perm.editarCatalogo ? 'Añadir referencia' : 'Nueva referencia (borrador)'}</button>
         </div>
       </div>
       <Kpis />
@@ -212,6 +214,7 @@ function StockMob() {
         <button onClick={() => ir('scan')} className="w-14 h-14 rounded-xl bg-primary text-white grid place-items-center shadow-sm" aria-label="Escanear"><Icon n="barcode_scanner" className="ico-28" /></button>
         <button onClick={() => setUI({ filtros: !u.filtros })} className={`w-14 h-14 rounded-xl ${u.filtros || hayFiltro ? 'bg-primary-fixed text-primary' : 'bg-surface-container-low'} grid place-items-center`} aria-label="Filtros"><Icon n="tune" className="ico-28" /></button>
       </div>
+      <button onClick={() => abrirAltaCamara()} className={`${BTN_P} h-14 text-body-lg`}><Icon n="add_a_photo" className="ico-28" />Nuevo con la cámara</button>
       {u.filtros && <div className="grid grid-cols-2 gap-2 bg-surface-container-lowest rounded-xl p-3 shadow-sm">
         <label className="flex flex-col gap-1"><span className={LBL}>Estado</span><select value={u.est} onChange={e => setUI({ est: e.target.value })} className={`${INP} h-12`}>{[['all', 'Todos'], ['red', 'Crítico'], ['amber', 'Bajo'], ['green', 'Correcto']].map(([v, t]) => <option key={v} value={v}>{t}</option>)}</select></label>
         <label className="flex flex-col gap-1"><span className={LBL}>Dónde</span><select value={u.ubi} onChange={e => setUI({ ubi: e.target.value })} className={`${INP} h-12`}><option value="all">Todo</option><option value="almacen">Almacén</option>{E.vehiculos.map(v => <option key={v.id} value={v.id}>{nombreVehiculo(E, v.id)}</option>)}</select></label>

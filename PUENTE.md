@@ -375,7 +375,7 @@ Hoy hay 3 equipos (Búfala 1, 2 y 3), cada uno con 2 técnicos y 1 furgoneta. **
 - **Registro:** cada copia enviada (canal y fecha) queda en el historial de la entrega, con opción de reenviar.
 - **Hecho cuando:** hay pruebas del token (hash, revocación, un técnico no ve lo de otro) y de la construcción del enlace `wa.me` con teléfonos en varios formatos.
 
-### E-015 · Dar de alta artículos con la cámara del móvil · PENDIENTE (después de E-013)
+### E-015 · Dar de alta artículos con la cámara del móvil · HECHO
 **Petición del usuario:** poder dar de alta materiales, herramientas, EPIs, ropa… **con la cámara del móvil**, sin teclear la ficha entera.
 
 **1. Dónde**
@@ -925,3 +925,56 @@ Cubren también el formato de cantidades, las respuestas envueltas en ```json y 
 - Corregidos de paso dos fallos:
   - `limpiar_demostracion` nombraba una tabla que ya no existía (`pedidos_reposicion`); lo detectó la prueba nueva;
   - la hoja de movimiento no pasaba el vehículo al registrar (`mover()`), así que devoluciones, mermas en vehículo y cargas fallaban con "Indica el vehículo".
+
+### 30/09/2026 · E-015 · HECHO
+**Dónde:** botón **"Nuevo con la cámara"** (56 px) en Inventario (escritorio y móvil), en Herramientas, EPIs y ropa, y en el menú del móvil. El escáner, ante un código desconocido, ofrece "Crear con la cámara" (y "Crear a mano").
+
+**Flujo** (`src/features/altaCamara/AltaCamara.tsx`)
+1. **Código:** cámara en la misma hoja, o escribirlo, o "No tiene código".
+   - **Si ya existe** (SKU, EAN, código del proveedor, QR `BUF:` o código de Saltoki con sufijo), no se crea nada: se ofrece **Registrar entrada** o **Abrir la ficha**.
+2. **Foto** con la cámara trasera. La función `leer-articulo` propone nombre, marca, modelo, referencia, EAN (solo si cuadra su dígito de control), categoría, **unidad y contenido** ("bote 1000 ud", "bolsa 100", "rollo 100 m" → metros) y talla en ropa y EPIs.
+3. **Revisar y guardar:**
+   - formulario precargado: tipo (material, ropa, EPI o herramienta), nombre, categoría, unidad y contenido, stock inicial, mínimo (solo el administrador), propiedad y, plegados, SKU, EAN, código y proveedor;
+   - **"¿Es alguno de estos?"** con los parecidos por nombre;
+   - **Guardar** o **Guardar y añadir otro**;
+   - la foto queda como **foto del artículo** (E-009: WebP, miniatura, bucket privado y cola de subidas sin cobertura).
+- **Sin IA** (demostración, fallo o sin conexión), la ficha se rellena a mano con la foto ya puesta. Sin conexión, el botón **Leer con IA** vuelve a estar activo al recuperarla.
+
+**Reglas**
+- **Administrador:** crea el artículo directamente (`guardar_producto`); el stock inicial entra como movimiento "Alta de artículo".
+- **Almacén:** crea un **borrador** con la ficha completa y el stock que ha contado (`crear_borrador_articulo`, columnas `stock_propuesto` y `propuesto_por`). El stock no entra hasta que el administrador lo aprueba:
+  - la bandeja del administrador tiene la sección **"Artículos en borrador"** con **Revisar y aprobar**;
+  - el formulario sale precargado con lo contado;
+  - al aprobar, entra como "Alta de artículo · Borrador aprobado", una sola vez;
+  - si el administrador corrige la cifra, manda la suya.
+- **Duplicados:** por código en la app y en el servidor (SKU, EAN y código del proveedor); por nombre, con el aviso antes de guardar.
+- **Reintentos de la cola:** el mismo borrador enviado dos veces devuelve "duplicado", sin error.
+- **Herramientas:** se crean como ficha de dotación (una unidad, operativa, con n.º de serie y el alta en su historial), solo el administrador.
+
+**Servidor**
+- `supabase/functions/leer-articulo` (nueva).
+- `_compartido/articulo.ts`: prompt, esquema, normalización y detección de unidad y EAN.
+- `_compartido/gemini.ts`: la llamada con reintentos y modelo de reserva sale de `leer-albaran`, que ahora la comparte.
+- Migración `20261005000100_e015_alta_camara.sql`.
+- La URL de la app sale sola de `VITE_ALBARANES_URL` (`leer-albaran` → `leer-articulo`), o de `VITE_ARTICULOS_URL` si se define. No hace falta tocar GitHub.
+
+**Pruebas:** 207 en verde (`npm test`).
+- `src/domain/altaCamara.test.ts` (9): duplicado por código (incluido el sufijo de Saltoki) y por nombre; la propuesta de la IA llega al formulario con unidad y contenido; alta sin IA; borrador del almacén sin stock hasta aprobarlo; foto como foto del artículo; herramientas solo del administrador; ropa con modelo y talla.
+- `supabase/tests/e015.test.ts` (5): borrador con stock propuesto, reintento, duplicados por EAN y por código del proveedor, aprobación que mete el stock una sola vez, corrección del administrador y contrato app ↔ servidor de las tres altas.
+- `supabase/tests/articulo.test.ts` (8): unidad y contenido del envase, limpieza de la propuesta, EAN-8, EAN-13 y UPC-A, prompt sin precios ni series, y reintentos y errores de Gemini con `fetch` simulado.
+- `tsc -b` sin errores, `npm run build` correcto y `deno check` de las cuatro funciones sin errores.
+
+**Probado en el navegador (móvil, demostración):**
+- código existente → "Ya existe" con Registrar entrada;
+- código nuevo → foto (simulada) → ficha a mano con la foto;
+- nombre parecido → "¿Es alguno de estos?";
+- bolsa de 100 con stock 2 → guardado con foto, formato y "Alta de artículo".
+
+**Desplegado:** migración, `leer-articulo` (responde 401 sin sesión y CORS correcto) y `leer-albaran`.
+
+**Sin verificar aquí:** la lectura real con Gemini (hace falta una foto de verdad y sesión en la app publicada) y la cámara física (el navegador de pruebas no la tiene). El tiempo de menos de un minuto por alta hay que medirlo en el móvil.
+
+**Decisiones:**
+- Las herramientas no guardan la foto en su ficha: la dotación no tiene campo de foto y E-009 las muestra con la del catálogo por modelo. Si se quiere, es una columna más.
+- El almacén no fija el mínimo; lo completa el administrador al aprobar (tarea "Completar mínimo").
+- **Corrección pendiente de E-013:** el prompt de `leer-albaran` seguía pidiendo multiplicar cajas por unidades y extraer series. Ahora pide la cantidad en el formato del catálogo (1000 tacos de una "caja de 100" son 10 cajas), con el contenido en la lista, y sin series.

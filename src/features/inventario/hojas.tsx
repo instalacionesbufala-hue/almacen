@@ -180,7 +180,7 @@ function FormProducto({ sku, preset, onCreado }: { sku?: string; preset: Partial
   const base: Partial<Producto> = p ?? { cat: 'fijaciones', unit: 'ud', contenido: 1, min: 0, ...preset };
   const [f, setF] = useState<FormProd>({
     sku: base.sku || '', ean: base.ean || '', name: base.name || '', cat: base.cat || 'fijaciones', unit: base.unit || 'ud', contenido: String(base.contenido ?? 1), packLabel: base.packLabel || '',
-    stock: '0', min: base.minimoDefinido === false ? '' : String(base.min ?? ''), supplier: base.supplier || '', supplierRef: base.supplierRef || '',
+    stock: String(p?.borrador ? p.stockPropuesto ?? 0 : 0), min: base.minimoDefinido === false ? '' : String(base.min ?? ''), supplier: base.supplier || '', supplierRef: base.supplierRef || '',
     objetivo: base.objetivo != null ? String(base.objetivo) : '', proveedorHabitual: base.proveedorHabitual || '', modelo: base.modelo || '', talla: base.talla || '',
     propiedad: base.propiedad || 'propia', propietario: base.propietario || S().propietarios[0]?.id || '',
   });
@@ -199,15 +199,15 @@ function FormProducto({ sku, preset, onCreado }: { sku?: string; preset: Partial
       supplier: f.supplier.trim(), ean: f.ean.trim() || undefined, supplierRef: f.supplierRef.trim() || undefined,
       objetivo: f.objetivo.trim() === '' ? undefined : toNum(f.objetivo), proveedorHabitual: f.proveedorHabitual.trim() || undefined, modelo: f.modelo.trim() || undefined, talla: f.talla.trim() || undefined,
       propiedad: f.propiedad, propietario: custodia ? f.propietario : undefined, foto: p?.foto, fotoMini: p?.fotoMini, fotoOrigen: p?.fotoOrigen };
-    if (!ejecutar({ op: 'producto', args: { producto: obj, nuevo: !p, stockInicial: p ? 0 : n.stock } })) return;
-    toast(p ? 'Referencia actualizada.' : `Referencia ${code} creada.`, 'ok');
+    if (!ejecutar({ op: 'producto', args: { producto: obj, nuevo: !p, stockInicial: p && !p.borrador ? 0 : n.stock } })) return;
+    toast(p?.borrador ? `Borrador aprobado: ${code} ya se puede mover${n.stock > 0 ? ` y entran ${n.stock} ${unidadTxt(f.unit, n.stock)} en el almacén` : ''}.` : p ? 'Referencia actualizada.' : `Referencia ${code} creada.`, 'ok', 6000);
     if (!p) onCreado?.(code);
     closeModal();
   };
   const inp = (k: keyof FormProd, label: string, extra: React.InputHTMLAttributes<HTMLInputElement> = {}) =>
     <Campo label={label}><input value={String(f[k])} onChange={set(k)} className={`${INP} h-12`} {...extra} /></Campo>;
   return (<>
-    <SheetHead title={p ? 'Editar referencia' : 'Nueva referencia'} sub={p ? p.sku : 'Alta en el catálogo del almacén'} />
+    <SheetHead title={p?.borrador ? 'Completar y aprobar borrador' : p ? 'Editar referencia' : 'Nueva referencia'} sub={p?.borrador ? `${p.sku}${p.propuestoPor ? ` · propuesto por ${p.propuestoPor}` : ''}` : p ? p.sku : 'Alta en el catálogo del almacén'} />
     <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
       {inp('sku', 'SKU / ID *', p ? { readOnly: true } : { autoFocus: true })}
       {inp('ean', 'EAN / código de barras', { inputMode: 'numeric' })}
@@ -215,7 +215,7 @@ function FormProducto({ sku, preset, onCreado }: { sku?: string; preset: Partial
       <Campo label="Categoría"><select value={f.cat} onChange={set('cat')} className={`${INP} h-12`}>{Object.entries(CATS).map(([k, c]) => <option key={k} value={k}>{c.label}</option>)}</select></Campo>
       <Campo label="Se vende y se entrega por"><select value={f.unit} onChange={set('unit')} className={`${INP} h-12`}>{UNIDADES.map(u => <option key={u} value={u}>{u === 'm' ? 'Metros' : u === 'ud' ? 'Unidades' : unidadTxt(u, 2).replace(/^./, c => c.toUpperCase())}</option>)}</select></Campo>
       {conContenido && inp('contenido', `Unidades por ${UNIT[f.unit]} (bote de 1000 → 1000)`, { inputMode: 'numeric' })}
-      {!p && inp('stock', `Stock inicial en el almacén (${unidadTxt(f.unit, 2)})`, { inputMode: 'decimal' })}
+      {(!p || p.borrador) && inp('stock', `Stock inicial en el almacén (${unidadTxt(f.unit, 2)})${p?.borrador ? ' · contado por el almacén' : ''}`, { inputMode: 'decimal' })}
       {inp('min', 'Mínimo en el almacén (vacío = completar después)', { inputMode: 'decimal' })}
       {inp('supplier', 'Proveedor')}
       {inp('supplierRef', 'Código del proveedor')}
@@ -226,7 +226,7 @@ function FormProducto({ sku, preset, onCreado }: { sku?: string; preset: Partial
       {inp('proveedorHabitual', 'Proveedor habitual (a quién se pide)')}
       {(f.cat === 'ropa' || f.cat === 'epis') && <>{inp('modelo', 'Modelo (agrupa las tallas)')}{inp('talla', 'Talla')}</>}
     </div>
-    <SheetFoot className="flex gap-2"><button onClick={closeModal} className={`${BTN_S} h-12 px-5`}>Cancelar</button><button onClick={guardarProd} className={`${BTN_P} h-12 flex-1`}><Icon n="save" className="ico-20" />{p ? 'Guardar cambios' : 'Crear referencia'}</button></SheetFoot>
+    <SheetFoot className="flex gap-2"><button onClick={closeModal} className={`${BTN_S} h-12 px-5`}>Cancelar</button><button onClick={guardarProd} className={`${BTN_P} h-12 flex-1`}><Icon n="save" className="ico-20" />{p?.borrador ? 'Aprobar' : p ? 'Guardar cambios' : 'Crear referencia'}</button></SheetFoot>
   </>);
 }
 
@@ -315,6 +315,7 @@ function Menu() {
     <div className="p-3 flex flex-col gap-1">
       {(Object.keys(VISTAS) as Vista[]).map(v =>
         <button key={v} onClick={() => { closeModal(); ir(v); }} className={`flex items-center gap-3 px-4 h-14 rounded-xl text-left ${vista === v ? 'bg-primary-fixed text-primary font-semibold' : 'hover:bg-surface-container-low'}`}><Icon n={VISTAS[v].icon} /><span className="flex-1">{VISTAS[v].label}</span></button>)}
+      <button onClick={() => { closeModal(); void import('../altaCamara/AltaCamara').then(m => m.abrirAltaCamara()); }} className="flex items-center gap-3 px-4 h-14 rounded-xl bg-primary-fixed/50 text-primary font-semibold"><Icon n="add_a_photo" /><span className="flex-1 text-left">Nuevo con la cámara</span></button>
       <button onClick={abrirAvisos} className="flex items-center gap-3 px-4 h-14 rounded-xl hover:bg-surface-container-low"><Icon n="notifications" /><span className="flex-1 text-left">Avisos de stock</span>{nCrit > 0 && <Tag c="bg-error-container text-error">{nCrit}</Tag>}</button>
       <button onClick={abrirPerfil} className="flex items-center gap-3 px-4 h-14 rounded-xl hover:bg-surface-container-low"><Icon n="person" /><span className="flex-1 text-left">Cambiar operario</span></button>
     </div>

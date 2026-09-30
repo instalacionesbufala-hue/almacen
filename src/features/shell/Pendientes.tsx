@@ -4,6 +4,7 @@ import { UNIT } from '../../data/catalogo';
 import { find, qtyTxt } from '../../domain/reglas';
 import { fechaHora, hace, num } from '../../domain/formato';
 import { ejecutar, useAlmacen } from '../../store/almacen';
+import { abrirFormProducto } from '../inventario/hojas';
 import { usePermisos } from '../../store/permisos';
 import { openModal, SheetHead } from '../../ui/modal';
 import { toast } from '../../ui/toast';
@@ -12,7 +13,8 @@ import { BTN_P, BTN_S, Icon, INP, Tag, Vacio } from '../../ui/base';
 export function BotonPendientes() {
   const E = useAlmacen(), { validar } = usePermisos();
   // E-013: también las mermas registradas (aplicadas al momento) que el administrador aún no ha visto
-  const n = E.pendientes.filter(p => p.estado === 'pendiente' || p.estado === 'aplicada').length;
+  // E-015: y los artículos en borrador que ha creado el almacén
+  const n = E.pendientes.filter(p => p.estado === 'pendiente' || p.estado === 'aplicada').length + E.products.filter(p => p.borrador).length;
   if (!validar || !n) return null;
   return <button onClick={abrirPendientes} className="relative p-2 rounded-lg text-amber-800 hover:bg-amber-100" aria-label={`${n} avisos en la bandeja`} title="Mermas y pendientes de validar">
     <Icon n="pending_actions" /><span className="absolute top-1 right-1 min-w-4 h-4 px-1 rounded-full bg-amber-500 text-black font-mono text-[10px] leading-4">{n}</span></button>;
@@ -21,7 +23,7 @@ export function BotonPendientes() {
 export const abrirPendientes = () => openModal(<Bandeja />, { ancha: true });
 function Bandeja() {
   const E = useAlmacen(), { validar } = usePermisos();
-  const abiertos = E.pendientes.filter(p => p.estado === 'pendiente'), mermas = E.pendientes.filter(p => p.estado === 'aplicada');
+  const abiertos = E.pendientes.filter(p => p.estado === 'pendiente'), mermas = E.pendientes.filter(p => p.estado === 'aplicada'), borradores = E.products.filter(p => p.borrador);
   const resueltos = E.pendientes.filter(p => p.estado === 'aprobado' || p.estado === 'rechazado').slice(0, 10);
   return (<>
     <SheetHead title="Bandeja del administrador" sub="Mermas registradas (ya aplicadas: solo para que lo sepas) y diferencias de recuento del almacén pendientes de validar." />
@@ -31,6 +33,11 @@ function Bandeja() {
           <div className="flex-1 min-w-[200px]"><div className="font-semibold">{p.operator}: {pr ? qtyTxt(pr, p.qty) : num(p.qty)} de {pr?.name || p.sku}</div>
             <div className="text-body-sm text-secondary">{p.reason}{p.ref ? ` · ${p.ref}` : ''} · <span title={fechaHora(p.ts)}>{hace(p.ts)}</span></div></div>
           {validar && <button onClick={() => ejecutar({ op: 'mermaVista', args: { id: p.id } })} className="h-12 px-4 rounded-lg bg-white font-semibold text-primary">Visto</button>}</div>; })}</div>}
+      {borradores.length > 0 && <div className="flex flex-col gap-2"><div className="font-mono text-label-sm uppercase tracking-wider text-secondary">Artículos en borrador ({borradores.length})</div>
+        {borradores.map(p => <div key={p.sku} className="rounded-xl bg-amber-50 p-3 flex flex-wrap items-center gap-3">
+          <div className="flex-1 min-w-[200px]"><div className="font-semibold">{p.name}</div>
+            <div className="text-body-sm text-secondary"><span className="font-mono">{p.sku}</span>{p.propuestoPor ? ` · de ${p.propuestoPor}` : ''}{p.stockPropuesto ? ` · ha contado ${qtyTxt(p, p.stockPropuesto)}` : ''}</div></div>
+          {validar && <button onClick={() => abrirFormProducto(p.sku)} className="h-12 px-4 rounded-lg bg-white font-semibold text-primary">Revisar y aprobar</button>}</div>)}</div>}
       <div className="font-mono text-label-sm uppercase tracking-wider text-secondary">Pendientes de validar</div>
       {abiertos.length ? abiertos.map(p => <Fila key={p.id} id={p.id} puede={validar} />) : <Vacio>No hay nada pendiente.</Vacio>}
       {resueltos.length > 0 && <div className="mt-2"><div className="font-mono text-label-sm uppercase tracking-wider text-secondary mb-1">Resueltos recientemente</div>

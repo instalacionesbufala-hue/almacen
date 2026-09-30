@@ -106,13 +106,14 @@ Las variables `VITE_ALBARANES_URL` (paso 7) y `VITE_VAPID_PUBLICA` (paso 8) se a
 
 ## 6. Desplegar las funciones de servidor
 
-Son tres pequeños programas que se ejecutan en Supabase, donde las claves no están a la vista:
+Son cuatro pequeños programas que se ejecutan en Supabase, donde las claves no están a la vista:
 
 | Función | Para qué sirve |
 |---|---|
 | `usuarios` | Dar de alta usuarios y cambiar contraseñas desde la app |
 | `notificar` | Enviar los avisos por correo, push y Telegram |
 | `leer-albaran` | Leer los albaranes con IA (Gemini) |
+| `leer-articulo` | Proponer la ficha de un artículo nuevo a partir de su foto ("Nuevo con la cámara", misma IA) |
 
 - [ ] 6.1. En la terminal de la carpeta `almacen` (con la sesión del paso 2.1):
   ```bash
@@ -124,7 +125,10 @@ Son tres pequeños programas que se ejecutan en Supabase, donde las claves no es
   ```bash
   npx.cmd supabase functions deploy leer-albaran
   ```
-  Cada comando termina con *Deployed Functions*. Compruébalo en Supabase → **Edge Functions**: deben aparecer las tres.
+  ```bash
+  npx.cmd supabase functions deploy leer-articulo
+  ```
+  Cada comando termina con *Deployed Functions*. Compruébalo en Supabase → **Edge Functions**: deben aparecer las cuatro.
 - [ ] 6.2. Di a las funciones desde qué web se les puede llamar (así ninguna otra página puede usarlas con tu sesión). Es la dirección de la app del paso 5, **sin la ruta final**:
   ```bash
   npx.cmd supabase secrets set ORIGEN_APP=https://instalacionesbufala-hue.github.io
@@ -151,7 +155,7 @@ Son tres pequeños programas que se ejecutan en Supabase, donde las claves no es
   |---|---|
   | `VITE_ALBARANES_URL` | `https://abcdefghijkl.supabase.co/functions/v1/leer-albaran` (con tu referencia) |
 
-- [ ] 7.4. Repite el paso 5.2 (Run workflow).
+- [ ] 7.4. Repite el paso 5.2 (Run workflow). "Nuevo con la cámara" usa la misma clave: su dirección sale sola de `VITE_ALBARANES_URL` cambiando `leer-albaran` por `leer-articulo` (no hace falta otra variable).
 - [ ] 7.5. **Prueba:** en la app, abre **Albaranes y recepción IA**. La etiqueta debe decir **IA CONECTADA (GEMINI)**. Sube una foto de un albarán, revisa las líneas propuestas y pulsa aprobar. Nada entra en stock hasta que lo apruebas.
 
 Si aparece *Se ha alcanzado el límite gratuito*, has pasado el cupo diario de Gemini: vuelve a intentarlo al día siguiente.

@@ -12,6 +12,7 @@ import { abrirBorrador, abrirFicha, abrirFormProducto, MovRow } from '../inventa
 import { candidatos, codigoConocido, leerTexto } from './texto';
 import { FotoGrande } from '../../ui/foto';
 import { fotoDe } from '../../domain/fotos';
+import { abrirAltaCamara } from '../altaCamara/AltaCamara';
 
 type Modo = 'entrada' | 'salida' | 'consulta';
 interface Hit { code: string; sku: string | null; via: string }
@@ -100,7 +101,8 @@ export default function ScanView() {
         </div>
           : !p ? <div className="flex flex-col gap-4">
             <div className="flex items-center gap-3 bg-error-container/60 rounded-xl p-4"><Icon n="help" className="text-error ico-32" /><div><div className="font-semibold">“{hit.code}” no está en el catálogo</div><div className="text-body-sm text-secondary">Puedes darlo de alta ahora con este código.</div></div></div>
-            <button onClick={() => { const c = hit.code.replace(/^BUF:/i, '').split('|')[0]; if (E.rol !== 'admin') abrirBorrador(c, () => setHit(null)); else abrirFormProducto(undefined, /^\d{8,14}$/.test(c) ? { ean: c } : { sku: c.toUpperCase() }, () => { setHit(null); }); }} className={`${BTN_P} h-14`}><Icon n="add_circle" className="ico-fill" />Crear referencia con este código</button>
+            <button onClick={() => { const c = hit.code.replace(/^BUF:/i, '').split('|')[0]; setHit(null); abrirAltaCamara({ codigo: c }); }} className={`${BTN_P} h-14`}><Icon n="add_a_photo" className="ico-fill" />Crear con la cámara</button>
+            <button onClick={() => { const c = hit.code.replace(/^BUF:/i, '').split('|')[0]; if (E.rol !== 'admin') abrirBorrador(c, () => setHit(null)); else abrirFormProducto(undefined, /^\d{8,14}$/.test(c) ? { ean: c } : { sku: c.toUpperCase() }, () => { setHit(null); }); }} className={`${BTN_S} h-14`}><Icon n="add_circle" className="ico-20" />Crear a mano</button>
             <button onClick={siguiente} className={`${BTN_T} h-14 text-body-lg`}><Icon n="skip_next" />Escanear siguiente</button>
             <Manual valor={manual} setValor={setManual} onEnviar={c => alLeer(c, 'teclado')} />
           </div>

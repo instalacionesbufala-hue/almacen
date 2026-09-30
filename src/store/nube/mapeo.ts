@@ -29,7 +29,7 @@ export function aEstado(t: Tablas, base: Pick<Estado, 'cesta' | 'seq'>, operador
   const products: Producto[] = t.productos.map(p => ({
     sku: p.sku, ean: p.ean ?? undefined, supplierRef: p.ref_proveedor ?? undefined, name: p.nombre, cat: p.categoria as CatId, unit: p.unidad as Unidad,
     contenido: n(p.contenido) || 1, packLabel: p.formato_texto || undefined, stock: n(p.stock), min: n(p.minimo), minimoDefinido: p.minimo_definido !== false, supplier: p.proveedor || '',
-    borrador: !!p.borrador,
+    borrador: !!p.borrador, stockPropuesto: p.stock_propuesto == null ? undefined : n(p.stock_propuesto), propuestoPor: p.propuesto_por || undefined,
     propiedad: p.propiedad === 'custodia' ? 'custodia' : 'propia', propietario: p.propietario_id ?? undefined,
     objetivo: p.objetivo == null ? undefined : n(p.objetivo), proveedorHabitual: p.proveedor_habitual ?? undefined, modelo: p.modelo ?? undefined, talla: p.talla ?? undefined,
     foto: p.foto ?? undefined, fotoMini: p.foto_mini ?? undefined, fotoOrigen: p.foto_origen ?? undefined,

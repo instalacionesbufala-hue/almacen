@@ -39,6 +39,7 @@ export type Op =
   | { op: 'recuento'; args: { id: string; pasillo: string; lineas: { sku: string; contado: number }[] } }
   | { op: 'validarPendiente'; args: { id: string; aprobar: boolean; nota: string } }
   | { op: 'borrador'; args: { sku: string; ean: string; nombre: string; cat: CatId } }
+  | { op: 'borradorArticulo'; args: { producto: Producto; stockInicial: number } }
   | { op: 'borrarProducto'; args: { sku: string } }
   | { op: 'perfil'; args: { id: string; nombre: string; rol: Rol; activo: boolean } }
   | { op: 'minimos'; args: { cambios: { sku: string; minimo: number; objetivo?: number | null; proveedorHabitual?: string }[] } }
@@ -92,8 +93,13 @@ export const OPS: Defs = {
       const actual = find(S, p.sku);
       if (nuevo && actual) throw new Error(`Ya existe una referencia con el SKU ${p.sku}`);
       if (formatoEntero(p) && stockInicial !== Math.trunc(stockInicial)) throw new Error(`El stock inicial de ${p.name} va en ${p.unit} enteros`);
-      if (actual) { const { stock } = actual; Object.assign(actual, p, { stock }); }
-      else {
+      if (actual) {
+        // E-015: completar (aprobar) un borrador mete su stock inicial (la app lo envía precargado con lo que contó el almacén)
+        const { stock, borrador } = actual;
+        Object.assign(actual, p, { stock, borrador: false, stockPropuesto: undefined, propuestoPor: undefined });
+        const inicial = borrador ? stockInicial : 0;
+        if (borrador && inicial > 0) applyMovement(S, { sku: p.sku, type: 'entrada', qty: inicial, reason: 'Alta de artículo', ref: 'Borrador aprobado' });
+      } else {
         S.products.push({ ...p, stock: 0 });
         if (stockInicial > 0) applyMovement(S, { sku: p.sku, type: 'entrada', qty: stockInicial, reason: 'Alta de artículo', ref: 'Stock inicial' });
       }
@@ -285,6 +291,22 @@ export const OPS: Defs = {
     },
     rpc: a => ['validar_pendiente', { p_pendiente: a.id, p_aprobar: a.aprobar, p_nota: a.nota }],
     desc: (_S, a) => a.aprobar ? 'Aprobar pendiente' : 'Rechazar pendiente',
+  },
+  borradorArticulo: {
+    // E-015: el almacén crea el artículo completo como borrador; el stock no entra hasta que el administrador lo aprueba
+    local: (S, { producto: p, stockInicial }) => {
+      const code = (v?: string) => String(v || '').toUpperCase();
+      const otro = S.products.find(x => x.sku === code(p.sku) || (p.ean && x.ean === p.ean) || (p.supplierRef && code(x.supplierRef) === code(p.supplierRef)));
+      if (otro) throw new Error(`Ya existe una referencia con ese código: ${otro.sku} (${otro.name})`);
+      if (!p.name.trim()) throw new Error('Indica el nombre del artículo');
+      if (formatoEntero(p) && stockInicial !== Math.trunc(stockInicial)) throw new Error(`El stock inicial va en ${p.unit} enteros`);
+      S.products.push({ ...p, sku: code(p.sku), stock: 0, min: 0, minimoDefinido: false, borrador: true, stockPropuesto: stockInicial, propuestoPor: S.operator });
+    },
+    rpc: ({ producto: p, stockInicial }) => ['crear_borrador_articulo', { p: {
+      sku: p.sku, ean: p.ean ?? '', ref_proveedor: p.supplierRef ?? '', nombre: p.name, categoria: p.cat, unidad: p.unit, contenido: p.contenido ?? 1,
+      proveedor: p.supplier, stock_inicial: stockInicial, propiedad: p.propiedad || 'propia', propietario_id: p.propiedad === 'custodia' ? p.propietario : null,
+      modelo: p.modelo ?? '', talla: p.talla ?? '' } }],
+    desc: (_S, a) => `Borrador ${a.producto.sku} · ${a.producto.name}`,
   },
   borrador: {
     local: (S, a) => {

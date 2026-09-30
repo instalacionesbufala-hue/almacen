@@ -10,6 +10,7 @@ import { usePermisos } from '../../store/permisos';
 import { closeModal, openModal, SheetFoot, SheetHead } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 import { BTN_P, BTN_S, BTN_T, CARD, Campo, Icon, INP, Kpi, LBL, Tag, Vacio } from '../../ui/base';
+import { abrirAltaCamara } from '../altaCamara/AltaCamara';
 
 const quienTxt = (h: Herramienta) => {
   const E = S(), eq = E.equipos.find(e => e.id === h.equipo), t = E.tecnicos.find(x => x.id === h.tecnico);
@@ -43,7 +44,7 @@ export default function DotacionView() {
     <div className="px-4 lg:px-gutter py-4 lg:py-space-lg flex flex-col gap-4 lg:gap-space-lg max-w-[1600px]">
       <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-3">
         <div><span className={LBL}>Herramientas · EPIs · ropa de trabajo</span><h1 className="text-headline-lg-mobile lg:text-headline-lg font-bold">Dotación de equipos y técnicos</h1></div>
-        <div className="flex flex-wrap gap-2">{perm.configurar && <button onClick={exportar} className={`${BTN_S} px-4 h-11`}><Icon n="file_download" className="ico-20" />CSV</button>}{perm.gestionarFlota && <button onClick={() => abrirAltaDotacion(clase === 'all' ? 'herramienta' : clase)} className={`${BTN_P} px-4 h-11`}><Icon n="add_circle" className="ico-20" />Nueva ficha</button>}</div>
+        <div className="flex flex-wrap gap-2">{perm.configurar && <button onClick={exportar} className={`${BTN_S} px-4 h-11`}><Icon n="file_download" className="ico-20" />CSV</button>}<button onClick={() => abrirAltaCamara({ origen: 'dotacion' })} className={`${BTN_P} px-4 h-14`}><Icon n="add_a_photo" className="ico-20" />Nuevo con la cámara</button>{perm.gestionarFlota && <button onClick={() => abrirAltaDotacion(clase === 'all' ? 'herramienta' : clase)} className={`${BTN_S} px-4 h-14`}><Icon n="add_circle" className="ico-20" />Nueva ficha</button>}</div>
       </div>
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-space-md">
         <Kpi icon="inventory" iconC="bg-surface-container-low text-primary" badge={`${E.herramientas.length - activos.length} de baja`} badgeC="text-secondary bg-surface-container-high" value={activos.length} label="Fichas activas" foot="Asignadas" footVal={`${activos.filter(h => h.equipo || h.tecnico).length}`} bar={activos.filter(h => h.equipo || h.tecnico).length / (activos.length || 1) * 100} barC="bg-primary" onClick={() => setSoloAvisos(false)} />
