@@ -23,7 +23,10 @@ jobs:
       - name: Mantener activo el proyecto (una consulta a la API)
         if: env.SUPABASE_URL != ''
         run: |
-          curl -fsS "$SUPABASE_URL/rest/v1/propietarios?select=id&limit=1" -H "apikey: $SUPABASE_ANON" -H "Authorization: Bearer $SUPABASE_ANON" -o /dev/null
+          # solo el dominio (la variable puede llevar barra final o /rest/v1/)
+          BASE=$(echo "$SUPABASE_URL" | sed -E 's#^(https?://[^/]+).*#\1#')
+          # función ping() sin datos (migración 20261002000100): las tablas no se pueden leer sin sesión, y así debe ser
+          curl -fsS -X POST "$BASE/rest/v1/rpc/ping" -H "apikey: $SUPABASE_ANON" -H "Authorization: Bearer $SUPABASE_ANON" -H "Content-Type: application/json" -d "{}" -o /dev/null
           echo "Proyecto activo"
 
       - name: Comprobar que la copia está configurada

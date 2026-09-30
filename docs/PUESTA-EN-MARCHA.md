@@ -56,7 +56,7 @@ Las "migraciones" son los archivos de `supabase/migrations/`: crean las tablas, 
   ```bash
   npx.cmd supabase db push
   ```
-  Te enseña la lista de migraciones (7 archivos) y pregunta si continúa: escribe `Y` y pulsa Enter. Termina con *Finished supabase db push*.
+  Te enseña la lista de migraciones (8 archivos) y pregunta si continúa: escribe `Y` y pulsa Enter. Termina con *Finished supabase db push*.
 - [ ] 2.4. **(Opcional) Cargar los datos de demostración** (referencias, furgonetas y técnicos de ejemplo). Sirve para probar la app antes de meter lo real:
   ```bash
   npx.cmd supabase db push --include-seed
