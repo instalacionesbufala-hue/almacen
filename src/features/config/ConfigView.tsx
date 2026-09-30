@@ -81,7 +81,7 @@ export default function ConfigView() {
             <button onClick={() => exportarMovimientosCsv(E)} className={`${BTN_S} h-12`}><Icon n="swap_vert" className="ico-20" />Movimientos CSV</button></div>
           <input ref={archivo} type="file" accept="application/json,.json" className="hidden" onChange={e => { importar(e.target.files?.[0]); e.target.value = ''; }} />
           {!modoNube && <button onClick={reset} className={`${BTN_BASE} h-12 text-error bg-error-container/50 hover:bg-error-container`}><Icon n="restart_alt" className="ico-20" />Restaurar datos de prueba</button>}</Bloque>}
-        <Bloque icon="info" t="Acerca de"><p className="text-body-sm text-secondary">{MARCA.nombre} · control de stock, entregas y dotación para material eléctrico, fontanería y movilidad eléctrica. {E.products.length} referencias · {E.movements.length} movimientos · {E.entregas.length} entregas · {E.herramientas.length} fichas de dotación.</p></Bloque>
+        <Bloque icon="info" t="Acerca de"><p className="text-body-sm text-secondary">{MARCA.nombre} · control de stock, entregas y dotación para instalaciones eléctricas especializadas en puntos de recarga. {E.products.length} referencias · {E.movements.length} movimientos · {E.entregas.length} entregas · {E.herramientas.length} fichas de dotación.</p></Bloque>
       </div>
     </div>
   );
