@@ -93,7 +93,7 @@ Así, la app publicada sabe a qué proyecto de Supabase conectarse.
 
   | Name | Value |
   |---|---|
-  | `VITE_SUPABASE_URL` | la Project URL del paso 1.4 (`https://abcdefghijkl.supabase.co`) |
+  | `VITE_SUPABASE_URL` | la Project URL del paso 1.4, **solo hasta `.supabase.co`** (`https://abcdefghijkl.supabase.co`), sin `/rest/v1/` ni nada detrás |
   | `VITE_SUPABASE_ANON_KEY` | la clave `anon public` del paso 1.4 |
 
   Van en **Variables**, no en *Secrets*: no son secretas y la app las necesita en el navegador.
@@ -272,6 +272,7 @@ Si los seis pasos salen bien, la app está en marcha.
 | Síntoma | Qué mirar |
 |---|---|
 | La app publicada no pide contraseña | Faltan las variables del paso 4, o no has repetido el paso 5.2 tras crearlas. |
+| *Invalid path specified in request URL* al entrar | La variable `VITE_SUPABASE_URL` lleva algo detrás de `.supabase.co` (por ejemplo `/rest/v1/`). Déjala solo hasta `.supabase.co` y repite el paso 5.2. |
 | "Correo o contraseña incorrectos" siendo correctos | En Supabase → Authentication → Users, el usuario debe estar confirmado (paso 3.1, *Auto Confirm User*). |
 | "Tu usuario no tiene acceso" | Falta el paso 3.2 (la fila en `perfiles`). Compruébalo con el paso 3.3. |
 | "Dar de alta un usuario" da error | La función `usuarios` no está desplegada (paso 6). |
