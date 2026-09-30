@@ -104,7 +104,7 @@ Objetivo: que el administrador reciba un aviso cuando algo baje de su mínimo, p
 - Se puede enviar un correo de prueba y una notificación push de prueba.
 - La guía de E-005 incluye cómo activar cada canal.
 
-### E-007 · Plantillas de entrega a técnicos · HECHO
+### E-007 · Plantillas de entrega a técnicos · HECHO (sustituido por E-011 por decisión del usuario)
 Objetivo: no añadir material a mano en cada entrega. Se elige una plantilla, se ajusta si hace falta y el técnico solo firma.
 
 **1. La plantilla (la crea y edita el administrador)**
@@ -209,9 +209,85 @@ Las imágenes de Saltoki Online tienen nombres internos que no corresponden con 
 - Las miniaturas cargan rápido en una lista de 200 artículos por datos móviles.
 - La foto se muestra también en el justificante PDF de entrega de E-007 (miniatura por línea) y en el informe de custodia para Esmove.
 
+### E-011 · Entregas libres con firma y copia por correo · PENDIENTE
+**Decisión del usuario:** las plantillas de E-007 **no son como las quiere**. No quiere nada predeterminado. Quiere un lugar donde **seleccionar los artículos** de cada entrega y que después **el técnico firme**. Este encargo sustituye el flujo de plantillas.
+
+**1. Quitar lo predeterminado**
+- **Qué sale de la interfaz:** la sección "Plantillas", el selector de plantilla y el "modo kit de furgoneta".
+- **Base de datos:** no se borran tablas con datos. Una migración nueva deja `plantillas_entrega` y `plantilla_lineas` sin uso y lo documenta. Se conservan del trabajo de E-007: la reserva de stock, la firma en pantalla grande, `confirmar_entrega` atómica, la huella y el PDF.
+
+**2. Nueva entrega en tres pasos (móvil primero, botones de 56 px)**
+1. **Para quién:** técnico o equipo (buscador) y, opcionalmente, la obra.
+2. **Qué se entrega (la cesta):**
+   - **Buscador** con foto, nombre, SKU y stock disponible, más filtros por categoría.
+   - **Escáner en modo continuo:** se escanean varios artículos seguidos y cada lectura suma a la cesta. Si se lee dos veces el mismo, suma cantidad.
+   - **Cada línea:** cantidad con − y +. Los cargadores piden su n.º de serie, que se puede escanear. En ropa y EPIs, la talla se elige en la propia línea; si la ficha del técnico tiene talla, aparece preseleccionada pero se puede cambiar.
+   - **Stock:** aviso en línea si no hay stock suficiente, sin dejar entregar más de lo disponible.
+   - **Cesta guardada:** si se cierra la app, la cesta en curso se conserva en el dispositivo.
+3. **Firma:** resumen en pantalla grande con fotos y cantidades. El técnico comprueba y firma con el dedo, y se confirma con "Firmar y recibir".
+
+Una cesta se puede guardar como **preparada**, con el stock reservado, para que el técnico firme más tarde.
+
+**3. Correo del técnico y copia de la entrega**
+- **Dato:** nuevo campo `email` en la ficha del técnico, opcional y validado.
+- **En la pantalla de firma** se muestra el correo al que irá la copia. Si falta o está mal, se puede escribir en ese momento y se guarda en la ficha. Esto lo puede hacer también el personal de almacén: es la única edición de la ficha que se le permite.
+- **Envío automático:** al confirmar la firma, la función `notificar` envía por Resend el **PDF del justificante firmado** como adjunto. El asunto es del tipo "Entrega de material n.º X · fecha" y el texto es breve. Hay opción de copia al administrador (configurable).
+- **Registro y reenvío:** cada envío queda en `envios_aviso` (enviado, error o reintentos). El historial de entregas muestra si llegó y tiene un botón "Reenviar copia".
+- **Resend:** para enviar a los técnicos hace falta un **dominio propio verificado**, porque con `onboarding@resend.dev` solo llega al correo del administrador. La guía (paso 8) debe decirlo claramente en este apartado. Sin dominio, la app avisa de que la copia no se ha podido enviar y ofrece descargar o compartir el PDF (compartir nativo del móvil, por WhatsApp o correo).
+
+**4. Hecho cuando**
+- Hay pruebas de: cesta con escaneo repetido que suma, talla editable, serie obligatoria en cargadores, reserva y su caducidad, confirmación atómica, y envío con reintento y registro.
+- En la interfaz no queda ninguna referencia a plantillas.
+
+### E-012 · Consumos de los cierres de instalación y stock en furgonetas · EN ESPERA
+**Petición del usuario:** cruzar la app con los **cierres de instalación** que los técnicos hacen en **otro proyecto**, para ir descontando el material que indican haber gastado. Así se lleva un control aproximado de lo que queda en cada furgoneta.
+
+**Falta información** (el chat la pedirá al usuario): qué sistema es el otro proyecto, dónde guarda los datos, cómo se identifica el material en un cierre (códigos o texto libre) y cómo se identifica al técnico o la furgoneta.
+
+**Diseño propuesto** (se ajustará cuando se conozca el otro proyecto):
+- **Stock a bordo por furgoneta:**
+  - suma las entregas firmadas (E-011) a ese equipo;
+  - resta los consumos de los cierres;
+  - suma o resta las devoluciones al almacén y los recuentos en furgoneta.
+- **Entrada de consumos** (una de estas vías, según el otro proyecto):
+  - **(a)** el otro proyecto llama a una función `registrar_consumo_cierre` con un token de integración propio, sin la clave de servicio;
+  - **(b)** importación de CSV o JSON;
+  - **(c)** la app lee periódicamente de la API o base de datos del otro proyecto.
+- **Idempotencia:** por `cierre_id`, de modo que un cierre enviado dos veces no descuenta dos veces.
+- **Emparejado del material:** por SKU o código de proveedor si el cierre los trae. Si no, se usa una tabla de equivalencias (texto del cierre → artículo) que el administrador mantiene. Las líneas sin emparejar van a "Pendientes de validar", sin descontar nada.
+- **Nunca por debajo de cero:** si un consumo deja la furgoneta en negativo, se registra igualmente y se marca como **discrepancia** (el técnico gastó algo que no constaba entregado), visible en un informe.
+- **Material en custodia de Esmove:** un cargador o cuadro consumido en un cierre se registra como **"Instalado en obra"**, con la obra y, en los cargadores, el n.º de serie, y aparece en el informe de custodia para Esmove.
+- **Informes:**
+  - stock teórico por furgoneta;
+  - consumo por obra, técnico y periodo;
+  - discrepancias;
+  - "recuento de furgoneta": el técnico cuenta, la app compara con lo teórico y el administrador valida los ajustes.
+- **Seguridad:** el token de integración solo puede registrar consumos. No lee precios ni datos personales y se puede revocar desde Configuración.
+
 ---
 
 ## Revisión del chat
+
+### 30/09/2026 · Revisión de E-009, E-010 y de la puesta en marcha
+Verificado desde el chat sobre `420c51d`:
+- `npm ci`, **148 pruebas en verde** (17 ficheros), `tsc -b` sin errores y `npm run build` correcto.
+- No hay contraseñas, claves ni cadenas de conexión en el repositorio.
+- E-010 aplicado:
+  - custodia con `price: null`;
+  - bloqueo del último administrador también en Auth;
+  - CORS por `ORIGEN_APP`.
+- E-009: bucket privado, lectura solo con sesión y sustitución solo para el administrador.
+
+Puesta en marcha del usuario, comprobada:
+- **GitHub Pages:** publica correctamente. La app carga, con sesión de administrador y el estado "Sincronizado".
+- **Custodia en la app:** Esmove aparece en unidades, fuera del valor del inventario.
+- **Copia de seguridad:** la ejecución manual n.º 2 terminó correctamente y la copia se hizo completa, sin el aviso "Copia desactivada". Bien resueltos el `ping()` y la contraseña con símbolos.
+
+Nuevo:
+- **E-011:** sustituye las plantillas por una cesta libre con firma y copia por correo al técnico.
+- **E-012:** en espera de información del otro proyecto.
+
+Orden: **E-011 → E-012** (cuando haya datos).
 
 ### 29/09/2026 · Revisión de E-002 a E-008
 Verificado desde el chat sobre `052e1cd`:
