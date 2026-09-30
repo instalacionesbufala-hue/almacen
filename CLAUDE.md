@@ -15,6 +15,14 @@ Este repositorio es el canal entre Claude (chat, arquitecto) y Claude Code (impl
 4. Haz commit con el mensaje `E-XXX: resumen` y push a `main`.
 5. No borres ni reescribas encargos del chat: solo cambia su estado.
 6. Si algo del encargo es ambiguo, elige lo razonable, anótalo como decisión y sigue.
+7. **Orden:** si la última revisión del chat en `PUENTE.md` indica un orden ("Orden: E-013 → E-015 → …"), sigue ese orden y no el de los ID.
+8. **Buzón alternativo del chat (cuando el chat no puede subir a GitHub).** El chat puede entregar sus cambios en un fichero **`PUENTE-chat.md`** que el usuario deja en la raíz del proyecto, o cuya ruta te indica (Descargas, una carpeta de Google Drive sincronizada…). Si lo encuentras al empezar, o el usuario te dice "integra el buzón":
+   - **Primera línea:** indica el commit sobre el que se escribió (`base: <sha>`).
+   - **Si `PUENTE.md` no ha cambiado desde ese commit:** sustitúyelo por el contenido del buzón, sin la primera línea.
+   - **Si ha cambiado:** integra solo las secciones nuevas o modificadas por el chat (encargos, "Revisión del chat" y decisiones del usuario), sin perder tus respuestas ni tus cambios de estado.
+   - **Ficheros de datos:** si el buzón trae adjuntos para `datos/` (por ejemplo, CSV), el usuario los dejará junto a `PUENTE-chat.md` con su nombre final; muévelos a `datos/`.
+   - **Después:** commit `Chat (buzón): <resumen>`, borra `PUENTE-chat.md` y sigue con los encargos.
+   - **Nunca se sube:** `PUENTE-chat.md` va en `.gitignore`; si no está, añádelo.
 
 ## Estado actual
 - `prototipo/index.html`: el prototipo original (un solo archivo). Se guarda solo como referencia para recuperar lógica; su diseño no se usa.
