@@ -336,8 +336,13 @@ Hoy hay 3 equipos (Búfala 1, 2 y 3), cada uno con 2 técnicos y 1 furgoneta. **
 - **Cierres (E-012):** el `equipo` del cierre se traduce al **vehículo asignado a ese equipo en la fecha del cierre** (`fechaCierreIso`), no al de hoy.
 - **Datos personales:** los nombres, códigos, teléfonos y matrículas reales **no van al repositorio**, que es público. El usuario los da de alta desde la app. La demostración y los fixtures usan datos inventados.
 
-**Borrado de la demostración (una sola vez)**
-- **Cómo:** función SQL `limpiar_demostracion()`, solo para el administrador, que se lanza desde Configuración con doble confirmación (escribir "BORRAR DEMO").
+**Borrado de la demostración (una sola vez). Es lo primero que se hace en E-013; el usuario lo ha pedido expresamente.**
+- **Botón visible:** en **Configuración**, en una zona "Datos" solo para el administrador, un botón rojo **"Borrar datos de ejemplo"**. Al pulsarlo:
+  - explica qué se borra y qué se conserva;
+  - pide escribir "BORRAR DEMO";
+  - al terminar, muestra "Datos de ejemplo borrados; ya puedes importar tu catálogo" y un acceso directo a **Importar catálogo (CSV)**.
+  - Una vez usado, el botón desaparece y en su lugar queda la fecha del borrado.
+- **Cómo:** llama a la función SQL `limpiar_demostracion()`, solo para el administrador.
 - **Qué borra:** productos, movimientos, entregas, albaranes, dotación, equipos, técnicos, avisos, pendientes, actas y fotos de la demostración.
 - **Qué conserva:** los usuarios, la configuración de avisos y el propietario Esmove.
 - **Protección del historial:** la función desactiva los triggers de bloqueo **solo dentro de su propia transacción**. Solo funciona mientras `config.modo_demo = true`, marca que la propia función pone a `false` al terminar.
@@ -370,9 +375,47 @@ Hoy hay 3 equipos (Búfala 1, 2 y 3), cada uno con 2 técnicos y 1 furgoneta. **
 - **Registro:** cada copia enviada (canal y fecha) queda en el historial de la entrega, con opción de reenviar.
 - **Hecho cuando:** hay pruebas del token (hash, revocación, un técnico no ve lo de otro) y de la construcción del enlace `wa.me` con teléfonos en varios formatos.
 
+### E-015 · Dar de alta artículos con la cámara del móvil · PENDIENTE (después de E-013)
+**Petición del usuario:** poder dar de alta materiales, herramientas, EPIs, ropa… **con la cámara del móvil**, sin teclear la ficha entera.
+
+**1. Dónde**
+- Botón grande **"Nuevo con la cámara"** (56 px) en **Inventario** y en **Dotación** (herramientas, EPIs y ropa), y en el menú rápido del móvil.
+
+**2. Flujo en tres toques**
+1. **Leer el código** (si lo tiene): se escanea el código de barras, el EAN o el código de la etiqueta de Saltoki.
+   - **Si ya existe** (por SKU, EAN o `supplierRef`), se abre esa ficha en lugar de crear un duplicado, y se ofrece "Registrar entrada".
+   - **Si no existe**, el código queda precargado.
+2. **Foto del producto o de su etiqueta:** la función de servidor `leer-articulo`, con el mismo proveedor de IA que `leer-albaran` (Gemini) y la clave solo en el servidor, extrae y **propone**:
+   - nombre, marca, modelo o referencia del fabricante y EAN;
+   - **categoría** sugerida;
+   - **unidad y contenido**, detectados del envase ("bote 1000 ud", "bolsa 100", "rollo 100 m");
+   - en herramientas, tipo, marca y modelo.
+   - **Si la IA no está disponible** o falla, la ficha se rellena a mano con la foto ya puesta.
+3. **Revisar y guardar:** formulario precargado y corregible.
+   - **Campos:** categoría, propiedad (propia o custodia de Esmove), unidad y contenido, **stock inicial en el almacén**, y mínimo (solo el administrador).
+   - **Foto:** la foto tomada queda como **foto del artículo** (E-009: WebP comprimido y miniatura, en el bucket privado).
+   - **Guardar varios seguidos:** botón "Guardar y añadir otro".
+
+**3. Reglas**
+- **Permisos (E-004):** el administrador crea el artículo directamente. El personal de almacén lo crea como **borrador**, que el administrador completa o aprueba desde su bandeja.
+- **Stock inicial:** entra como movimiento "Alta de artículo" en el almacén, nunca como edición directa.
+- **Duplicados:** antes de guardar, la app busca parecidos por nombre y avisa: "¿Es alguno de estos?".
+- **Sin cobertura:** la foto y la ficha se guardan en la cola y se suben después. La lectura con IA se hace al volver la conexión, y mientras tanto se deja rellenar a mano.
+- **Privacidad:** son fotos de producto, no de personas. Se mantiene el aviso del nivel gratuito de Gemini.
+
+**4. Hecho cuando**
+- Hay pruebas de: detección de duplicado por código, borrador para el rol almacén, propuesta de la IA con unidad y contenido, alta sin IA, y foto guardada como foto del artículo.
+- En el móvil, un alta completa lleva menos de un minuto.
+
 ---
 
 ## Revisión del chat
+
+### 30/09/2026 · Chat: botón de borrar ejemplos, fotos de Saltoki y alta con cámara
+- **E-013:** el botón **"Borrar datos de ejemplo"** en Configuración queda explícito y es lo primero que se hace.
+- **E-015 (nuevo):** alta de artículos y dotación con la cámara.
+- **Fotos de Saltoki:** las descarga el chat desde la sesión del usuario en Saltoki Online, con nombre `<código>.webp`, para el importador por lote de E-009. Code no tiene que hacer nada.
+- **Orden: E-013 → E-015 → E-014 → E-012.**
 
 ### 30/09/2026 · Revisión de E-011 y nuevos encargos
 Verificado desde el chat sobre `aeb4e8a`:
