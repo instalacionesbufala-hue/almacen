@@ -189,9 +189,10 @@ Después, cada canal se configura en la app, en **Configuración → Avisos**, d
   npx.cmd supabase secrets set RESEND_API_KEY=re_...
   ```
 - [ ] 8.3. **Remitente.** Tienes dos opciones:
+  > El remitente **no puede ser un Gmail** (ni Hotmail u otro correo gratuito): Resend solo envía desde `onboarding@resend.dev` o desde un dominio tuyo verificado.
   - **Sin dominio propio:** usa `Almacén <onboarding@resend.dev>`. Solo llega **a tu propio correo**, el de la cuenta de Resend.
   - **Con dominio propio:** para enviar a otros (por ejemplo, a Esmove), en Resend → **Domains** → **Add domain**. Añade en tu proveedor de dominio los registros DNS que te indica y usa `Almacén <avisos@tudominio.es>`.
-- [ ] 8.4. En la app, en **Configuración → Avisos → Correo**: activa el canal y rellena el remitente y los destinatarios. Pulsa **Guardar configuración de avisos** y luego **Enviar prueba**.
+- [ ] 8.4. En la app, en **Configuración → Avisos → Correo**: activa el canal y rellena el remitente y los destinatarios. Pulsa **Guardar configuración de avisos** y luego **Enviar prueba** (desde esta versión, Enviar prueba guarda antes los cambios). Si falta la clave del paso 8.2, el Registro de envíos lo dirá.
 
 ### Notificaciones push en el móvil
 - [ ] 8.5. Genera el par de claves de push en la terminal:

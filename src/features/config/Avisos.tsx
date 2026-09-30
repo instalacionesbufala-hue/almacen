@@ -22,6 +22,8 @@ export function ConfigAvisosPanel() {
   const guardar = () => { if (ejecutar({ op: 'configAvisos', args: { ...c, correoDestinatarios: dest.split(/[,;\s]+/).filter(Boolean) } })) toast('Configuración de avisos guardada.', 'ok'); };
   const probar = async (canal: 'correo' | 'push' | 'telegram') => {
     if (!modoNube) return toast('En la demostración no se envían mensajes reales: conecta Supabase (guía de puesta en marcha).', 'warn', 6000);
+    // la prueba usa la configuración guardada: si hay cambios sin guardar, se guardan antes (van en orden en la cola)
+    if (cambiado && !ejecutar({ op: 'configAvisos', args: { ...c, correoDestinatarios: dest.split(/[,;s]+/).filter(Boolean) } })) return;
     if (!ejecutar({ op: 'envio', args: { canal, tipo: 'prueba', asunto: 'Prueba de avisos del almacén', cuerpo: 'Si lees esto, el canal funciona.', destinatarios: [] } })) return;
     const e = await procesarAhora(); e ? toast(e, 'err', 7000) : toast('Prueba enviada. Mira el registro de envíos.', 'ok');
   };
