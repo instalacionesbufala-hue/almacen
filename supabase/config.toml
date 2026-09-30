@@ -17,3 +17,7 @@ enable_signup = false
 # la cabecera x-clave-cron o que quien llama es administrador, así que la pasarela no debe exigir JWT.
 [functions.notificar]
 verify_jwt = false
+
+# E-014: el portal del técnico se abre sin sesión (enlace personal); la función valida el token ella misma.
+[functions.portal-tecnico]
+verify_jwt = false

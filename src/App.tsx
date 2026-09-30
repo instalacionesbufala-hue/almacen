@@ -16,6 +16,16 @@ import CustodiaView from './features/custodia/CustodiaView';
 import Acceso from './features/shell/Acceso';
 import { modoNube } from './store/nube/cliente';
 import { sesion } from './store/nube/sync';
+import { lazy, Suspense, useEffect, useState } from 'react';
+import { tokenDeRuta } from './domain/portal';
+
+// E-014: el portal del técnico es una página aparte (sin sesión) que solo se carga si se abre su enlace
+const PortalTecnico = lazy(() => import('./features/portal/PortalTecnico'));
+function useTokenPortal() {
+  const [t, setT] = useState(() => tokenDeRuta(location.hash));
+  useEffect(() => { const f = () => setT(tokenDeRuta(location.hash)); addEventListener('hashchange', f); return () => removeEventListener('hashchange', f); }, []);
+  return t;
+}
 
 const PANTALLAS: Record<Vista, ComponentType> = {
   stock: StockView, albaranes: AlbaranesView, equipos: EquiposView, entregas: EntregasView,
@@ -23,7 +33,8 @@ const PANTALLAS: Record<Vista, ComponentType> = {
 };
 
 export default function App() {
-  const vista = useVista(), Pantalla = PANTALLAS[vista], s = sesion.use();
+  const vista = useVista(), Pantalla = PANTALLAS[vista], s = sesion.use(), portal = useTokenPortal();
+  if (portal) return <Suspense fallback={null}><PortalTecnico token={portal} /></Suspense>;
   if (modoNube && s.estado !== 'lista') return <><Acceso /><Toasts /></>;
   return (<>
     <Sidebar vista={vista} />

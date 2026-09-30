@@ -1,6 +1,6 @@
 /* E-011 · Piezas de la entrega: panel de firma en pantalla grande (con el correo de la copia), entregas preparadas,
    albarán con el estado de la copia por correo, tallas del técnico e informe de entregas. Sin plantillas. */
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { Entrega, LineaEntrega, Tallas, TipoTalla } from '../../data/tipos';
 import { MARCA } from '../../data/catalogo';
 import { find, nombreVehiculo, numEntrega, qtyTxt } from '../../domain/reglas';
@@ -10,6 +10,7 @@ import { descargarCsv } from '../../domain/csv';
 import { emailValido, NOMBRE_TALLA } from '../../domain/entregas';
 import { estadoCopia } from '../../../supabase/functions/_compartido/envios';
 import { ejecutar, guardar, S, useAlmacen } from '../../store/almacen';
+import { nuevoId } from '../../store/ops';
 import { modoNube } from '../../store/nube/cliente';
 import { procesarAhora } from '../../store/nube/avisos';
 import { closeModal, openModal, SheetFoot, SheetHead } from '../../ui/modal';
@@ -18,21 +19,26 @@ import { Firma, firmaPNG, type Trazo } from '../../ui/firma';
 import { BTN_P, BTN_S, Campo, FirmaImg, Icon, INP, LBL, Vacio } from '../../ui/base';
 import { FotoLinea } from '../../ui/foto';
 import { compartirJustificante, descargarJustificante } from './justificante';
+import { enlaceWhatsApp, normalizarTelefono, textoWhatsApp } from '../../domain/whatsapp';
+import { enlacePortal, generarToken, hashToken } from '../../domain/portal';
 
 /** Sin dominio propio verificado en Resend, la copia solo llega al correo del administrador */
 export const sinDominioResend = (remitente: string) => !remitente.trim() || /resend\.dev/i.test(remitente);
 
 /* ---------- Panel de firma: resumen grande con fotos, correo de la copia y firma con el dedo ---------- */
-export function PanelFirma({ lineas, receptor, obra, onFirmar, enPagina, extra }: { lineas: LineaEntrega[]; receptor: string; obra?: string; onFirmar: (firma: string, email: string) => Promise<boolean>; enPagina?: boolean; extra?: ReactNode }) {
+export function PanelFirma({ lineas, receptor, obra, onFirmar, enPagina, extra }: { lineas: LineaEntrega[]; receptor: string; obra?: string; onFirmar: (firma: string, email: string, telefono: string) => Promise<boolean>; enPagina?: boolean; extra?: ReactNode }) {
   const E = useAlmacen(), t = E.tecnicos.find(x => x.id === receptor);
   const [firma, setFirma] = useState<Trazo[]>([]);
   const [email, setEmail] = useState(t?.email || '');
+  const [telefono, setTelefono] = useState(t?.telefono || '');
   const [ocupado, setOcupado] = useState(false);
   const malo = !!email.trim() && !emailValido(email);
+  const telMalo = !!telefono.trim() && !normalizarTelefono(telefono);
   const firmar = async () => {
     if (malo) return toast('El correo no es válido: corrígelo o déjalo vacío.', 'err');
+    if (telMalo) return toast('El teléfono no es válido: 9 cifras o con el prefijo del país (+34 600 000 000).', 'err');
     setOcupado(true);
-    try { if (await onFirmar(firmaPNG(firma), email.trim().toLowerCase())) setFirma([]); } finally { setOcupado(false); }
+    try { if (await onFirmar(firmaPNG(firma), email.trim().toLowerCase(), telefono.trim() ? normalizarTelefono(telefono)! : '')) setFirma([]); } finally { setOcupado(false); }
   };
   return (<>
     <div className="p-4 lg:p-5 flex flex-col gap-4">
@@ -44,7 +50,12 @@ export function PanelFirma({ lineas, receptor, obra, onFirmar, enPagina, extra }
             {p?.talla ? <span className="block text-body-sm text-secondary">Talla {p.talla}</span> : null}</span>
           <b className="text-headline-sm whitespace-nowrap">{h ? '1 ud' : p ? qtyTxt(p, l.qty) : num(l.qty)}</b></li>); })}</ul>
       {obra && <p className="text-body-sm">Obra: <b>{obra}</b></p>}
-      <Campo label={`Copia por correo a ${t?.nombre || 'el técnico'}`}>
+      <Campo label={`WhatsApp de ${t?.nombre || 'el técnico'} (para enviarle la copia y su enlace)`}>
+        <input value={telefono} onChange={e => setTelefono(e.target.value)} type="tel" inputMode="tel" autoComplete="off" placeholder="600 000 000"
+          className={`${INP} h-14 ${telMalo ? 'ring-2 ring-error' : ''}`} />
+      </Campo>
+      {telMalo ? <p className="text-body-sm text-error -mt-2">Teléfono no válido.</p> : telefono.trim() && normalizarTelefono(telefono) !== (t?.telefono || null) ? <p className="text-body-sm text-secondary -mt-2">Se guardará en su ficha.</p> : null}
+      <Campo label={`Copia por correo a ${t?.nombre || 'el técnico'} (opcional)`}>
         <input value={email} onChange={e => setEmail(e.target.value)} type="email" inputMode="email" autoComplete="off" placeholder="correo@ejemplo.es (opcional)"
           className={`${INP} h-14 ${malo ? 'ring-2 ring-error' : ''}`} />
       </Campo>
@@ -63,9 +74,10 @@ export function PanelFirma({ lineas, receptor, obra, onFirmar, enPagina, extra }
 }
 
 /** Después de firmar: correo nuevo a la ficha (va antes en la cola), confirmación y, en la nube, envío inmediato de la copia */
-export async function confirmarFirma(id: string, firma: string, email: string, receptor: string): Promise<boolean> {
+export async function confirmarFirma(id: string, firma: string, email: string, receptor: string, telefono = ''): Promise<boolean> {
   const t = S().tecnicos.find(x => x.id === receptor);
   if (email !== (t?.email || '') && !ejecutar({ op: 'emailTecnico', args: { tecnico: receptor, email } })) return false;
+  if (telefono && telefono !== (t?.telefono || '') && !ejecutar({ op: 'telefonoTecnico', args: { tecnico: receptor, telefono } })) return false;
   if (!ejecutar({ op: 'confirmarEntrega', args: { id, firma } })) return false;
   if (!modoNube) { const x = S().entregas.find(y => y.id === id)!; x.hash = await hashEntrega(x); guardar(); }
   // el administrador puede lanzar el envío al momento; si no, la tarea programada lo envía en menos de un minuto
@@ -81,8 +93,8 @@ function FirmaPreparada({ id }: { id: string }) {
   const t = E.tecnicos.find(x => x.id === e.receptor);
   return (<>
     <SheetHead title={`Entrega para ${t?.nombre}`} sub={`${numEntrega(e)} · ${E.equipos.find(q => q.id === e.equipo)?.nombre || ''}`} />
-    <PanelFirma lineas={e.lineas} receptor={e.receptor} obra={e.obra} onFirmar={async (firma, email) => {
-      if (!(await confirmarFirma(id, firma, email, e.receptor))) return false;
+    <PanelFirma lineas={e.lineas} receptor={e.receptor} obra={e.obra} onFirmar={async (firma, email, telefono) => {
+      if (!(await confirmarFirma(id, firma, email, e.receptor, telefono))) return false;
       closeModal(); toast(`Entrega firmada por ${t?.nombre}. Stock descontado.`, 'ok', 6000); abrirRecibo(id);
       return true;
     }} />
@@ -147,14 +159,61 @@ function Recibo({ id }: { id: string }) {
       {e.obra && <p className="text-body-sm">Obra: <b>{e.obra}</b></p>}
       <p className="text-body-sm text-secondary">Aceptación de la entrega por el receptor. Registrado por {e.operator}.</p>
     </div>
+    {firmada && <CopiaWhatsApp e={e} />}
     {firmada && <CopiaCorreo e={e} email={email} setEmail={setEmail} />}
+    {firmada && <HistorialCopias e={e} />}
     <SheetFoot className="flex flex-wrap gap-2">
       <button onClick={closeModal} className={`${BTN_S} h-14 px-5`}>Cerrar</button>
-      <button onClick={() => void compartirJustificante(e)} className={`${BTN_S} h-14 px-4`}><Icon n="share" className="ico-20" />Compartir PDF</button>
+      <button onClick={() => void compartirJustificante(e).then(ok => { if (ok && firmada) ejecutar({ op: 'copiaEntrega', args: { id: nuevoId(), entrega: e.id, canal: 'compartir', destino: '' } }); })} className={`${BTN_S} h-14 px-4`}><Icon n="share" className="ico-20" />Compartir PDF</button>
       <button onClick={() => void descargarJustificante(e)} className={`${BTN_S} h-14 px-4`}><Icon n="download" className="ico-20" />Descargar PDF</button>
       <button onClick={() => print()} className={`${BTN_P} h-14 flex-1`}><Icon n="print" className="ico-20" />Imprimir</button>
     </SheetFoot>
   </>);
+}
+
+/* ---------- E-014 · Copia por WhatsApp con el enlace a su portal ---------- */
+function CopiaWhatsApp({ e }: { e: Entrega }) {
+  const E = useAlmacen(), t = E.tecnicos.find(x => x.id === e.receptor);
+  const [tel, setTel] = useState(t?.telefono || '');
+  // el token se prepara al abrir el albarán para que el botón abra WhatsApp en el mismo toque (los móviles bloquean las ventanas abiertas tarde)
+  const [enlace, setEnlace] = useState<{ token: string; hash: string } | null>(null);
+  useEffect(() => { let vivo = true; const token = generarToken(); void hashToken(token).then(hash => { if (vivo) setEnlace({ token, hash }); }); return () => { vivo = false; }; }, []);
+  const n = normalizarTelefono(tel), enviadas = E.copias.filter(c => c.entrega === e.id && c.canal === 'whatsapp').length;
+  const enviar = () => {
+    if (!n) return toast('Escribe el teléfono del técnico: 9 cifras o con el prefijo del país.', 'err');
+    if (!enlace || !t) return;
+    const url = enlaceWhatsApp(n, textoWhatsApp({ nombre: t.nombre, numero: numEntrega(e), fecha: e.ts, lineas: e.lineas.length, enlace: enlacePortal(enlace.token) }))!;
+    window.open(url, '_blank', 'noopener');
+    if (n !== (t.telefono || '')) ejecutar({ op: 'telefonoTecnico', args: { tecnico: t.id, telefono: n } });
+    ejecutar({ op: 'enlacePortal', args: { tecnico: t.id, hash: enlace.hash, entrega: e.id } });
+    ejecutar({ op: 'copiaEntrega', args: { id: nuevoId(), entrega: e.id, canal: 'whatsapp', destino: n } });
+    const token = generarToken(); void hashToken(token).then(hash => setEnlace({ token, hash }));   // el siguiente envío lleva otro enlace
+  };
+  return (
+    <div className="mx-5 mb-3 rounded-xl p-3 flex flex-col gap-2 bg-[#e7f8ee]">
+      <div className="flex flex-wrap gap-2">
+        <input value={tel} onChange={x => setTel(x.target.value)} type="tel" inputMode="tel" placeholder="Teléfono del técnico" aria-label="Teléfono para WhatsApp"
+          className={`${INP} h-14 flex-1 min-w-[180px] ${tel.trim() && !n ? 'ring-2 ring-error' : ''}`} />
+        <button onClick={enviar} disabled={!enlace} className="h-14 px-5 rounded-xl bg-[#128c3e] hover:bg-[#0f7a36] text-white font-semibold inline-flex items-center gap-2 disabled:opacity-50">
+          <Icon n="chat" className="ico-fill" />{enviadas ? 'Reenviar por WhatsApp' : 'Enviar por WhatsApp'}</button>
+      </div>
+      <p className="text-body-sm text-secondary">Le llega un mensaje breve con el enlace a <b>su portal</b>: sus entregas, el PDF firmado y lo que lleva su vehículo. Sin usuario ni contraseña; el administrador puede revocar sus enlaces desde su ficha.</p>
+    </div>
+  );
+}
+
+function HistorialCopias({ e }: { e: Entrega }) {
+  const E = useAlmacen();
+  const filas = [
+    ...E.copias.filter(c => c.entrega === e.id).map(c => ({ ts: c.ts, icon: c.canal === 'whatsapp' ? 'chat' : 'share', txt: `${c.canal === 'whatsapp' ? 'WhatsApp' : 'PDF compartido'}${c.destino ? ` · ${c.destino}` : ''}`, quien: c.operator })),
+    ...E.envios.filter(x => x.entrega === e.id).map(x => ({ ts: x.ts, icon: 'mail', txt: `Correo · ${(x.destinatarios || []).join(', ')} · ${x.estado === 'enviado' ? 'enviado' : x.estado === 'descartado' ? 'sustituido por un reenvío' : x.estado === 'pendiente' ? 'pendiente' : 'no enviado'}`, quien: '' })),
+  ].sort((a, b) => b.ts - a.ts);
+  if (!filas.length) return null;
+  return (
+    <div className="mx-5 mb-3"><div className={`${LBL} mb-1`}>Copias enviadas</div>
+      {filas.map((f, i) => <div key={i} className="flex items-center gap-2 py-1.5 border-b border-surface-container text-body-sm"><Icon n={f.icon} className="ico-18 text-secondary" /><span className="flex-1 min-w-0 truncate">{f.txt}</span><span className="text-secondary whitespace-nowrap">{fechaHora(f.ts)}{f.quien ? ` · ${f.quien}` : ''}</span></div>)}
+    </div>
+  );
 }
 
 function CopiaCorreo({ e, email, setEmail }: { e: Entrega; email: string; setEmail: (v: string) => void }) {

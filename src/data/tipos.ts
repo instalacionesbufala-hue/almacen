@@ -146,6 +146,10 @@ export interface Asignacion { tipo: 'tecnico' | 'vehiculo'; sujeto: string; equi
 /** Stock a bordo de un vehículo, en UNIDADES de contenido (puede ser negativo: discrepancia) */
 export interface StockVehiculo { vehiculo: string; sku: string; unidades: number }
 
+/** E-014: enlace personal del portal del técnico. Solo se guarda el hash del token. */
+export interface EnlacePortal { tecnico: string; entrega?: string; creado: number; creadoPor: string; revocado?: number; hash?: string }
+export interface CopiaEntrega { id: string; entrega: string; canal: 'whatsapp' | 'compartir' | 'correo'; destino: string; ts: number; operator: string }
+
 export interface LineaEntrega {
   sku: string;
   qty: number;
@@ -248,6 +252,9 @@ export interface Estado {
   asignaciones: Asignacion[];
   aBordo: StockVehiculo[];
   configApp: { modoDemo: boolean; demoBorrada?: number; demoBorradaPor?: string };
+  /** E-014: enlaces del portal del técnico (en la nube no se lee el hash) y copias enviadas por WhatsApp o compartiendo el PDF */
+  portalEnlaces: EnlacePortal[];
+  copias: CopiaEntrega[];
   actas: ActaCustodia[];
   /** E-011: entrega en curso (se conserva en el dispositivo si se cierra la app) */
   cesta: Cesta;

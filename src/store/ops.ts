@@ -8,6 +8,7 @@ import { emailValido, herramientasLibres } from '../domain/entregas';
 import { redondea } from '../domain/formato';
 import { asignarHerramienta, registrarIncidencia } from '../domain/herramientas';
 import { fotoDe, grupoFoto } from '../domain/fotos';
+import { normalizarTelefono } from '../domain/whatsapp';
 
 export interface OpMovimiento { id: string; sku: string; tipo: TipoMov; qty: number; motivo: string; ref: string; series: string[]; equipo?: string; vehiculo?: string }
 export interface OpAlbaran { id: string; cabecera: { numero: string; proveedor: string; cif: string; fecha: string; confianza: number; modo: 'ia' | 'sim' }; lineas: { sku: string; cantidad: number; series: string[] }[] }
@@ -55,6 +56,10 @@ export type Op =
   | { op: 'emailTecnico'; args: { tecnico: string; email: string } }
   | { op: 'reenviarCopia'; args: { entrega: string; email?: string } }
   | { op: 'tallas'; args: { tecnico: string; tallas: Tallas } }
+  | { op: 'telefonoTecnico'; args: { tecnico: string; telefono: string } }
+  | { op: 'enlacePortal'; args: { tecnico: string; hash: string; entrega?: string } }
+  | { op: 'revocarPortal'; args: { tecnico: string } }
+  | { op: 'copiaEntrega'; args: { id: string; entrega: string; canal: 'whatsapp' | 'compartir'; destino: string } }
   | { op: 'foto'; args: { sku: string; foto: string; mini: string; origen: OrigenFoto } }
   | { op: 'quitarFoto'; args: { sku: string } }
   | { op: 'acta'; args: { id: string; propietario: string; representante: string; firma: string; lineas: { sku: string; contado: number }[] } };
@@ -220,13 +225,51 @@ export const OPS: Defs = {
     rpc: a => ['marcar_merma_vista', { p_pendiente: a.id }],
     desc: () => 'Merma vista',
   },
+  telefonoTecnico: {
+    // E-014: como el correo, cualquier usuario activo lo puede escribir (desde la pantalla de firma); se guarda en formato +34…
+    local: (S, a) => {
+      const t = S.tecnicos.find(x => x.id === a.tecnico); if (!t) throw new Error('Técnico no encontrado');
+      const n = a.telefono.trim() ? normalizarTelefono(a.telefono) : '';
+      if (n === null) throw new Error('Teléfono no válido: escríbelo con 9 cifras o con el prefijo del país (+34 600 000 000)');
+      t.telefono = n || undefined;
+    },
+    rpc: a => ['guardar_telefono_tecnico', { p_tecnico: a.tecnico, p_telefono: a.telefono.trim() ? normalizarTelefono(a.telefono) : '' }],
+    desc: (S, a) => `Teléfono de ${S.tecnicos.find(t => t.id === a.tecnico)?.nombre || a.tecnico}`,
+  },
+  enlacePortal: {
+    // E-014: el token lo genera este dispositivo; solo viaja y se guarda su hash
+    local: (S, a) => {
+      if (!/^[0-9a-f]{64}$/.test(a.hash)) throw new Error('Enlace no válido');
+      if (!S.tecnicos.some(t => t.id === a.tecnico)) throw new Error('Técnico no encontrado');
+      if (!S.portalEnlaces.some(e => e.hash === a.hash)) S.portalEnlaces.push({ tecnico: a.tecnico, entrega: a.entrega, creado: Date.now(), creadoPor: S.operator, hash: a.hash });
+    },
+    rpc: a => ['crear_enlace_portal', { p_tecnico: a.tecnico, p_hash: a.hash, p_entrega: a.entrega && /^[0-9a-f-]{36}$/.test(a.entrega) ? a.entrega : null }],
+    desc: (S, a) => `Enlace del portal para ${S.tecnicos.find(t => t.id === a.tecnico)?.nombre || a.tecnico}`,
+  },
+  revocarPortal: {
+    local: (S, a) => {
+      if (S.rol !== 'admin') throw new Error('Solo el administrador revoca los enlaces del portal');
+      for (const e of S.portalEnlaces) if (e.tecnico === a.tecnico && !e.revocado) e.revocado = Date.now();
+    },
+    rpc: a => ['revocar_enlaces_portal', { p_tecnico: a.tecnico }],
+    desc: (S, a) => `Revocar los enlaces de ${S.tecnicos.find(t => t.id === a.tecnico)?.nombre || a.tecnico}`,
+  },
+  copiaEntrega: {
+    local: (S, a) => {
+      const e = S.entregas.find(x => x.id === a.entrega);
+      if (!e || (e.estado ?? 'firmada') !== 'firmada') throw new Error('Solo se envían copias de entregas firmadas');
+      if (!S.copias.some(c => c.id === a.id)) S.copias.unshift({ id: a.id, entrega: a.entrega, canal: a.canal, destino: a.destino, ts: Date.now(), operator: S.operator });
+    },
+    rpc: a => ['registrar_copia_entrega', { p_id: a.id, p_entrega: a.entrega, p_canal: a.canal, p_destino: a.destino }],
+    desc: (_S, a) => `Copia por ${a.canal === 'whatsapp' ? 'WhatsApp' : 'PDF compartido'}`,
+  },
   limpiarDemo: {
     // E-013: una sola vez. Conserva los usuarios, la configuración de avisos y el propietario Esmove.
     local: S => {
       if (S.rol !== 'admin') throw new Error('Solo el administrador puede borrar los datos de ejemplo');
       if (!S.configApp.modoDemo) throw new Error('Los datos de ejemplo ya se borraron');
       Object.assign(S, { products: [], movements: [], albaranes: [], equipos: [], tecnicos: [], entregas: [], herramientas: [], pendientes: [], avisos: [], minimosHerramienta: [],
-        envios: [], actas: [], vehiculos: [], asignaciones: [], aBordo: [], pedidos: {}, cesta: { equipo: '', receptor: null, lineas: [], obra: '', paso: 1 }, seq: { ent: 0 } });
+        envios: [], actas: [], vehiculos: [], asignaciones: [], aBordo: [], portalEnlaces: [], copias: [], pedidos: {}, cesta: { equipo: '', receptor: null, lineas: [], obra: '', paso: 1 }, seq: { ent: 0 } });
       S.configApp = { modoDemo: false, demoBorrada: Date.now(), demoBorradaPor: S.operator };
     },
     rpc: () => ['limpiar_demostracion', {}],

@@ -106,7 +106,7 @@ Las variables `VITE_ALBARANES_URL` (paso 7) y `VITE_VAPID_PUBLICA` (paso 8) se a
 
 ## 6. Desplegar las funciones de servidor
 
-Son cuatro pequeños programas que se ejecutan en Supabase, donde las claves no están a la vista:
+Son cinco pequeños programas que se ejecutan en Supabase, donde las claves no están a la vista:
 
 | Función | Para qué sirve |
 |---|---|
@@ -114,6 +114,7 @@ Son cuatro pequeños programas que se ejecutan en Supabase, donde las claves no 
 | `notificar` | Enviar los avisos por correo, push y Telegram |
 | `leer-albaran` | Leer los albaranes con IA (Gemini) |
 | `leer-articulo` | Proponer la ficha de un artículo nuevo a partir de su foto ("Nuevo con la cámara", misma IA) |
+| `portal-tecnico` | Página de cada técnico con sus entregas y lo que lleva su vehículo (se abre con su enlace de WhatsApp, sin contraseña) |
 
 - [ ] 6.1. En la terminal de la carpeta `almacen` (con la sesión del paso 2.1):
   ```bash
@@ -128,7 +129,10 @@ Son cuatro pequeños programas que se ejecutan en Supabase, donde las claves no 
   ```bash
   npx.cmd supabase functions deploy leer-articulo
   ```
-  Cada comando termina con *Deployed Functions*. Compruébalo en Supabase → **Edge Functions**: deben aparecer las cuatro.
+  ```bash
+  npx.cmd supabase functions deploy portal-tecnico
+  ```
+  Cada comando termina con *Deployed Functions*. Compruébalo en Supabase → **Edge Functions**: deben aparecer las cinco.
 - [ ] 6.2. Di a las funciones desde qué web se les puede llamar (así ninguna otra página puede usarlas con tu sesión). Es la dirección de la app del paso 5, **sin la ruta final**:
   ```bash
   npx.cmd supabase secrets set ORIGEN_APP=https://instalacionesbufala-hue.github.io
@@ -297,6 +301,13 @@ La app deja de usar precios: solo cuenta material. El stock está en el **almac�
 - [ ] 12.5. **Completa los mínimos**: el botón **Completar mínimo (N)** abre la lista de los artículos importados sin mínimo. Escribe el mínimo de cada uno (en su formato: cajas, botes, metros…) y **Guarda**. Mientras un artículo no tenga mínimo, no genera avisos de reposición.
 - [ ] 12.6. **Da de alta los equipos, vehículos y técnicos reales** en **Equipos y técnicos**: primero los vehículos (matrícula), luego los equipos (con el nombre tal como lo envía el wizard, p. ej. *Búfala 1*) y asígnales su vehículo; por último los técnicos, con su código y teléfono. Cada cambio de equipo queda en el **historial**.
 - [ ] 12.7. **Carga los vehículos**: si un vehículo ya lleva material, regístralo como **Traspaso** al vehículo desde la ficha del artículo (o con una entrega firmada). Así el total (almacén + vehículos) cuadra desde el primer día.
+
+## 13. Copia por WhatsApp y portal del técnico (E-014)
+
+- [ ] 13.1. En **Equipos y técnicos → Técnicos**, pon el **teléfono** de cada técnico (o escríbelo en la pantalla de firma: se guarda solo).
+- [ ] 13.2. Tras firmar una entrega, en el albarán pulsa **Enviar por WhatsApp**. Se abre WhatsApp con un mensaje breve y un **enlace personal** al portal del técnico: sus entregas firmadas (con el PDF) y el material que lleva su vehículo. Sin usuario ni contraseña.
+- [ ] 13.3. Cada envío (WhatsApp, PDF compartido o correo) queda en **Copias enviadas** del albarán, con fecha y quién lo mandó.
+- [ ] 13.4. Si un técnico pierde el móvil o deja la empresa: su fila → **Portal** → **Revocar todos**. Sus enlaces dejan de funcionar al momento. **Revocar y generar nuevo** crea otro y lo puedes enviar por WhatsApp desde ahí.
 
 ---
 

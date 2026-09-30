@@ -363,7 +363,7 @@ Hoy hay 3 equipos (Búfala 1, 2 y 3), cada uno con 2 técnicos y 1 furgoneta. **
 - Hay pruebas de: no aparece ningún importe; traspaso almacén → vehículo que no cambia el stock total; historial de asignaciones (técnico que cambia de equipo, vehículo que cambia de equipo con su stock, cierre con fecha anterior a un cambio); formatos enteros en el almacén; cargador sin serie; borrado de la demostración una sola vez; importación idempotente.
 - La guía tiene el paso "Pasar a datos reales".
 
-### E-014 · Portal del técnico y copia por WhatsApp · PENDIENTE
+### E-014 · Portal del técnico y copia por WhatsApp · HECHO
 **Decisión del usuario:** los técnicos usan Gmail, pero se prefiere **WhatsApp**. Lo importante es que el técnico **tenga un sitio donde ver sus entregas**. E-011 ya permite compartir el PDF desde el móvil; falta lo siguiente.
 - **Portal del técnico (solo lectura):** página `#/tecnico/<token>` de la propia app, sin usuario ni contraseña. Se abre con un **enlace personal y privado**: token aleatorio largo, del que solo se guarda el hash. El administrador lo revoca y regenera desde la ficha del técnico.
   - **Qué muestra:** sus entregas firmadas, con fecha, líneas, fotos y PDF, y el **material que tiene su vehículo** (E-013/E-012).
@@ -978,3 +978,54 @@ Cubren también el formato de cantidades, las respuestas envueltas en ```json y 
 - Las herramientas no guardan la foto en su ficha: la dotación no tiene campo de foto y E-009 las muestra con la del catálogo por modelo. Si se quiere, es una columna más.
 - El almacén no fija el mínimo; lo completa el administrador al aprobar (tarea "Completar mínimo").
 - **Corrección pendiente de E-013:** el prompt de `leer-albaran` seguía pidiendo multiplicar cajas por unidades y extraer series. Ahora pide la cantidad en el formato del catálogo (1000 tacos de una "caja de 100" son 10 cajas), con el contenido en la lista, y sin series.
+
+### 30/09/2026 · E-014 · HECHO
+**Enlace personal (solo el hash)**
+- El token (32 bytes aleatorios, 43 caracteres) lo genera **el dispositivo que envía** la copia; al servidor solo le llega su SHA-256 (tabla `portal_enlaces`, sin columna de token).
+- **Decisión:** cada envío por WhatsApp lleva **un enlace nuevo** del mismo técnico. Como solo se guarda el hash, un enlace no se puede recuperar para reenviarlo. Así además funciona sin cobertura (`crear_enlace_portal` va por la cola).
+- **Revocar:** el administrador, desde la fila del técnico → **Portal**, revoca **todos** sus enlaces de una vez (`revocar_enlaces_portal`, con auditoría), o revoca y genera uno nuevo (se muestra una sola vez, con Copiar y Enviar por WhatsApp).
+- Un técnico dado de baja no ve nada.
+
+**Portal** (`#/tecnico/<token>`, `src/features/portal/PortalTecnico.tsx`)
+- Página aparte, sin sesión y de solo lectura, que se carga solo si se abre el enlace.
+- **Muestra:** lo que lleva el vehículo de su equipo (en formatos y unidades) y sus entregas firmadas con líneas, fotos y el botón **PDF**.
+- **Función `portal-tecnico`** (`verify_jwt = false`, porque valida el token ella misma):
+  - calcula el hash y llama a `portal_datos(hash)`, que solo puede ejecutar el servidor (`service_role`);
+  - firma las fotos durante 1 hora;
+  - para el PDF comprueba `portal_entrega_permitida`, lo genera la primera vez en el bucket privado `justificantes` y devuelve una URL firmada de 10 minutos.
+- La generación del PDF pasa a `_compartido/pdf-entrega.ts`, compartida con `notificar`.
+- **En la demostración** el portal se calcula en el navegador (`datosPortalLocal`), con la misma forma de datos.
+
+**WhatsApp**
+- Teléfono del técnico en formato internacional:
+  - en la ficha (administrador);
+  - en la **pantalla de firma**, que ahora pide "WhatsApp de…" y lo guarda;
+  - o en el propio albarán (`guardar_telefono_tecnico`, abierto a cualquier usuario activo, como el correo).
+- En el albarán, tras firmar, el botón principal es **Enviar por WhatsApp**: abre `wa.me` con un texto breve (número, fecha, líneas) y el enlace al portal.
+- El token se prepara al abrir el albarán, para que WhatsApp se abra en el mismo toque (los móviles bloquean las ventanas que se abren tarde).
+- Se mantienen **Compartir PDF** y el correo como opciones secundarias.
+
+**Registro:** `copias_entrega` (WhatsApp y PDF compartido) más `envios_aviso` (correo). El albarán muestra **Copias enviadas** con canal, destino, fecha y quién, y el botón pasa a **Reenviar por WhatsApp**.
+
+**Migración** `20261006000100_e014_portal_whatsapp.sql`. Redefine `limpiar_demostracion` para vaciar también las tablas nuevas; las pruebas de E-013 lo detectaron.
+
+**Pruebas:** 237 en verde (`npm test`), de ellas 136 de base de datos.
+- `supabase/tests/e014.test.ts` (8):
+  - solo se guarda el hash (ni el token ni una columna para él) y un token en claro se rechaza;
+  - reintento idempotente, y un hash de otro técnico no se acepta;
+  - **cada técnico ve solo lo suyo**: el PDF de la entrega de otro se deniega;
+  - ni el almacén ni el público leen el portal directamente;
+  - revocar anula todos sus enlaces y no los de los demás; uno nuevo vuelve a funcionar; baja;
+  - teléfono validado y registro de copias (solo de entregas firmadas, sin duplicar).
+- `src/domain/whatsapp.test.ts` (5): teléfonos en muchos formatos (`600 123 456`, `+34…`, `0034…`, `34…`, con paréntesis, guiones o puntos, fijos y extranjeros) y los que se rechazan; enlace `wa.me` con el texto codificado; texto del mensaje.
+- `src/domain/portal.test.ts` (6): token y hash (vector SHA-256 conocido), ruta, datos solo del técnico, operaciones locales y firma de fotos.
+- `tsc -b` sin errores, `npm run build` correcto y `deno check` sin errores.
+
+**Probado en el navegador (demostración):**
+- albarán → teléfono "600 12 34 56" → Enviar por WhatsApp;
+- se abre `wa.me/34600123456` con el texto y el enlace; el teléfono queda en la ficha y la copia en el historial ("Reenviar por WhatsApp");
+- al abrir el enlace en móvil sale el portal de Luis: su vehículo 0000-DEM con su material y su entrega firmada con PDF.
+
+**Desplegado:** migración, `portal-tecnico` (en producción: un enlace inventado da "ya no es válido" y uno mal formado, 400) y `notificar` (usa el módulo del PDF).
+
+**Sin verificar aquí:** el envío real por WhatsApp desde un móvil y el PDF del portal en producción (hace falta una entrega firmada real).

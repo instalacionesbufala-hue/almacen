@@ -18,6 +18,8 @@ import { closeModal, openModal, SheetFoot, SheetHead } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 import { Avatar, BTN_P, BTN_S, CARD, Campo, ESTADO_EQ, FirmaImg, Icon, INP, LBL, Vacio } from '../../ui/base';
 import { abrirRecibo, abrirTallas } from '../entregas/Hojas';
+import { enlacePortal, generarToken, hashToken } from '../../domain/portal';
+import { enlaceWhatsApp, normalizarTelefono } from '../../domain/whatsapp';
 
 type Pestaña = 'equipos' | 'vehiculos' | 'tecnicos' | 'historial';
 
@@ -122,6 +124,7 @@ function FilaTecnico({ t }: { t: Tecnico }) {
         <div className="text-body-sm text-secondary flex flex-wrap items-center gap-x-3"><span className="flex items-center gap-1"><Icon n="call" className="ico-16" />{t.telefono || 'Sin teléfono'}</span><span className="flex items-center gap-1"><Icon n="mail" className="ico-16" />{t.email || 'Sin correo'}</span></div></div>
       {gestionarFlota && <button onClick={() => abrirFormTecnico(t)} className="text-primary text-body-sm font-semibold h-10">Editar</button>}
       {gestionarFlota && <button onClick={() => abrirTallas(t.id)} className="text-primary text-body-sm font-semibold h-10">Tallas</button>}
+      {gestionarFlota && <button onClick={() => abrirPortalAdmin(t.id)} className="text-primary text-body-sm font-semibold h-10">Portal</button>}
       <label className="flex items-center gap-2"><span className={LBL}>Equipo</span>
         <select disabled={!gestionarFlota} value={e?.id || ''} onChange={ev => { if (ejecutar({ op: 'asignarTecnico', args: { tecnico: t.id, equipo: ev.target.value || undefined } })) toast('Asignación actualizada (queda en el historial).', 'ok'); }} className={`${INP} !w-auto h-12`}>
           <option value="">— Sin equipo —</option>{E.equipos.map(x => <option key={x.id} value={x.id}>{x.nombre}</option>)}</select></label>
@@ -233,6 +236,43 @@ function FormVehiculo({ v }: { v?: Vehiculo }) {
   </>);
 }
 
+/* ---------- E-014 · Enlace personal del portal del técnico (solo el administrador) ---------- */
+export const abrirPortalAdmin = (tecnico: string) => openModal(<PortalAdmin tecnico={tecnico} />);
+function PortalAdmin({ tecnico }: { tecnico: string }) {
+  const E = useAlmacen(), t = E.tecnicos.find(x => x.id === tecnico);
+  const [nuevo, setNuevo] = useState<string | null>(null);
+  if (!t) return <SheetHead title="Técnico no encontrado" />;
+  const activos = E.portalEnlaces.filter(x => x.tecnico === t.id && !x.revocado), ultimo = [...activos].sort((a, b) => b.creado - a.creado)[0];
+  const revocar = () => {
+    if (!confirm(`¿Revocar todos los enlaces de ${t.nombre}? Dejarán de funcionar al momento; sus entregas no se tocan.`)) return;
+    if (ejecutar({ op: 'revocarPortal', args: { tecnico: t.id } })) { setNuevo(null); toast('Enlaces revocados.', 'ok'); }
+  };
+  const generar = async () => {
+    const token = generarToken(), hash = await hashToken(token);
+    if (activos.length && !ejecutar({ op: 'revocarPortal', args: { tecnico: t.id } })) return;
+    if (ejecutar({ op: 'enlacePortal', args: { tecnico: t.id, hash } })) setNuevo(enlacePortal(token));
+  };
+  const wa = nuevo ? enlaceWhatsApp(t.telefono, `Hola ${t.nombre.split(' ')[0]}: este es tu enlace personal del almacén para ver tus entregas y lo que lleva tu vehículo. No lo compartas: ${nuevo}`) : null;
+  return (<>
+    <SheetHead title={`Portal de ${t.nombre}`} sub="Página de solo lectura con sus entregas firmadas y el material de su vehículo. Se entra con un enlace personal, sin contraseña." />
+    <div className="p-5 flex flex-col gap-3">
+      <p className="text-body-md">{activos.length ? <>Tiene <b>{activos.length}</b> enlace{activos.length === 1 ? '' : 's'} activo{activos.length === 1 ? '' : 's'} (cada entrega enviada por WhatsApp lleva uno). Último: {fechaHora(ultimo.creado)}, por {ultimo.creadoPor}.</> : 'No tiene ningún enlace activo.'}</p>
+      <p className="text-body-sm text-secondary">Del enlace solo se guarda una huella: nadie puede recuperarlo. Si lo pierde o el móvil cambia de manos, revócalos todos y genera uno nuevo.</p>
+      {nuevo && <div className="rounded-xl bg-primary-fixed/40 p-3 flex flex-col gap-2">
+        <span className={LBL}>Enlace nuevo (cópialo ahora: no se vuelve a mostrar)</span>
+        <input readOnly value={nuevo} onFocus={x => x.target.select()} className={`${INP} h-12 font-mono text-label-sm`} aria-label="Enlace del portal" />
+        <div className="flex flex-wrap gap-2">
+          <button onClick={() => void navigator.clipboard?.writeText(nuevo).then(() => toast('Enlace copiado.', 'ok'))} className={`${BTN_S} h-12 px-4`}><Icon n="content_copy" className="ico-20" />Copiar</button>
+          {wa ? <a href={wa} target="_blank" rel="noopener" className="h-12 px-4 rounded-xl bg-[#128c3e] text-white font-semibold inline-flex items-center gap-2"><Icon n="chat" className="ico-fill" />Enviar por WhatsApp</a>
+            : <span className="text-body-sm text-secondary self-center">Sin teléfono en su ficha: cópialo y envíaselo.</span>}
+        </div></div>}
+    </div>
+    <SheetFoot className="grid grid-cols-2 gap-2">
+      <button onClick={revocar} disabled={!activos.length} className={`${BTN_S} h-14 text-error disabled:opacity-40`}><Icon n="link_off" className="ico-20" />Revocar todos</button>
+      <button onClick={() => void generar()} className={`${BTN_P} h-14`}><Icon n="add_link" className="ico-20" />{activos.length ? 'Revocar y generar nuevo' : 'Generar enlace'}</button></SheetFoot>
+  </>);
+}
+
 export const abrirFormTecnico = (t?: Tecnico) => openModal(<FormTecnico t={t} />);
 function FormTecnico({ t }: { t?: Tecnico }) {
   const E = useAlmacen();
@@ -243,7 +283,7 @@ function FormTecnico({ t }: { t?: Tecnico }) {
     // el DNI completo nunca sale del navegador: solo se guarda enmascarado
     const dni = d ? (d.length >= 5 ? `***${d.slice(-5, -1)}-${d.slice(-1)}` : d) : (t?.dni || '—');
     const id = t?.id || uid('T');
-    if (!ejecutar({ op: 'tecnico', args: { id, nombre: f.nombre.trim(), rol: f.rol.trim() || 'Técnico', dni, email: f.email.trim(), codigo: f.codigo, telefono: f.telefono } })) return;
+    if (!ejecutar({ op: 'tecnico', args: { id, nombre: f.nombre.trim(), rol: f.rol.trim() || 'Técnico', dni, email: f.email.trim(), codigo: f.codigo, telefono: f.telefono.trim() ? normalizarTelefono(f.telefono) ?? f.telefono.trim() : '' } })) return;
     const antes = E.equipos.find(e => e.tecnicos.includes(id))?.id || '';
     if (f.equipo !== antes) ejecutar({ op: 'asignarTecnico', args: { tecnico: id, equipo: f.equipo || undefined } });
     closeModal(); setUI({ eqTab: 'tecnicos' }); toast(t ? 'Técnico actualizado.' : 'Técnico añadido.', 'ok');

@@ -36,15 +36,17 @@ export async function descargarJustificante(e: Entrega) {
 }
 
 /** Compartir nativo del móvil (WhatsApp, correo…). Si el navegador no puede compartir archivos, se descarga. */
-export async function compartirJustificante(e: Entrega) {
+/** Devuelve true si se ha compartido (o descargado para enviarlo a mano) */
+export async function compartirJustificante(e: Entrega): Promise<boolean> {
   try {
     const b = await justificantePdf(e), archivo = new File([b], nombreArchivo(numEntrega(e)), { type: 'application/pdf' });
     const nav = navigator as Navigator & { canShare?: (d: { files: File[] }) => boolean };
     if (nav.canShare?.({ files: [archivo] })) {
       await navigator.share({ files: [archivo], title: `Entrega de material ${numEntrega(e)}`, text: `Justificante de la entrega ${numEntrega(e)}` });
-      return;
+      return true;
     }
     toast('Este navegador no permite compartir archivos: se descarga el PDF para enviarlo a mano.', 'warn', 6000);
     await descargarJustificante(e);
-  } catch (err) { if ((err as Error).name !== 'AbortError') toast((err as Error).message, 'err'); }
+    return true;
+  } catch (err) { if ((err as Error).name !== 'AbortError') toast((err as Error).message, 'err'); return false; }
 }

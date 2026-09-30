@@ -190,7 +190,7 @@ function Escaner({ onLeer, lecturas, manual, setManual }: { onLeer: (c: string) 
 function PasoFirma() {
   const E = useAlmacen(), c = cesta(), rec = E.tecnicos.find(t => t.id === c.receptor), eq = E.equipos.find(e => e.id === c.equipo);
   const err = problemas(E, c);
-  const firmar = async (firma: string, email: string) => {
+  const firmar = async (firma: string, email: string, telefono: string) => {
     const bad = problemas(S(), c); if (bad.length) { toast(bad[0], 'err', 6000); return false; }
     const antes = c.lineas.map(l => { const p = find(S(), l.sku)!; return { p, before: status(p) }; });
     const numero = modoNube ? undefined : `ENT-${new Date().getFullYear()}-${String(S().seq.ent + 1).padStart(4, '0')}`;
@@ -198,7 +198,7 @@ function PasoFirma() {
     // preparar (reserva) y confirmar van seguidas en la cola: en el servidor la firma descuenta todo o nada
     if (!ejecutar({ op: 'prepararEntrega', args: { id, numero, equipo: c.equipo, receptor: c.receptor!, obra: (c.obra || '').trim(), lineas: aLineas(c) } })) return false;
     if (!modoNube) S().seq.ent++;
-    if (!(await confirmarFirma(id, firma, email, c.receptor!))) { toast('La entrega ha quedado preparada (reservada): fírmala desde la lista de preparadas.', 'warn', 7000); vaciarCesta(); return false; }
+    if (!(await confirmarFirma(id, firma, email, c.receptor!, telefono))) { toast('La entrega ha quedado preparada (reservada): fírmala desde la lista de preparadas.', 'warn', 7000); vaciarCesta(); return false; }
     vaciarCesta();
     toast(`Entrega firmada por ${rec?.nombre}. Stock descontado${email ? ' y copia por correo en camino' : ''}.`, 'ok', 6000);
     antes.forEach(a => avisoEstado({ ...a, after: status(a.p) }));
