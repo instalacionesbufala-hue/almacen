@@ -56,7 +56,7 @@ export type Rol = 'admin' | 'almacen';
 export interface PerfilUsuario { id: string; nombre: string; email: string | null; rol: Rol; activo: boolean }
 /** Merma o diferencia de recuento del almacén que espera la validación del administrador (E-004) */
 export interface Pendiente {
-  id: string; ts: number; tipo: 'merma' | 'recuento'; sku: string; qty: number; reason: string; ref: string; serials: string[];
+  id: string; ts: number; tipo: 'merma' | 'recuento' | 'ajuste'; sku: string; qty: number; reason: string; ref: string; serials: string[];
   operator: string; estado: 'pendiente' | 'aprobado' | 'rechazado' | 'aplicada' | 'vista'; resueltoPor?: string; nota?: string; valor?: number;
   /** E-012: recuento de un vehículo (la diferencia va en formatos, puede tener decimales) */
   vehiculo?: string;
@@ -126,6 +126,8 @@ export interface Albaran {
   operator: string;
   confianza: number;
   modo: 'ia' | 'sim';
+  /** E-018: códigos impresos en sus líneas (aunque se emparejaran con otro artículo) */
+  codigos?: string[];
 }
 
 export type TipoTalla = 'camiseta' | 'pantalon' | 'calzado' | 'guantes';

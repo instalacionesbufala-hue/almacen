@@ -11,10 +11,11 @@ import { fotoDe, grupoFoto } from '../domain/fotos';
 import { normalizarTelefono } from '../domain/whatsapp';
 import { EQUIVALENCIAS_PROPUESTA, KITS_PROPUESTA, registrarCierreLocal, sincronizarCierreLocal, type Cierre, type LineaTraducida } from '../domain/cierres';
 import { cambiarCodigoLocal, fusionarLocal, reasignarLineaLocal } from '../domain/fichas';
+import { ajustarLocal, previsionAjuste } from '../domain/ajuste';
 import { uid } from '../domain/formato';
 
 export interface OpMovimiento { id: string; sku: string; tipo: TipoMov; qty: number; motivo: string; ref: string; series: string[]; equipo?: string; vehiculo?: string }
-export interface OpAlbaran { id: string; cabecera: { numero: string; proveedor: string; delegacion?: string; cif: string; fecha: string; confianza: number; modo: 'ia' | 'sim' }; lineas: { sku: string; cantidad: number; series: string[] }[] }
+export interface OpAlbaran { id: string; cabecera: { numero: string; proveedor: string; delegacion?: string; cif: string; fecha: string; confianza: number; modo: 'ia' | 'sim' }; lineas: { sku: string; cantidad: number; series: string[]; codigo?: string }[] }
 export interface OpProducto { producto: Producto; nuevo: boolean; stockInicial: number }
 /** Fila del CSV del catálogo (E-013), ya interpretada */
 export interface FilaCatalogo { sku: string; ref_proveedor: string; nombre: string; categoria: CatId; propiedad: 'propia' | 'custodia'; propietario: string; proveedor: string; unidad: Producto['unit']; contenido: number; stock_inicial: number; minimo: number | null; albaranes: string }
@@ -22,6 +23,8 @@ export interface OpIncidencia { id: string; dotacion: string; tipo: TipoIncidenc
 
 export type Op =
   | { op: 'movimiento'; args: OpMovimiento }
+  | { op: 'ajuste'; args: { id: string; sku: string; qty: number; motivo: string; vehiculo?: string } }
+  | { op: 'proponerAjuste'; args: { id: string; sku: string; qty: number; motivo: string; vehiculo?: string } }
   | { op: 'albaran'; args: OpAlbaran }
   | { op: 'producto'; args: OpProducto }
   | { op: 'pedido'; args: { sku: string; qty: number; proveedor?: string } }
@@ -104,13 +107,30 @@ export const OPS: Defs = {
     rpc: a => ['registrar_movimiento', { p_id: a.id, p_sku: a.sku, p_tipo: a.tipo, p_cantidad: a.qty, p_motivo: a.motivo, p_referencia: a.ref, p_series: [], p_equipo: a.equipo ?? null, p_corrige: null, p_vehiculo: a.vehiculo ?? null }],
     desc: (S, a) => `${a.tipo} de ${a.qty} · ${nombreProd(S, a.sku)}`,
   },
+  // E-018: ajuste de inventario del administrador (con signo y motivo); el almacén lo propone a la bandeja
+  ajuste: {
+    local: (S, a) => { ajustarLocal(S, a); },
+    rpc: a => ['ajustar_inventario', { p_id: a.id, p_sku: a.sku, p_cantidad: a.qty, p_motivo: a.motivo.trim(), p_vehiculo: a.vehiculo ?? null }],
+    desc: (S, a) => `Ajuste de ${a.qty > 0 ? '+' : ''}${a.qty} · ${nombreProd(S, a.sku)}`,
+  },
+  proponerAjuste: {
+    local: (S, a) => {
+      if (S.pendientes.some(x => x.id === a.id)) return;
+      previsionAjuste(S, a);
+      S.pendientes.unshift({ id: a.id, ts: Date.now(), tipo: 'ajuste', sku: a.sku, qty: a.qty, reason: a.motivo.trim(), ref: `Ajuste propuesto por ${S.operator}`, serials: [], operator: S.operator,
+        estado: 'pendiente', ...(a.vehiculo ? { vehiculo: a.vehiculo } : {}) });
+    },
+    rpc: a => ['proponer_ajuste', { p_id: a.id, p_sku: a.sku, p_cantidad: a.qty, p_motivo: a.motivo.trim(), p_vehiculo: a.vehiculo ?? null }],
+    desc: (S, a) => `Propuesta de ajuste de ${a.qty > 0 ? '+' : ''}${a.qty} · ${nombreProd(S, a.sku)}`,
+  },
   albaran: {
     local: (S, a) => {
       const copia = JSON.stringify(S.products);
       try { for (const l of a.lineas) { applyMovement(S, { sku: l.sku, type: 'entrada', qty: l.cantidad, reason: find(S, l.sku)?.propiedad === 'custodia' ? 'Recepción en custodia' : 'Compra a proveedor', ref: `Alb. ${a.cabecera.numero || 's/n'}` }); S.movements[0].albaran = a.id; } }
       catch (e) { S.products = JSON.parse(copia); throw e; }
       S.albaranes.unshift({ id: a.id, delegacion: a.cabecera.delegacion || undefined, numero: a.cabecera.numero || 's/n', proveedor: a.cabecera.proveedor || 'Proveedor', fecha: a.cabecera.fecha, lineas: a.lineas.length,
-        unidades: a.lineas.reduce((s, l) => s + l.cantidad, 0), ts: Date.now(), operator: S.operator, confianza: a.cabecera.confianza, modo: a.cabecera.modo });
+        unidades: a.lineas.reduce((s, l) => s + l.cantidad, 0), ts: Date.now(), operator: S.operator, confianza: a.cabecera.confianza, modo: a.cabecera.modo,
+        codigos: [...new Set(a.lineas.map(l => String(l.codigo || '').replace(/s/g, '').toUpperCase()).filter(Boolean))] });
     },
     rpc: a => ['aprobar_albaran', { p_id: a.id, p_cabecera: a.cabecera, p_lineas: a.lineas }],
     desc: (_S, a) => `Albarán ${a.cabecera.numero} (${a.lineas.length} líneas)`,
@@ -514,7 +534,13 @@ export const OPS: Defs = {
     local: (S, a) => {
       if (S.rol !== 'admin') throw new Error('Solo el administrador puede validar');
       const pe = S.pendientes.find(x => x.id === a.id); if (!pe || pe.estado !== 'pendiente') return;
-      if (a.aprobar) {
+      if (a.aprobar && pe.tipo === 'ajuste') {
+        // E-018: el ajuste propuesto se aplica con su motivo, en el almacén o en el vehículo
+        previsionAjuste(S, { sku: pe.sku, qty: pe.qty, motivo: pe.reason, vehiculo: pe.vehiculo });
+        applyMovement(S, { sku: pe.sku, type: 'ajuste', qty: pe.qty, reason: pe.reason, ref: pe.ref, vehiculo: pe.vehiculo });
+      } else if (a.aprobar && pe.vehiculo) {
+        applyMovement(S, { sku: pe.sku, type: 'ajuste', qty: pe.qty, reason: 'Recuento de vehículo (validado)', ref: pe.ref, vehiculo: pe.vehiculo });
+      } else if (a.aprobar) {
         const tipo = pe.tipo === 'merma' ? 'merma' : 'ajuste';
         const p = find(S, pe.sku); if (p && p.stock + delta(tipo, pe.qty) < 0) throw new Error(`Solo hay ${p.stock} de ${p.name}: no se puede aplicar`);
         applyMovement(S, { sku: pe.sku, type: tipo, qty: pe.qty, reason: pe.tipo === 'merma' ? pe.reason : 'Ajuste de inventario (recuento validado)', ref: pe.ref, serials: pe.serials });

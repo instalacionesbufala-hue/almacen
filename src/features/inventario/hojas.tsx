@@ -17,6 +17,7 @@ import { EditorFoto } from '../../ui/foto';
 import { nuevoId } from '../../store/ops';
 import type { CatId } from '../../data/tipos';
 import { comprobarFusion, diferencias } from '../../domain/fichas';
+import { avisoStockInicial, previsionAjuste } from '../../domain/ajuste';
 
 /* ---------- Fila de movimiento ---------- */
 export function MovRow({ m }: { m: Movimiento }) {
@@ -88,7 +89,8 @@ function Ficha({ sku }: { sku: string }) {
       {perm.editarCatalogo ? <button onClick={() => abrirFormProducto(sku)} className={`${BTN_S} h-14`}><Icon n="edit" className="ico-20" />{p.borrador ? 'Completar' : 'Editar'}</button>
         : !p.borrador && <button onClick={() => abrirFormProducto(sku, {}, undefined, { modo: 'propuesta' })} className={`${BTN_S} h-14 col-span-2`}><Icon n="edit_note" className="ico-20" />Proponer un cambio de la ficha</button>}
     </SheetFoot>
-    {perm.editarCatalogo && !p.borrador && <div className="px-4 pb-2"><button onClick={() => abrirFusionar(sku)} className="text-primary text-body-sm font-semibold h-10">Fusionar en otro artículo (era el mismo)…</button></div>}
+    {!p.borrador && <div className="px-4 pb-2 flex flex-wrap gap-x-5"><button onClick={() => abrirAjuste(sku)} className="text-amber-800 text-body-sm font-semibold h-10">{E.rol === 'admin' ? 'Ajuste de inventario…' : 'Proponer ajuste de inventario…'}</button>
+      {perm.editarCatalogo && <button onClick={() => abrirFusionar(sku)} className="text-primary text-body-sm font-semibold h-10">Fusionar en otro artículo (era el mismo)…</button>}</div>}
     {perm.editarCatalogo && p.stock === 0 && !E.movements.some(m => m.sku === sku) && <div className="px-4 pb-4"><button onClick={() => { if (confirm(`¿Borrar la referencia ${sku}? No tiene stock ni historial.`) && ejecutar({ op: 'borrarProducto', args: { sku } })) { closeModal(); toast('Referencia borrada.', 'ok'); } }} className="text-error text-body-sm font-semibold">Borrar esta referencia</button></div>}
   </>);
 }
@@ -150,7 +152,8 @@ function HojaMovimiento({ sku, type0, opts }: { sku: string; type0: TipoMov; opt
     <SheetHead title={type === 'traspaso' ? 'Cargar material en un vehículo' : `${TIPO[type].t} de material`} sub={p.name} />
     <div className="p-5 flex flex-col gap-4">
       {!opts.lock && <div className="grid grid-cols-3 sm:grid-cols-5 bg-surface-container-low rounded-xl p-1">{tipos.map(t =>
-        <button key={t} onClick={() => cambiaTipo(t)} disabled={(t === 'devolucion' && !conMaterial.length) || (t === 'traspaso' && !E.vehiculos.length)} className={`h-12 rounded-lg font-semibold text-body-sm disabled:opacity-40 ${type === t ? 'bg-white shadow-sm ' + (t === 'entrada' || t === 'devolucion' ? 'text-tertiary' : t === 'merma' ? 'text-error' : 'text-primary') : 'text-on-surface-variant'}`}>{TIPO[t].t}</button>)}</div>}
+        <button key={t} onClick={() => cambiaTipo(t)} disabled={(t === 'devolucion' && !conMaterial.length) || (t === 'traspaso' && !E.vehiculos.length)} className={`h-12 rounded-lg font-semibold text-body-sm disabled:opacity-40 ${type === t ? 'bg-white shadow-sm ' + (t === 'entrada' || t === 'devolucion' ? 'text-tertiary' : t === 'merma' ? 'text-error' : 'text-primary') : 'text-on-surface-variant'}`}>{TIPO[t].t}</button>)}
+        <button onClick={() => abrirAjuste(sku)} className="h-12 rounded-lg font-semibold text-body-sm text-amber-800 col-span-3 sm:col-span-5">{E.rol === 'admin' ? 'Ajuste de inventario' : 'Proponer ajuste'}</button></div>}
       <div className="flex items-center gap-3 bg-surface-container-low rounded-xl p-3"><Tile p={p} />
         <div className="flex-1 min-w-0"><div className="font-mono text-label-sm text-secondary">{p.sku}{contenidoTxt(p) ? ` · ${contenidoTxt(p)}` : ''}</div><div className="text-body-sm">Almacén <b>{qtyTxt(p, p.stock)}</b> · mín. {qtyTxt(p, p.min)}</div></div></div>
       {(type === 'devolucion' || type === 'merma' || type === 'traspaso') && <Campo label={type === 'devolucion' ? 'Vehículo que devuelve' : type === 'traspaso' ? 'Vehículo que se carga' : 'Dónde se ha perdido o roto'}>
@@ -180,6 +183,46 @@ function HojaMovimiento({ sku, type0, opts }: { sku: string; type0: TipoMov; opt
       <p className="text-body-sm text-secondary">Se registra a nombre de <b>{E.operator}</b> con fecha y hora.</p>
     </div>
     <SheetFoot><button onClick={confirmar} disabled={!(q > 0) || bad} className={`${BTN_P} w-full h-14 text-body-lg`}><Icon n="check_circle" className="ico-fill" />{type === 'traspaso' ? 'Cargar' : `Confirmar ${TIPO[type].t.toLowerCase()} de`} {q > 0 ? qtyTxt(p, q) : '…'}{type === 'traspaso' ? ' en el vehículo' : ''}</button></SheetFoot>
+  </>);
+}
+
+/* ---------- E-018 · Ajuste de inventario: solo el administrador; el almacén lo propone a la bandeja ---------- */
+export const abrirAjuste = (sku: string) => openModal(<HojaAjuste sku={sku} />);
+function HojaAjuste({ sku }: { sku: string }) {
+  const E = useAlmacen(), p = find(E, sku)!, admin = E.rol === 'admin';
+  const [signo, setSigno] = useState<1 | -1>(-1), [qty, setQty] = useState(''), [motivo, setMotivo] = useState(''), [veh, setVeh] = useState('');
+  const q = redondea(signo * (toNum(qty) || 0));
+  let prev: { de: number; a: number } | null = null, error = '';
+  if (q) { try { prev = previsionAjuste(E, { sku, qty: q, motivo: motivo || '·', vehiculo: veh || undefined }); } catch (e) { error = (e as Error).message; } }
+  const listo = !!prev && !!motivo.trim();
+  const confirmar = () => {
+    if (!listo) return;
+    const args = { id: nuevoId(), sku, qty: q, motivo: motivo.trim(), vehiculo: veh || undefined };
+    if (admin) {
+      if (!confirm(`¿Ajustar ${p.name}? ${veh ? nombreVehiculo(E, veh) : 'Almacén'}: de ${qtyTxt(p, prev!.de)} a ${qtyTxt(p, prev!.a)}.`)) return;
+      if (ejecutar({ op: 'ajuste', args })) { closeModal(); toast(`Ajuste registrado: ${p.name} pasa de ${qtyTxt(p, prev!.de)} a ${qtyTxt(p, prev!.a)}.`, 'ok', 6000); }
+    } else if (ejecutar({ op: 'proponerAjuste', args })) { closeModal(); toast('Ajuste propuesto: el administrador lo revisará en su bandeja.', 'ok'); }
+  };
+  return (<>
+    <SheetHead title={admin ? 'Ajuste de inventario' : 'Proponer ajuste de inventario'} sub={p.name} />
+    <div className="p-5 flex flex-col gap-4">
+      <p className="text-body-sm text-secondary bg-amber-50 rounded-lg p-3">Para corregir un error de stock (algo contado dos veces, un alta duplicada…). No cuenta como merma, ni como salida a obra, ni como consumo.{admin ? '' : ' Lo aplica el administrador desde su bandeja.'}</p>
+      <div className="flex items-center gap-3 bg-surface-container-low rounded-xl p-3"><Tile p={p} />
+        <div className="flex-1 min-w-0"><div className="font-mono text-label-sm text-secondary">{p.sku}{contenidoTxt(p) ? ` · ${contenidoTxt(p)}` : ''}</div><div className="text-body-sm">Almacén <b>{qtyTxt(p, p.stock)}</b></div></div></div>
+      <Campo label="Dónde"><select value={veh} onChange={e => setVeh(e.target.value)} className={`${INP} h-14`}><option value="">Almacén</option>
+        {E.vehiculos.map(v => <option key={v.id} value={v.id}>{nombreVehiculo(E, v.id)} (lleva {qtyTxt(p, redondea(unidadesABordo(E, v.id, p.sku) / contenidoDe(p)))})</option>)}</select></Campo>
+      <div><div className={`${LBL} mb-2`}>Cantidad ({unidadTxt(p.unit, 2)})</div>
+        <div className="flex gap-2">
+          <div className="grid grid-cols-2 bg-surface-container-low rounded-xl p-1 shrink-0">
+            <button onClick={() => setSigno(-1)} className={`h-12 w-14 rounded-lg font-bold text-headline-sm ${signo < 0 ? 'bg-white shadow-sm text-error' : 'text-on-surface-variant'}`} aria-label="Restar">−</button>
+            <button onClick={() => setSigno(1)} className={`h-12 w-14 rounded-lg font-bold text-headline-sm ${signo > 0 ? 'bg-white shadow-sm text-tertiary' : 'text-on-surface-variant'}`} aria-label="Sumar">+</button></div>
+          <input value={qty} onChange={e => setQty(e.target.value.replace('-', ''))} inputMode="decimal" className={`${INP} h-14 flex-1 text-center text-headline-sm font-bold`} placeholder="0" aria-label="Cantidad del ajuste" /></div></div>
+      <Campo label="Motivo (obligatorio, queda en el historial)"><input value={motivo} onChange={e => setMotivo(e.target.value)} className={`${INP} h-12`} placeholder="Alta duplicada al corregir un albarán" /></Campo>
+      <div className={`rounded-xl p-3 text-body-md ${error ? 'bg-error-container text-error' : 'bg-surface-container-low'}`}>
+        {error ? error : prev ? <>{veh ? nombreVehiculo(E, veh) : 'Almacén'}: de <b>{qtyTxt(p, prev.de)}</b> a <b>{qtyTxt(p, prev.a)}</b></> : 'Indica la cantidad que se suma o se resta.'}</div>
+      <p className="text-body-sm text-secondary">Se registra a nombre de <b>{E.operator}</b> con fecha y hora{admin ? ', y queda en la auditoría' : ''}.</p>
+    </div>
+    <SheetFoot><button onClick={confirmar} disabled={!listo} className={`${BTN_P} w-full h-14 text-body-lg disabled:opacity-40`}><Icon n="tune" />{admin ? 'Confirmar ajuste' : 'Proponer ajuste'}{prev ? ` (${q > 0 ? '+' : '−'}${qtyTxt(p, Math.abs(q))})` : ''}</button></SheetFoot>
   </>);
 }
 
@@ -224,6 +267,7 @@ function FormProducto({ sku, preset, onCreado, modo, propuesta }: { sku?: string
     if (!(n.contenido > 0)) return toast('Indica cuántas unidades trae cada formato (bote de 1000 → 1000).', 'err');
     if (!(n.min >= 0) || !(n.stock >= 0)) return toast('Revisa los números: no pueden ser negativos.', 'err');
     if (f.unit !== 'm' && n.stock !== Math.trunc(n.stock)) return toast(`El stock inicial va en ${unidadTxt(f.unit, 2)} enteros.`, 'err');
+    if (!p) { const aviso = avisoStockInicial(E, code, n.stock); if (aviso && !confirm(aviso)) return; }
     const custodia = f.propiedad === 'custodia';
     const obj: Producto = { sku: code, name, cat: f.cat, unit: f.unit, contenido: n.contenido, packLabel: f.packLabel.trim() || undefined, stock: p?.stock ?? 0, min: n.min, minimoDefinido: f.min.trim() !== '',
       supplier: f.supplier.trim(), ean: f.ean.trim() || undefined, supplierRef: f.supplierRef.trim() || undefined,

@@ -85,7 +85,7 @@ function confirmar() {
   const conf = a.lines.reduce((s, l) => s + l.confianza, 0) / (a.lines.length || 1);
   // todo o nada: se valida entero en local y el servidor lo repite en una sola transacción
   if (!ejecutar({ op: 'albaran', args: { id: nuevoId(), cabecera: { numero: a.doc.numero || 's/n', proveedor: normalizarProveedor(a.doc.proveedor).proveedor || a.doc.proveedor, delegacion: a.doc.delegacion || '', cif: a.doc.cif, fecha: a.doc.fecha, confianza: conf, modo: a.mode || 'sim' },
-    lineas: lines.map(l => ({ sku: l.sku!, cantidad: toNum(l.cantidad), series: [] })) } })) return;
+    lineas: lines.map(l => ({ sku: l.sku!, cantidad: toNum(l.cantidad), series: [], codigo: l.codigo || undefined })) } })) return;
   toast(`Albarán ${a.doc.numero} integrado: ${lines.length} línea${lines.length === 1 ? '' : 's'} sumada${lines.length === 1 ? '' : 's'} al stock.`, 'ok', 6000);
   albStore.set(vacio());
 }

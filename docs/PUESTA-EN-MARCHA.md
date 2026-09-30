@@ -346,6 +346,11 @@ La primera carga se hizo leyendo los albaranes con la IA y dejó algunas fichas 
   - la línea de **6222110056 (tapa final), +20** → pasa a **6222106082 (moldura)**;
   - la línea de **6222110053 (ángulo exterior), +10** → pasa a **6222110054 (ángulo interior)**.
   Cada una deja dos ajustes enlazados (−A y +B) con referencia al albarán; el historial no se borra.
+  - **Si ya creaste la moldura y el ángulo interior con stock inicial (20 m y 10 ud)** en lugar de 0, **no reasignes**: ese material estaría contado dos veces. Haz dos **ajustes de inventario** (E-018): abre la ficha del artículo → **Ajuste de inventario…** (debajo de los botones) → Dónde: **Almacén** → **−** y la cantidad:
+    - **6222110056 (tapa final): −20** (de 30 a 10);
+    - **6222110053 (ángulo exterior): −10** (de 20 a 10);
+    - motivo en los dos: **"Duplicado de la corrección del albarán 3.322.577"**.
+    Antes de confirmar verás "de X a Y". El ajuste no cuenta como merma, ni como salida a obra, ni como consumo, y queda en el historial y en la auditoría.
 - [ ] 15.3. **Actualiza las fichas con el catálogo corregido**: Configuración → **Importar catálogo (CSV)** → `datos/catalogo-stock-real.csv` → marca **Actualizar fichas existentes**. En la pestaña "Ya existen" verás, campo a campo, lo que cambia (unidad `ud` → `m`, `bote`, `bolsa`…, categoría, proveedor **Saltoki**). **El stock no se toca**: el número ya es el del albarán. Además crea la **cinta aislante negra (9900101045) con 20 ud**. La moldura y el ángulo interior ya tienen movimientos, así que su stock no se duplica.
 - [ ] 15.4. **Revisa** Configuración → **Categorías** (ya sin Fontanería; bolsas, cinta y bridas están en Consumibles) y, en Integraciones y cierres, que ninguna equivalencia salga en rojo ("NO EXISTE en el catálogo"). Después, **confirma las equivalencias**.
 - [ ] 15.5. **Fotos:** las bridas incoloras se ven casi en blanco (la foto de Saltoki es transparente). Sustitúyelas con la cámara desde la ficha, igual que las que faltan (bolsas de basura y el Trydan de Esmove).
@@ -353,6 +358,8 @@ La primera carga se hizo leyendo los albaranes con la IA y dejó algunas fichas 
 **Para el día a día:**
 - **Editar una ficha** (administrador): Ficha → **Editar**. Puedes cambiar también el **código (SKU)**: se crea la ficha con el código nuevo y la antigua queda archivada dentro; el historial y las entregas firmadas conservan el código antiguo, y buscarlo lleva al nuevo. Cada cambio queda en la auditoría (antes y después).
 - **Dos fichas que eran el mismo artículo:** Ficha → **Fusionar en otro artículo**. El stock (también el de los vehículos) pasa con ajustes enlazados, convertido por el formato.
+- **Ajuste de inventario** (solo tú): ficha → **Ajuste de inventario…**, o en el diálogo de Entrada/Salida. Cantidad que se suma o se resta, en el almacén o en un vehículo, con motivo obligatorio. El personal de almacén ve **Proponer ajuste**, que te llega a la bandeja.
+- **Aviso al dar de alta con stock inicial:** si el código ya entró por un albarán, la app lo avisa antes de guardar (para no contarlo dos veces).
 - **El personal de almacén** no edita fichas: **Proponer un cambio**; te llega a la bandeja para aplicarlo o descartarlo.
 - **Equivalencias:** se editan en la app (condiciones, artículos con buscador y foto, fórmula, kits). **Probar** enseña qué descontaría un cierre sin aplicar nada, y **Recalcular cierres desde…** vuelve a aplicar las reglas actuales a los cierres ya recibidos (solo la diferencia).
 

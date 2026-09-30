@@ -501,7 +501,7 @@ La ropa, los EPIs y las herramientas personales se siguen asignando **a la perso
 **5. Hecho cuando**
 - Hay pruebas de: entrega a equipo con firma de uno de sus técnicos, rechazo si quien firma no pertenece al equipo, equipo sin vehículo bloqueado, migración de entregas antiguas, portal filtrado por pertenencia con fechas, y dotación personal asignada a quien firma.
 
-### E-018 · Ajuste de inventario para el administrador · PENDIENTE
+### E-018 · Ajuste de inventario para el administrador · HECHO
 **Qué ha visto el chat en la app real (30/09).** Al corregir la primera carga, el usuario creó la moldura (6222106082) y el ángulo interior (6222110054) **con stock inicial 20 m y 10 ud**, en lugar de 0, y no reasignó las líneas. Ahora ese material está **contado dos veces**:
 - la tapa final (6222110056) tiene **30** y deberían ser **10**;
 - el ángulo exterior (6222110053) tiene **20** y deberían ser **10**.
@@ -1445,3 +1445,55 @@ Comprobado en producción: la cinta blanca (9900101044) no existe, así que no h
 **Probado en el navegador (móvil, demostración):** Búfala 1 → 10 m de cable → en la firma, "Recoge y firma" con Luis y Jorge → Jorge firma → albarán "Entrega al equipo Búfala 1 · Recoge y firma: Jorge Ruiz". El PDF y el portal se han comprobado solo con pruebas.
 
 **Desplegado:** migración, `notificar` (PDF del correo) y `portal-tecnico`. La app se publica con este commit. En producción, las entregas ya firmadas no cambian.
+
+### 01/10/2026 · E-018 · HECHO
+**1. Ajuste de inventario** (`HojaAjuste` en `src/features/inventario/hojas.tsx`)
+- Se abre desde la ficha (**"Ajuste de inventario…"**, debajo de los botones) o desde el diálogo de movimientos (botón bajo Entrada · Salida · A vehículo · Devolución · Merma).
+- **Dónde:** almacén o un vehículo (con lo que lleva cada uno).
+- **Cantidad:** botones **− / +** y la cantidad.
+- **Motivo:** texto obligatorio.
+- Antes de confirmar muestra **"Almacén: de X a Y"** (o el vehículo), y otra vez en la confirmación.
+- No deja el stock en negativo; en el almacén, los formatos van enteros.
+- Queda como movimiento de tipo **"Ajuste"** con el motivo y la referencia "Ajuste de inventario". No es merma (no crea aviso de merma), ni salida a obra, ni consumo; en el informe de custodia sale en "Diferencias de recuento".
+- **El personal de almacén** ve **"Proponer ajuste"**: llega a la bandeja del administrador como "Ajuste de inventario propuesto", con el motivo, la ubicación y quién lo propone. Al aprobarlo se aplica con ese motivo.
+
+**2. Servidor** (migración `20261010000100_e018_ajuste_inventario.sql`, **aplicada**)
+- `ajustar_inventario(id, sku, cantidad, motivo, vehiculo)`:
+  - solo el administrador;
+  - idempotente por id;
+  - comprueba motivo, cantidad distinta de cero y que no quede en negativo;
+  - escribe en la **auditoría** (`ajuste_inventario`: de, a, ubicación y motivo);
+  - devuelve `de` y `a`.
+- `proponer_ajuste(...)`: cualquier usuario; crea un pendiente de tipo `ajuste` (nuevo valor en el `check`).
+- `validar_pendiente` aplica los ajustes propuestos con su motivo, en el almacén o en el vehículo, y los anota en la auditoría. Los demás casos no cambian.
+- `registrar_movimiento` ya rechazaba el tipo `ajuste` para el rol almacén; sigue igual.
+
+**3. Aviso de código ya ingresado por albarán**
+- El aviso se da al **crear** una referencia con stock inicial mayor que 0. Si ese código aparece en un albarán ingresado, la app pregunta: "Ese código ya ha entrado por el albarán X; ¿seguro que quieres añadir stock inicial?".
+- **Decisión:** para detectarlo, el albarán tiene que guardar **el código impreso en cada línea**, porque en el caso real la línea se emparejó con otro artículo. Hoy no se guardaba.
+  - Nueva columna `albaranes.codigos`, que se rellena al ingresar el albarán. La app envía el código de cada línea.
+  - También avisa si el código es el de un artículo que ya tuvo entradas por albarán.
+  - **Límite:** los albaranes ingresados antes de hoy no tienen códigos guardados, así que el aviso funciona a partir de los próximos (por ejemplo, el 3.322.577 no avisará).
+
+**4. Guía, paso 15:** se añade qué hacer si ya se crearon con stock:
+- **no reasignar**;
+- ajuste **−20** en la tapa final (de 30 a 10) y **−10** en el ángulo exterior (de 20 a 10);
+- motivo en los dos: "Duplicado de la corrección del albarán 3.322.577".
+En "Para el día a día" se explican el ajuste y el aviso.
+
+**Comprobado en producción (solo lectura):** tapa final 30, ángulo exterior 20, moldura 20 y ángulo interior 10. Coincide con lo que vio el chat; el usuario tiene que hacer los dos ajustes.
+
+**Pruebas:** 301 en verde (`npm test`).
+- `supabase/tests/e018.test.ts` (6):
+  - ajuste negativo y positivo del administrador, con "de X a Y", movimiento "Ajuste" y auditoría;
+  - motivo obligatorio, cero y negativo;
+  - ajuste en un vehículo;
+  - rechazo para el rol almacén (también por `registrar_movimiento`), y la propuesta aprobada desde la bandeja;
+  - sin mermas, salidas ni consumos;
+  - códigos impresos guardados en el albarán.
+- `src/domain/ajuste.test.ts` (6): lo mismo en local, más el informe (0 salidas, 0 incidencias) y el aviso por albarán.
+- `tsc -b` sin errores y `npm run build` correcto.
+
+**Probado en el navegador (demostración):**
+- Administrador: cable 3G16, **−20** → "Almacén: de 305 m a 285 m" → confirmado, y queda como Ajuste.
+- Rol almacén: bridas, "Proponer ajuste" **−2** → el stock no cambia → como administrador, en la bandeja → Aprobar → de 14 a 12 bolsas.

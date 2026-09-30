@@ -1,7 +1,7 @@
 /* Bandeja "Pendientes de validar" del administrador (E-004): mermas grandes o de custodia y diferencias de recuento */
 import { useState } from 'react';
 import { UNIT } from '../../data/catalogo';
-import { find, qtyTxt } from '../../domain/reglas';
+import { find, nombreVehiculo, qtyTxt } from '../../domain/reglas';
 import { fechaHora, hace, num } from '../../domain/formato';
 import { ejecutar, useAlmacen } from '../../store/almacen';
 import { abrirFormProducto } from '../inventario/hojas';
@@ -27,7 +27,7 @@ function Bandeja() {
   const abiertos = E.pendientes.filter(p => p.estado === 'pendiente'), mermas = E.pendientes.filter(p => p.estado === 'aplicada'), borradores = E.products.filter(p => p.borrador), propuestas = E.propuestas.filter(p => p.estado === 'pendiente');
   const resueltos = E.pendientes.filter(p => p.estado === 'aprobado' || p.estado === 'rechazado').slice(0, 10);
   return (<>
-    <SheetHead title="Bandeja del administrador" sub="Mermas registradas (ya aplicadas: solo para que lo sepas) y diferencias de recuento del almacén pendientes de validar." />
+    <SheetHead title="Bandeja del administrador" sub="Mermas registradas (ya aplicadas: solo para que lo sepas) , diferencias de recuento y ajustes de inventario propuestos por el almacén, pendientes de validar." />
     <div className="p-5 flex flex-col gap-3">
       {mermas.length > 0 && <div className="flex flex-col gap-2"><div className="font-mono text-label-sm uppercase tracking-wider text-secondary">Mermas registradas ({mermas.length})</div>
         {mermas.map(p => { const pr = find(E, p.sku); return <div key={p.id} className="rounded-xl bg-error-container/30 p-3 flex flex-wrap items-center gap-3">
@@ -50,7 +50,7 @@ function Bandeja() {
       {abiertos.length ? abiertos.map(p => <Fila key={p.id} id={p.id} puede={validar} />) : <Vacio>No hay nada pendiente.</Vacio>}
       {resueltos.length > 0 && <div className="mt-2"><div className="font-mono text-label-sm uppercase tracking-wider text-secondary mb-1">Resueltos recientemente</div>
         {resueltos.map(p => { const pr = find(E, p.sku); return <div key={p.id} className="flex justify-between gap-2 py-2 border-b border-surface-container text-body-sm">
-          <span className="truncate">{p.tipo === 'merma' ? 'Merma' : 'Recuento'} · {pr?.name || p.sku} · {num(p.qty)} {pr ? UNIT[pr.unit] : ''}</span>
+          <span className="truncate">{p.tipo === 'merma' ? 'Merma' : p.tipo === 'ajuste' ? 'Ajuste' : 'Recuento'} · {pr?.name || p.sku} · {num(p.qty)} {pr ? UNIT[pr.unit] : ''}</span>
           <Tag c={p.estado === 'aprobado' ? 'bg-tertiary-fixed/30 text-tertiary' : 'bg-error-container text-error'}>{p.estado === 'aprobado' ? 'Aprobado' : 'Rechazado'}{p.resueltoPor ? ` · ${p.resueltoPor}` : ''}</Tag></div>; })}</div>}
     </div>
   </>);
@@ -63,8 +63,8 @@ function Fila({ id, puede }: { id: string; puede: boolean }) {
   return (
     <div className="rounded-xl bg-surface-container-low p-4 flex flex-col gap-2">
       <div className="flex flex-wrap justify-between gap-2">
-        <div className="min-w-0"><div className="font-semibold">{p.tipo === 'merma' ? 'Merma' : 'Diferencia de recuento'} · {pr?.name || p.sku}</div>
-          <div className="text-body-sm text-secondary">{p.reason}{p.ref ? ` · ${p.ref}` : ''} · {p.operator} · <span title={fechaHora(p.ts)}>{hace(p.ts)}</span></div></div>
+        <div className="min-w-0"><div className="font-semibold">{p.tipo === 'merma' ? 'Merma' : p.tipo === 'ajuste' ? 'Ajuste de inventario propuesto' : 'Diferencia de recuento'} · {pr?.name || p.sku}</div>
+          <div className="text-body-sm text-secondary">{p.reason}{p.ref ? ` · ${p.ref}` : ''}{p.tipo === 'ajuste' ? ` · ${p.vehiculo ? nombreVehiculo(E, p.vehiculo) : 'almacén'}` : ''} · {p.operator} · <span title={fechaHora(p.ts)}>{hace(p.ts)}</span></div></div>
         <div className="text-right"><div className={`text-headline-sm font-bold ${p.qty < 0 || p.tipo === 'merma' ? 'text-error' : 'text-tertiary'}`}>{p.tipo === 'merma' ? '−' : p.qty > 0 ? '+' : '−'}{num(Math.abs(p.qty))} {pr ? UNIT[pr.unit] : ''}</div>
           <div className="font-mono text-label-sm text-secondary">{pr?.propiedad === 'custodia' ? 'Custodia Esmove' : ''}</div></div>
       </div>

@@ -70,7 +70,7 @@ export function aEstado(t: Tablas, base: Pick<Estado, 'cesta' | 'seq'>, operador
     ref: m.referencia || '', operator: m.operario, serials: [], equipo: m.equipo_id ?? undefined, entrega: m.entrega_id ?? undefined, ...(m.albaran_id ? { albaran: m.albaran_id } : {}), ...(m.corrige ? { corrige: m.corrige } : {}),
     vehiculo: m.vehiculo_id ?? undefined, unidades: m.unidades == null ? undefined : n(m.unidades), ...(m.cierre_id ? { cierre: m.cierre_id } : {}) })).sort((a, b) => b.ts - a.ts);
   const albaranes: Albaran[] = t.albaranes.map(a => ({ id: a.id, delegacion: a.delegacion || undefined, numero: a.numero, proveedor: a.proveedor, fecha: a.fecha, lineas: a.lineas, unidades: n(a.unidades),
-    ts: ms(a.ts), operator: a.operario, confianza: a.confianza == null ? .95 : n(a.confianza), modo: a.modo })).sort((a, b) => b.ts - a.ts);
+    ts: ms(a.ts), operator: a.operario, confianza: a.confianza == null ? .95 : n(a.confianza), modo: a.modo, codigos: a.codigos || [] })).sort((a, b) => b.ts - a.ts);
   const lineas = new Map<string, Fila[]>();
   for (const l of t.entrega_lineas) lineas.set(l.entrega_id, [...(lineas.get(l.entrega_id) || []), l]);
   const entregas: Entrega[] = t.entregas.map(e => ({ id: e.id, numero: e.numero, ts: ms(e.firmada_ts || e.ts), equipo: e.equipo_id, receptor: e.receptor_id, dni: e.dni, firma: e.firma || '', hash: e.hash ?? undefined, operator: e.operario,
