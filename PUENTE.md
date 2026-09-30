@@ -239,7 +239,7 @@ Una cesta se puede guardar como **preparada**, con el stock reservado, para que 
 - Hay pruebas de: cesta con escaneo repetido que suma, talla editable, serie obligatoria en cargadores, reserva y su caducidad, confirmación atómica, y envío con reintento y registro.
 - En la interfaz no queda ninguna referencia a plantillas.
 
-### E-012 · Consumos de los cierres de instalación y stock en furgonetas · PENDIENTE (después de E-013 y E-014)
+### E-012 · Consumos de los cierres de instalación y stock en furgonetas · HECHO
 **Petición del usuario:** cruzar la app con los **cierres de instalación** que los equipos hacen con el wizard del repositorio `instalacionesbufala-hue/bufala`. El material que declaran se va descontando del stock de su furgoneta, para llevar un control aproximado.
 
 **Qué ha visto el chat en el wizard** (`cierre-esbrain.html`, v1.1.x):
@@ -1009,7 +1009,7 @@ Cubren también el formato de cantidades, las respuestas envueltas en ```json y 
 
 **Migración** `20261006000100_e014_portal_whatsapp.sql`. Redefine `limpiar_demostracion` para vaciar también las tablas nuevas; las pruebas de E-013 lo detectaron.
 
-**Pruebas:** 237 en verde (`npm test`), de ellas 136 de base de datos.
+**Pruebas:** 225 en verde (`npm test`), de ellas 136 de base de datos.
 - `supabase/tests/e014.test.ts` (8):
   - solo se guarda el hash (ni el token ni una columna para él) y un token en claro se rechaza;
   - reintento idempotente, y un hash de otro técnico no se acepta;
@@ -1029,3 +1029,107 @@ Cubren también el formato de cantidades, las respuestas envueltas en ```json y 
 **Desplegado:** migración, `portal-tecnico` (en producción: un enlace inventado da "ya no es válido" y uno mal formado, 400) y `notificar` (usa el módulo del PDF).
 
 **Sin verificar aquí:** el envío real por WhatsApp desde un móvil y el PDF del portal en producción (hace falta una entrega firmada real).
+
+### 30/09/2026 · E-012 · HECHO
+**Qué llega del wizard:** revisado `cierre-esbrain.html` en `instalacionesbufala-hue/bufala` (solo lectura).
+- `recolectarDatos()` envía `numInst`, `esbrainUuid`, `fechaCierreIso`, `equipo` (`Búfala 1..3`), `hardware` (texto libre), `despFallido`, `tipoLinea` (`tubo` | `manguera`), `fase` (`mono` | `trif`), `seccion` (`'6'`…`'25'`) y las partidas numéricas (`metrosLinea`, `metrosUtp`, `rj45`, `bornasMono/Trif`, canalizaciones, protecciones…).
+- Todo va en un POST al Apps Script. Las reglas usan esos nombres tal cual.
+
+**1. Cómo llegan**
+- **Función `registrar-cierre`** (`verify_jwt = false`): cabecera `X-Integracion`; admite un cierre o `{ cierres: [...] }` (histórico, hasta 200 por llamada).
+- **Token:** lo genera el servidor (`crear_integracion`) y se enseña una sola vez; se guarda solo su hash (tabla `integraciones`), se revoca en Configuración → Integraciones y cierres, y solo puede registrar cierres.
+- **La función:**
+  - carga las equivalencias confirmadas, los kits y el catálogo;
+  - traduce con `_compartido/cierres.ts`;
+  - llama a `aplicar_cierre(hash, cierre, líneas)`, que solo puede ejecutar `service_role` y vuelve a validar el token.
+- **Fragmento de Apps Script** listo para pegar: `docs/apps-script-almacen.gs`.
+  - `enviarAlAlmacen(datos)` recorta el cierre a lo necesario (sin fotos), reintenta 3 veces y no rompe el guardado del cierre;
+  - los errores van a la hoja **Almacén-log** y `reintentarAlmacen()` los reenvía;
+  - `cargarHistoricoAlAlmacen()` lee "Registro" por el nombre de las cabeceras y envía lotes de 100.
+- **Alternativa para el histórico:** CSV cargado desde la app (`aplicar_cierre_admin`).
+- **Idempotencia:** por `esbrainUuid` o por `numInst` + `fechaCierreIso`. Una **versión** mayor aplica solo la diferencia: consume más, o devuelve al vehículo con "Corrección de cierre"; si pasa a fallido, lo devuelve todo. Una versión igual o menor no hace nada.
+- **Apertura:** los cierres anteriores a la fecha de apertura se guardan como "ignorado" sin consumo. Sin fecha configurada, cuenta la del borrado de la demostración.
+
+**2. Equivalencias** (`equivalencias_cierre` y `kits_fijacion`, editables por el administrador)
+- **Regla:** partida (o suma, `pvc32+acero32`), fórmula, condiciones sobre **cualquier campo** del cierre, artículos con su factor en unidades de contenido, kit, estimada, activa y orden.
+- **Fórmulas:** directa, manguitos `floor(m/3)+1`, fijaciones `ceil(m/0,5)` × kit, o 1 ud (cargador).
+- **Condiciones:** igual (sin mayúsculas), lista, `campo~texto` (contiene) y `a&b` (contiene los dos). Así un "Policharger 22 kW" no se confunde con un "Trydan 22 kW".
+- **Prioridad:** dentro de cada partida y fórmula manda la primera regla por orden que cumpla.
+- **Propuesta:** 18 reglas con artículo, sacadas de las 28 filas de `datos/equivalencias-cierres.csv`, y los kits A, B y C.
+  - Se cargan como **borrador** y solo aplican cuando el administrador las **confirma**.
+  - Las 10 filas "PENDIENTE: dar de alta" no se convierten en reglas: esas partidas salen solas como "sin equivalencia" y no descuentan hasta que se definan.
+  - Si un artículo de una regla aún no está en el catálogo (la propuesta usa los códigos reales), la línea queda "sin equivalencia" con la nota correspondiente.
+- **Reglas del usuario incluidas:**
+  - manguitos solo en PVC (el de acero, sin artículo);
+  - fijaciones en PVC + acero, **sin corrugado**;
+  - kit A (clip + clavo; el clavo queda "sin equivalencia" hasta que exista), B y C;
+  - UTP: V2C/Trydan → 7270020010 y Policharger → 7270021010; con otro modelo, **por elegir**;
+  - RJ45 como unidades del sobre de 25;
+  - canaleta = moldura Hager 6222106082;
+  - cargadores Trydan (7,4, 22 y Schuko) → sus referencias de custodia.
+
+**3. Qué hace con cada cierre** (`_registrar_cierre` y `_sincronizar_cierre`)
+- **Consumo:** movimientos **"Consumo en obra"** desde el **vehículo** asignado al equipo **en la fecha del cierre** (`vehiculo_de_equipo`), nunca del almacén.
+  - Referencia: `numInst · cliente · dirección`.
+  - En unidades de contenido: 2 RJ45 = −2 ud = 0,08 sobres.
+- **Discrepancia:** lo que deja el vehículo en negativo se registra igual y la línea y el cierre quedan en "discrepancia".
+- **Desplazamiento fallido:** queda registrado, sin consumo.
+- **Cargador de Esmove:** 1 ud del vehículo, **sin n.º de serie**. Aparece como "Instalado en obra" en el informe de custodia, con la referencia de la obra. Si el modelo no se reconoce, queda **por elegir**.
+- **Sin vehículo:** si el equipo no casa o no tiene vehículo, el cierre se guarda como "sin vehículo" y se aplica con **Reprocesar**.
+- **Estados:** aplicado, parcial, discrepancia, fallido, ignorado y sin vehículo.
+
+**4. Pantallas**
+- **Configuración → Integraciones y cierres:**
+  - token (crear, copiar URL y token, revocar, último uso);
+  - comprobación de `Búfala 1..3` → equipo → vehículo;
+  - apertura y kit por defecto;
+  - equivalencias (cargar propuesta, confirmar, editar regla en texto, activar o desactivar) y kits A/B/C;
+  - carga del histórico en CSV.
+- **Equipos y técnicos → Cierres:**
+  - filtros por equipo, periodo y estado;
+  - cada cierre con sus líneas traducidas (estimadas marcadas);
+  - **resolver** las líneas por elegir o sin equivalencia eligiendo el artículo;
+  - **consumo del periodo** por artículo, con CSV;
+  - **discrepancias** (vehículos en negativo).
+- **Vehículos → Recontar** (`registrar_recuento_vehiculo`): el almacén cuenta en formatos (un sobre empezado cuenta como 0,5) y la diferencia va a la bandeja del administrador (`pendientes.vehiculo_id`; `validar_pendiente` ajusta el vehículo). El administrador ajusta directamente.
+- En la demostración todo funciona en local con la misma lógica (`src/domain/cierres.ts`).
+
+**Migración** `20261007000100_e012_cierres.sql`:
+- `movimientos.cierre_id`;
+- `config_app.kit_fijacion` y `config_app.apertura_cierres`;
+- `pendientes.vehiculo_id`;
+- `limpiar_demostracion` vacía también los cierres; las equivalencias, los kits y las integraciones se conservan.
+
+**Pruebas:** 257 en verde (`npm test`).
+- `supabase/tests/cierres.test.ts` (12): manguitos y fijaciones, condiciones, sección y fase, UTP según `hardware`, corrugado que no cuenta, kits A, B y C (y kit por regla), RJ45 fraccionado, cargador sin serie, fallido, reglas desactivadas o artículo ausente y clave de idempotencia.
+- `supabase/tests/e012.test.ts` (12):
+  - hash del token y permisos;
+  - consumo del vehículo (no del almacén) con formatos fraccionados y el cargador;
+  - discrepancias;
+  - idempotencia (uuid y numInst + fecha);
+  - **versión** con diferencia;
+  - fallido;
+  - por elegir y resolución;
+  - sin vehículo → reprocesar;
+  - apertura;
+  - **token revocado rechazado**;
+  - propuesta → confirmar y kits;
+  - recuento de vehículo.
+- `src/domain/cierres.test.ts` (8): la misma lógica en local, consumo del periodo, recuento, edición de reglas en texto y CSV del histórico.
+- La prueba de actualización sobre una base en uso aplica también esta migración.
+- `tsc -b` sin errores, `npm run build` correcto y `deno check` de las seis funciones sin errores.
+
+**Probado en el navegador (demostración):** cargar la propuesta → confirmar 18 reglas → histórico CSV de 2 cierres → aplicados al vehículo de Búfala 1 y 2 → pestaña Cierres con estados, líneas y consumo del periodo.
+
+**Desplegado:** migración y `registrar-cierre` (en producción: sin cabecera, 401; con un token inventado, 401 "no válida o revocada").
+
+**Guía:** paso 6 (función nueva) y **paso 14** (equipos, equivalencias, token, cómo pegar el fragmento en el Apps Script y publicar una versión nueva, prueba, histórico y día a día).
+
+**Para el usuario:** crear el token, pegar el fragmento y ejecutar el histórico (guía, paso 14). **Antes** hay que importar el catálogo real (E-013), porque las equivalencias usan sus códigos.
+
+**Sin verificar aquí:** el envío real desde el Apps Script (hace falta el token y el proyecto del usuario) y los nombres de las cabeceras de la hoja "Registro" (el histórico por Apps Script los empareja por nombre; si no coinciden, la alternativa es el CSV).
+
+**Sugerencias para el wizard** (proyecto `bufala`; decide el usuario):
+- Añadir `version` al reenviar un cierre corregido, para que el almacén aplique la diferencia.
+- Añadir un campo para el medidor V2C, si se instala.
+- Usar identificadores estables si se añaden partidas: la tabla de equivalencias se amplía sin tocar código.

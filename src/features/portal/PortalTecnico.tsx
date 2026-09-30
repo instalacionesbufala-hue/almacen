@@ -26,6 +26,7 @@ export default function PortalTecnico({ token }: { token: string }) {
   const [error, setError] = useState('');
   const [pdf, setPdf] = useState('');
   useEffect(() => {
+    const antes = document.title;
     document.title = `Mis entregas · ${MARCA.nombre}`;
     (async () => {
       try {
@@ -38,6 +39,7 @@ export default function PortalTecnico({ token }: { token: string }) {
         }
       } catch (x) { setError((x as Error).message); }
     })();
+    return () => { document.title = antes; };
   }, [token]);
 
   const verPdf = async (id: string) => {

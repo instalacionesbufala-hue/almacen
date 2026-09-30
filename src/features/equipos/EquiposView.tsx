@@ -20,12 +20,13 @@ import { Avatar, BTN_P, BTN_S, CARD, Campo, ESTADO_EQ, FirmaImg, Icon, INP, LBL,
 import { abrirRecibo, abrirTallas } from '../entregas/Hojas';
 import { enlacePortal, generarToken, hashToken } from '../../domain/portal';
 import { enlaceWhatsApp, normalizarTelefono } from '../../domain/whatsapp';
+import CierresView, { abrirRecuentoVehiculo } from '../cierres/CierresView';
 
-type Pestaña = 'equipos' | 'vehiculos' | 'tecnicos' | 'historial';
+type Pestaña = 'equipos' | 'vehiculos' | 'tecnicos' | 'historial' | 'cierres';
 
 export default function EquiposView() {
   const E = useAlmacen(), u = useUI(), { gestionarFlota } = usePermisos();
-  const pest = (['equipos', 'vehiculos', 'tecnicos', 'historial'] as Pestaña[]).includes(u.eqTab as Pestaña) ? u.eqTab as Pestaña : 'equipos';
+  const pest = (['equipos', 'vehiculos', 'tecnicos', 'historial', 'cierres'] as Pestaña[]).includes(u.eqTab as Pestaña) ? u.eqTab as Pestaña : 'equipos';
   const libres = E.tecnicos.filter(t => !E.equipos.some(e => e.tecnicos.includes(t.id)));
   const tab = (k: Pestaña, l: string, n: number | null, i: string) =>
     <button onClick={() => setUI({ eqTab: k })} className={`flex items-center gap-2 px-3 sm:px-4 h-12 rounded-lg font-semibold ${pest === k ? 'bg-white text-primary shadow-sm' : 'text-on-surface-variant'}`}><Icon n={i} className="ico-20" /><span className="hidden sm:inline">{l}</span>{n !== null && <span className="font-mono text-label-sm px-1.5 rounded bg-surface-container-high">{n}</span>}</button>;
@@ -41,13 +42,14 @@ export default function EquiposView() {
       <section className={`${CARD} p-4 lg:p-space-md flex gap-4 items-start`}><span className="w-11 h-11 rounded-xl bg-primary-fixed text-primary grid place-items-center shrink-0"><Icon n="alt_route" /></span>
         <div className="flex-1"><h2 className="text-headline-sm font-semibold">Composición variable</h2><p className="text-body-md text-secondary">Técnicos, equipos y vehículos van por separado y cada cambio queda en el historial. <b>El material a bordo es del vehículo</b>: si un técnico cambia de equipo no se mueve nada, y si un vehículo pasa a otro equipo, su material va con él. El nombre del equipo debe ser el que envía el wizard de cierres ("Búfala 1").</p></div></section>
       <div className="inline-flex self-start bg-surface-container-low rounded-xl p-1 max-w-full overflow-x-auto no-scrollbar">
-        {tab('equipos', 'Equipos', E.equipos.length, 'groups')}{tab('vehiculos', 'Vehículos', E.vehiculos.length, 'local_shipping')}{tab('tecnicos', 'Técnicos', E.tecnicos.length, 'engineering')}{tab('historial', 'Historial', null, 'history')}</div>
+        {tab('equipos', 'Equipos', E.equipos.length, 'groups')}{tab('vehiculos', 'Vehículos', E.vehiculos.length, 'local_shipping')}{tab('tecnicos', 'Técnicos', E.tecnicos.length, 'engineering')}{tab('historial', 'Historial', null, 'history')}{tab('cierres', 'Cierres', E.cierres.length, 'assignment_turned_in')}</div>
       {pest === 'equipos' && (E.equipos.length ? <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4 lg:gap-space-lg">{E.equipos.map(e => <CardEquipo key={e.id} e={e} />)}</div>
         : <section className={`${CARD} p-6 text-center text-secondary`}>Aún no hay equipos. {gestionarFlota && <button onClick={() => abrirFormEquipo()} className="text-primary font-semibold">Crear el primero</button>}</section>)}
       {pest === 'vehiculos' && <Vehiculos />}
       {pest === 'tecnicos' && <div className={`${CARD} overflow-hidden`}>{E.tecnicos.length ? E.tecnicos.map(t => <FilaTecnico key={t.id} t={t} />) : <Vacio>Aún no hay técnicos.</Vacio>}
         {libres.length > 0 && <p className="p-4 text-body-sm text-amber-800 bg-amber-50">{libres.length} técnico{libres.length === 1 ? '' : 's'} sin equipo: no podrán recibir material de instalación hasta asignarlos.</p>}</div>}
       {pest === 'historial' && <Historial />}
+      {pest === 'cierres' && <CierresView />}
       <AuditoriaEntregas />
     </div>
   );
@@ -110,6 +112,7 @@ function Vehiculos() {
           <select disabled={!gestionarFlota} value={v.equipo || ''} onChange={x => { if (ejecutar({ op: 'asignarVehiculo', args: { vehiculo: v.id, equipo: x.target.value || undefined } })) toast(x.target.value ? 'Vehículo asignado: su material va con él.' : 'Vehículo sin equipo (p. ej. en taller).', 'ok'); }} className={`${INP} !w-auto h-12`}>
             <option value="">— Sin equipo —</option>{E.equipos.map(e => <option key={e.id} value={e.id}>{e.nombre}</option>)}</select></label>
         {gestionarFlota && <button onClick={() => abrirFormVehiculo(v)} className="text-primary text-body-sm font-semibold h-10">Editar</button>}
+        <button onClick={() => abrirRecuentoVehiculo(v.id)} className="text-primary text-body-sm font-semibold h-10">Recontar</button>
         {gestionarFlota && <button onClick={() => { if (confirm(`¿Dar de baja el vehículo ${v.matricula}? El historial se conserva.`) && ejecutar({ op: 'bajaVehiculo', args: { id: v.id } })) toast('Vehículo dado de baja.', 'ok'); }} className="text-error text-body-sm font-semibold h-10">Baja</button>}
       </div>); })}</div>
   );

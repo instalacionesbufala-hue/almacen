@@ -21,7 +21,7 @@ export interface UI {
   prop: string;
   /** 'central' o id de una furgoneta */
   almacen: string;
-  eqTab: 'equipos' | 'vehiculos' | 'tecnicos' | 'historial';
+  eqTab: 'equipos' | 'vehiculos' | 'tecnicos' | 'historial' | 'cierres';
 }
 export const ui = crearStore<UI>({ q: '', est: 'all', ubi: 'all', cat: 'all', prop: 'all', page: 1, catTab: 'cargadores', filtros: false, almacen: 'central', eqTab: 'equipos' });
 export const useUI = ui.use;

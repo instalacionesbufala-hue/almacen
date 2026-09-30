@@ -71,7 +71,7 @@ export function reservado(S: Estado, sku: string, excepto?: string, ahora = Date
 export const disponibleReal = (S: Estado, p: Producto, excepto?: string) => redondea(p.stock - reservado(S, p.sku, excepto));
 
 /* ---------- Movimientos ---------- */
-export interface MovInput { id?: string; sku: string; type: TipoMov; qty: number; reason: string; ref?: string; serials?: string[]; equipo?: string; entrega?: string; vehiculo?: string }
+export interface MovInput { id?: string; sku: string; type: TipoMov; qty: number; reason: string; ref?: string; serials?: string[]; equipo?: string; entrega?: string; vehiculo?: string; cierre?: string }
 /** Variación del stock del ALMACÉN (el ajuste lleva su signo; traspaso resta, devolución suma, consumo no toca el almacén) */
 export const delta = (type: TipoMov, qty: number) =>
   type === 'entrada' || type === 'ajuste' || type === 'devolucion' ? qty : type === 'consumo' ? 0 : -qty;
@@ -121,7 +121,7 @@ export function applyMovement(S: Estado, i: MovInput, ahora = Date.now()): MovRe
     p.stock = redondea(p.stock + d);
   }
   if (p.stock > 0 && S.pedidos[p.sku] && p.stock >= p.min) delete S.pedidos[p.sku];
-  const m: Movimiento = { id: i.id || uid('M'), ts: ahora, sku: p.sku, type, qty, reason: i.reason, ref, operator: S.operator, serials: [], equipo: i.equipo, entrega: i.entrega, vehiculo: i.vehiculo, unidades };
+  const m: Movimiento = { id: i.id || uid('M'), ts: ahora, sku: p.sku, type, qty, reason: i.reason, ref, operator: S.operator, serials: [], equipo: i.equipo, entrega: i.entrega, vehiculo: i.vehiculo, unidades, ...(i.cierre ? { cierre: i.cierre } : {}) };
   S.movements.unshift(m);
   return { p, before, after: status(p), m };
 }

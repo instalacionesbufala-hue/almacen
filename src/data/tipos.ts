@@ -53,6 +53,8 @@ export interface PerfilUsuario { id: string; nombre: string; email: string | nul
 export interface Pendiente {
   id: string; ts: number; tipo: 'merma' | 'recuento'; sku: string; qty: number; reason: string; ref: string; serials: string[];
   operator: string; estado: 'pendiente' | 'aprobado' | 'rechazado' | 'aplicada' | 'vista'; resueltoPor?: string; nota?: string; valor?: number;
+  /** E-012: recuento de un vehículo (la diferencia va en formatos, puede tener decimales) */
+  vehiculo?: string;
   /** creado en este dispositivo y aún sin respuesta del servidor */
   provisional?: boolean;
 }
@@ -99,6 +101,8 @@ export interface Movimiento {
   unidades?: number;
   /** Entrega a la que pertenece */
   entrega?: string;
+  /** E-012: cierre de instalación que lo generó */
+  cierre?: string;
 }
 
 export interface Albaran {
@@ -145,6 +149,23 @@ export interface Vehiculo { id: string; matricula: string; modelo: string; equip
 export interface Asignacion { tipo: 'tecnico' | 'vehiculo'; sujeto: string; equipo: string; desde: number; hasta?: number }
 /** Stock a bordo de un vehículo, en UNIDADES de contenido (puede ser negativo: discrepancia) */
 export interface StockVehiculo { vehiculo: string; sku: string; unidades: number }
+
+/** E-012 · Cierres de instalación del wizard */
+export type EstadoCierre = 'aplicado' | 'parcial' | 'discrepancia' | 'fallido' | 'ignorado' | 'sin_vehiculo';
+export interface CierreApp {
+  id: string; clave: string; version: number; numInst: string; cliente: string; direccion: string; fecha: number; equipoWizard: string;
+  equipo?: string; vehiculo?: string; hardware: string; despFallido: boolean; estado: EstadoCierre; origen: 'integracion' | 'historico'; recibido: number;
+}
+export interface LineaCierre {
+  id: string; cierre: string; campo: string; formula: string; valor: number; sku?: string; cantidad: number; estimada: boolean;
+  estado: 'aplicada' | 'discrepancia' | 'sin_equivalencia' | 'pendiente' | 'resuelta'; nota: string;
+}
+export interface ArticuloRegla { sku: string | null; factor: number; nombre?: string }
+export interface Equivalencia {
+  id: string; campo: string; formula: 'directa' | 'manguitos' | 'fijaciones' | 'unidad'; condiciones: Record<string, string | string[]>;
+  articulos: ArticuloRegla[]; kit?: string | null; estimada: boolean; activa: boolean; orden: number; nota?: string; confirmada: boolean;
+}
+export interface Integracion { id: string; nombre: string; creado: number; creadoPor: string; revocado?: number; ultimoUso?: number }
 
 /** E-014: enlace personal del portal del técnico. Solo se guarda el hash del token. */
 export interface EnlacePortal { tecnico: string; entrega?: string; creado: number; creadoPor: string; revocado?: number; hash?: string }
@@ -251,7 +272,13 @@ export interface Estado {
   vehiculos: Vehiculo[];
   asignaciones: Asignacion[];
   aBordo: StockVehiculo[];
-  configApp: { modoDemo: boolean; demoBorrada?: number; demoBorradaPor?: string };
+  configApp: { modoDemo: boolean; demoBorrada?: number; demoBorradaPor?: string; kitFijacion?: 'A' | 'B' | 'C'; aperturaCierres?: number };
+  /** E-012: cierres del wizard, sus líneas traducidas, equivalencias, kits de fijación e integraciones (token del Apps Script) */
+  cierres: CierreApp[];
+  lineasCierre: LineaCierre[];
+  equivalencias: Equivalencia[];
+  kits: Record<string, ArticuloRegla[]>;
+  integraciones: Integracion[];
   /** E-014: enlaces del portal del técnico (en la nube no se lee el hash) y copias enviadas por WhatsApp o compartiendo el PDF */
   portalEnlaces: EnlacePortal[];
   copias: CopiaEntrega[];

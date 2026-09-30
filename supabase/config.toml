@@ -21,3 +21,7 @@ verify_jwt = false
 # E-014: el portal del técnico se abre sin sesión (enlace personal); la función valida el token ella misma.
 [functions.portal-tecnico]
 verify_jwt = false
+
+# E-012: la llama el Apps Script del wizard (servidor a servidor) con su propio token en X-Integracion, sin sesión de usuario.
+[functions.registrar-cierre]
+verify_jwt = false

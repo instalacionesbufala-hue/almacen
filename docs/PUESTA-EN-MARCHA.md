@@ -106,7 +106,7 @@ Las variables `VITE_ALBARANES_URL` (paso 7) y `VITE_VAPID_PUBLICA` (paso 8) se a
 
 ## 6. Desplegar las funciones de servidor
 
-Son cinco pequeños programas que se ejecutan en Supabase, donde las claves no están a la vista:
+Son seis pequeños programas que se ejecutan en Supabase, donde las claves no están a la vista:
 
 | Función | Para qué sirve |
 |---|---|
@@ -115,6 +115,7 @@ Son cinco pequeños programas que se ejecutan en Supabase, donde las claves no e
 | `leer-albaran` | Leer los albaranes con IA (Gemini) |
 | `leer-articulo` | Proponer la ficha de un artículo nuevo a partir de su foto ("Nuevo con la cámara", misma IA) |
 | `portal-tecnico` | Página de cada técnico con sus entregas y lo que lleva su vehículo (se abre con su enlace de WhatsApp, sin contraseña) |
+| `registrar-cierre` | Recibir los cierres de instalación del wizard y descontar el material del vehículo del equipo (paso 14) |
 
 - [ ] 6.1. En la terminal de la carpeta `almacen` (con la sesión del paso 2.1):
   ```bash
@@ -132,7 +133,10 @@ Son cinco pequeños programas que se ejecutan en Supabase, donde las claves no e
   ```bash
   npx.cmd supabase functions deploy portal-tecnico
   ```
-  Cada comando termina con *Deployed Functions*. Compruébalo en Supabase → **Edge Functions**: deben aparecer las cinco.
+  ```bash
+  npx.cmd supabase functions deploy registrar-cierre
+  ```
+  Cada comando termina con *Deployed Functions*. Compruébalo en Supabase → **Edge Functions**: deben aparecer las seis.
 - [ ] 6.2. Di a las funciones desde qué web se les puede llamar (así ninguna otra página puede usarlas con tu sesión). Es la dirección de la app del paso 5, **sin la ruta final**:
   ```bash
   npx.cmd supabase secrets set ORIGEN_APP=https://instalacionesbufala-hue.github.io
@@ -308,6 +312,26 @@ La app deja de usar precios: solo cuenta material. El stock está en el **almac�
 - [ ] 13.2. Tras firmar una entrega, en el albarán pulsa **Enviar por WhatsApp**. Se abre WhatsApp con un mensaje breve y un **enlace personal** al portal del técnico: sus entregas firmadas (con el PDF) y el material que lleva su vehículo. Sin usuario ni contraseña.
 - [ ] 13.3. Cada envío (WhatsApp, PDF compartido o correo) queda en **Copias enviadas** del albarán, con fecha y quién lo mandó.
 - [ ] 13.4. Si un técnico pierde el móvil o deja la empresa: su fila → **Portal** → **Revocar todos**. Sus enlaces dejan de funcionar al momento. **Revocar y generar nuevo** crea otro y lo puedes enviar por WhatsApp desde ahí.
+
+## 14. Cierres del wizard: descontar el material de los vehículos (E-012)
+
+Cada cierre que un equipo hace con el wizard (`cierre-esbrain.html`) descuenta del **vehículo de su equipo** el material declarado. Es un control aproximado: se corrige con el recuento del vehículo.
+
+- [ ] 14.1. **Equipos:** en **Equipos y técnicos**, los equipos se llaman exactamente como en el wizard (`Búfala 1`, `Búfala 2`, `Búfala 3`) y cada uno tiene su vehículo. En **Configuración → Integraciones y cierres** lo verás en verde o con el aviso de lo que falta.
+- [ ] 14.2. **Equivalencias:** en el mismo bloque, **Cargar la propuesta** (las reglas del chat con tus respuestas: conductores por sección, UTP según el cargador, manguitos, fijaciones, canaleta = moldura Hager…). Revísalas y pulsa **Confirmar**. Las partidas sin artículo (bornas trifásicas, cajas, magnetotérmicos, picas…) no descuentan hasta que les pongas uno. Elige el **kit de fijación** por defecto (A: clip + clavo) y la fecha de **apertura** (los cierres anteriores se ignoran).
+- [ ] 14.3. **Token:** **Crear token para el wizard**. Copia `ALMACEN_URL` y `ALMACEN_TOKEN`: el token se enseña una sola vez.
+- [ ] 14.4. **Apps Script:** abre el proyecto de Google Apps Script del wizard (el de `WEB_APP_URL`):
+  1. **Configuración del proyecto** (rueda dentada) → **Propiedades del script** → añade `ALMACEN_URL` y `ALMACEN_TOKEN` con los valores del paso anterior.
+  2. **Editor** → **+** → **Secuencia de comandos** → llámalo `Almacen` y pega el contenido de [`docs/apps-script-almacen.gs`](apps-script-almacen.gs).
+  3. En tu `doPost`, justo después de escribir la fila en "Registro", añade la línea `enviarAlAlmacen(datos);` (`datos` = el objeto del cierre que ya recibes).
+  4. **Implementar → Gestionar implementaciones → editar (lápiz) → Versión: nueva → Implementar**, para que el wizard use el código nuevo (la URL no cambia).
+- [ ] 14.5. **Prueba:** haz un cierre de prueba con el wizard. En la app, **Equipos y técnicos → Cierres** debe aparecer con su estado, y el material debe bajar en el vehículo de ese equipo. Si algo falla, el Apps Script lo apunta en la hoja **Almacén-log** (y `reintentarAlmacen()` lo reenvía).
+- [ ] 14.6. **Histórico:** en el editor de Apps Script, elige la función `cargarHistoricoAlAlmacen` y pulsa **Ejecutar** (la primera vez pedirá permisos). Envía los cierres de "Registro" en lotes; los anteriores a la apertura se ignoran y reenviar no descuenta dos veces. Si las cabeceras de "Registro" no se llaman como los campos del wizard, exporta la hoja a CSV con esos nombres y cárgala en **Configuración → Integraciones y cierres → Cargar histórico (CSV)**.
+- [ ] 14.7. **Día a día:**
+  - **Cierres** muestra cada cierre (aplicado, parcial, discrepancia, fallido…), sus líneas traducidas, el consumo del periodo (con CSV) y las discrepancias.
+  - Las líneas **por elegir** (cable de datos con un cargador que no es V2C ni Policharger, o un cargador no reconocido) las resuelves ahí mismo eligiendo el artículo.
+  - **Vehículos → Recontar**: el almacén cuenta lo que hay a bordo y tú validas las diferencias en tu bandeja.
+- [ ] 14.8. Si el token se filtra, **Revocar** en Integraciones y crea otro (paso 14.3 y 14.4.1).
 
 ---
 

@@ -2,13 +2,14 @@
    - aplicarse en local (validación previa con src/domain y respuesta inmediata en pantalla), y
    - traducirse a su función SQL del servidor (la fuente de verdad en modo nube).
    En modo nube la operación se guarda en la cola y se reaplica en local hasta que el servidor la confirma. */
-import type { OrigenFoto, Tallas, ConfigAvisos, Propietario, Rol, CatId, EstadoEquipo, Estado, Herramienta, LineaEntrega, Producto, TipoIncidencia, TipoMov } from '../data/tipos';
-import { applyMovement, find, delta, disponibleReal, formatoEntero, vehiculoDeEquipo } from '../domain/reglas';
+import type { OrigenFoto, Tallas, ConfigAvisos, Propietario, Rol, CatId, EstadoEquipo, Estado, Herramienta, LineaEntrega, Producto, TipoIncidencia, TipoMov, Equivalencia, ArticuloRegla } from '../data/tipos';
+import { applyMovement, find, delta, disponibleReal, formatoEntero, vehiculoDeEquipo, unidadesABordo, contenidoDe } from '../domain/reglas';
 import { emailValido, herramientasLibres } from '../domain/entregas';
 import { redondea } from '../domain/formato';
 import { asignarHerramienta, registrarIncidencia } from '../domain/herramientas';
 import { fotoDe, grupoFoto } from '../domain/fotos';
 import { normalizarTelefono } from '../domain/whatsapp';
+import { EQUIVALENCIAS_PROPUESTA, KITS_PROPUESTA, registrarCierreLocal, sincronizarCierreLocal, type Cierre, type LineaTraducida } from '../domain/cierres';
 
 export interface OpMovimiento { id: string; sku: string; tipo: TipoMov; qty: number; motivo: string; ref: string; series: string[]; equipo?: string; vehiculo?: string }
 export interface OpAlbaran { id: string; cabecera: { numero: string; proveedor: string; cif: string; fecha: string; confianza: number; modo: 'ia' | 'sim' }; lineas: { sku: string; cantidad: number; series: string[] }[] }
@@ -57,6 +58,16 @@ export type Op =
   | { op: 'reenviarCopia'; args: { entrega: string; email?: string } }
   | { op: 'tallas'; args: { tecnico: string; tallas: Tallas } }
   | { op: 'telefonoTecnico'; args: { tecnico: string; telefono: string } }
+  | { op: 'equivalencia'; args: { regla: Equivalencia } }
+  | { op: 'cargarPropuesta'; args: Record<string, never> }
+  | { op: 'confirmarEquivalencias'; args: Record<string, never> }
+  | { op: 'kitFijacion'; args: { kit: 'A' | 'B' | 'C'; articulos: ArticuloRegla[] } }
+  | { op: 'configCierres'; args: { kit: 'A' | 'B' | 'C'; apertura?: number } }
+  | { op: 'resolverLinea'; args: { linea: string; sku: string; cantidad?: number } }
+  | { op: 'reprocesarCierre'; args: { id: string } }
+  | { op: 'recuentoVehiculo'; args: { id: string; vehiculo: string; lineas: { sku: string; contado: number }[] } }
+  | { op: 'cierreHistorico'; args: { cierre: Cierre; lineas: LineaTraducida[] } }
+  | { op: 'revocarIntegracion'; args: { id: string } }
   | { op: 'enlacePortal'; args: { tecnico: string; hash: string; entrega?: string } }
   | { op: 'revocarPortal'; args: { tecnico: string } }
   | { op: 'copiaEntrega'; args: { id: string; entrega: string; canal: 'whatsapp' | 'compartir'; destino: string } }
@@ -225,6 +236,89 @@ export const OPS: Defs = {
     rpc: a => ['marcar_merma_vista', { p_pendiente: a.id }],
     desc: () => 'Merma vista',
   },
+  /* ---------- E-012 · Cierres del wizard ---------- */
+  equivalencia: {
+    local: (S, { regla }) => {
+      if (S.rol !== 'admin') throw new Error('Solo el administrador edita las equivalencias');
+      if (!regla.campo.trim()) throw new Error('Indica la partida del wizard');
+      const i = S.equivalencias.findIndex(r => r.id === regla.id);
+      if (i >= 0) S.equivalencias[i] = { ...regla }; else S.equivalencias.push({ ...regla });
+      S.equivalencias.sort((a, b) => a.orden - b.orden);
+    },
+    rpc: ({ regla: r }) => ['guardar_equivalencia', { p: { id: r.id, campo: r.campo, formula: r.formula, condiciones: r.condiciones, articulos: r.articulos, kit: r.kit ?? '', estimada: r.estimada, activa: r.activa, orden: r.orden, nota: r.nota ?? '', confirmada: r.confirmada } }],
+    desc: (_S, a) => `Equivalencia de ${a.regla.campo}`,
+  },
+  cargarPropuesta: {
+    local: S => {
+      if (S.rol !== 'admin') throw new Error('Solo el administrador carga las equivalencias');
+      for (const r of EQUIVALENCIAS_PROPUESTA) if (!S.equivalencias.some(x => x.id === r.id)) S.equivalencias.push({ ...r, confirmada: false });
+      for (const [k, v] of Object.entries(KITS_PROPUESTA)) S.kits[k] ??= v;
+      S.equivalencias.sort((a, b) => a.orden - b.orden);
+    },
+    rpc: () => ['cargar_propuesta_equivalencias', { p_reglas: EQUIVALENCIAS_PROPUESTA, p_kits: KITS_PROPUESTA }],
+    desc: () => 'Cargar la propuesta de equivalencias',
+  },
+  confirmarEquivalencias: {
+    local: S => { if (S.rol !== 'admin') throw new Error('Solo el administrador confirma las equivalencias'); S.equivalencias.forEach(r => { r.confirmada = true; }); },
+    rpc: () => ['confirmar_equivalencias', {}],
+    desc: () => 'Confirmar las equivalencias',
+  },
+  kitFijacion: {
+    local: (S, a) => { if (S.rol !== 'admin') throw new Error('Solo el administrador edita los kits'); S.kits[a.kit] = a.articulos; },
+    rpc: a => ['guardar_kit_fijacion', { p_kit: a.kit, p_articulos: a.articulos }],
+    desc: (_S, a) => `Kit de fijación ${a.kit}`,
+  },
+  configCierres: {
+    local: (S, a) => { if (S.rol !== 'admin') throw new Error('Solo el administrador'); S.configApp.kitFijacion = a.kit; S.configApp.aperturaCierres = a.apertura; },
+    rpc: a => ['config_cierres', { p_kit: a.kit, p_apertura: a.apertura ? new Date(a.apertura).toISOString() : null }],
+    desc: () => 'Configuración de los cierres',
+  },
+  resolverLinea: {
+    local: (S, a) => {
+      if (S.rol !== 'admin') throw new Error('Solo el administrador resuelve las líneas pendientes');
+      const l = S.lineasCierre.find(x => x.id === a.linea); if (!l) throw new Error('Línea no encontrada');
+      if (l.estado !== 'pendiente' && l.estado !== 'sin_equivalencia') return;
+      if (!find(S, a.sku)) throw new Error(`Artículo no encontrado: ${a.sku}`);
+      Object.assign(l, { sku: a.sku.toUpperCase(), cantidad: a.cantidad ?? l.cantidad, estado: 'resuelta' });
+      sincronizarCierreLocal(S, l.cierre);
+    },
+    rpc: a => ['resolver_linea_cierre', { p_linea: a.linea, p_sku: a.sku, p_cantidad: a.cantidad ?? null }],
+    desc: () => 'Resolver una línea de un cierre',
+  },
+  reprocesarCierre: {
+    local: (S, a) => {
+      if (S.rol !== 'admin') throw new Error('Solo el administrador');
+      const ci = S.cierres.find(c => c.id === a.id); if (!ci) throw new Error('Cierre no encontrado');
+      if (!ci.vehiculo) { const eq = S.equipos.find(e => e.nombre.trim().toLowerCase() === ci.equipoWizard.trim().toLowerCase()); ci.equipo = eq?.id; ci.vehiculo = eq ? vehiculoDeEquipo(S, eq.id, ci.fecha) : undefined; }
+      sincronizarCierreLocal(S, ci.id);
+    },
+    rpc: a => ['reprocesar_cierre', { p_cierre: a.id }],
+    desc: () => 'Reprocesar un cierre',
+  },
+  recuentoVehiculo: {
+    local: (S, a) => {
+      const v = S.vehiculos.find(x => x.id === a.vehiculo); if (!v) throw new Error('Vehículo no encontrado');
+      for (const l of a.lineas) {
+        const p = find(S, l.sku); if (!p) throw new Error(`Producto no encontrado: ${l.sku}`);
+        if (l.contado < 0) throw new Error('La cantidad contada no puede ser negativa');
+        const d = redondea(l.contado - unidadesABordo(S, v.id, p.sku) / contenidoDe(p)); if (!d) continue;
+        if (S.rol === 'admin') applyMovement(S, { sku: p.sku, type: 'ajuste', qty: d, reason: 'Recuento de vehículo', ref: `Recuento ${v.matricula}`, vehiculo: v.id });
+        else S.pendientes.unshift({ id: nuevoId(), ts: Date.now(), tipo: 'recuento', sku: p.sku, qty: d, reason: 'Diferencia de recuento del vehículo', ref: `Recuento ${v.matricula}`, serials: [], operator: S.operator, estado: 'pendiente', vehiculo: v.id, provisional: true });
+      }
+    },
+    rpc: a => ['registrar_recuento_vehiculo', { p_id: a.id, p_vehiculo: a.vehiculo, p_lineas: a.lineas }],
+    desc: (S, a) => `Recuento del vehículo ${S.vehiculos.find(v => v.id === a.vehiculo)?.matricula || a.vehiculo}`,
+  },
+  cierreHistorico: {
+    local: (S, a) => { if (S.rol !== 'admin') throw new Error('Solo el administrador carga el histórico'); registrarCierreLocal(S, a.cierre, a.lineas, 'historico'); },
+    rpc: a => ['aplicar_cierre_admin', { p: a.cierre, p_lineas: a.lineas }],
+    desc: (_S, a) => `Cierre ${a.cierre.numInst || a.cierre.esbrainUuid}`,
+  },
+  revocarIntegracion: {
+    local: (S, a) => { if (S.rol !== 'admin') throw new Error('Solo el administrador'); const i = S.integraciones.find(x => x.id === a.id); if (i && !i.revocado) i.revocado = Date.now(); },
+    rpc: a => ['revocar_integracion', { p_id: a.id }],
+    desc: () => 'Revocar una integración',
+  },
   telefonoTecnico: {
     // E-014: como el correo, cualquier usuario activo lo puede escribir (desde la pantalla de firma); se guarda en formato +34…
     local: (S, a) => {
@@ -269,7 +363,7 @@ export const OPS: Defs = {
       if (S.rol !== 'admin') throw new Error('Solo el administrador puede borrar los datos de ejemplo');
       if (!S.configApp.modoDemo) throw new Error('Los datos de ejemplo ya se borraron');
       Object.assign(S, { products: [], movements: [], albaranes: [], equipos: [], tecnicos: [], entregas: [], herramientas: [], pendientes: [], avisos: [], minimosHerramienta: [],
-        envios: [], actas: [], vehiculos: [], asignaciones: [], aBordo: [], portalEnlaces: [], copias: [], pedidos: {}, cesta: { equipo: '', receptor: null, lineas: [], obra: '', paso: 1 }, seq: { ent: 0 } });
+        envios: [], actas: [], vehiculos: [], asignaciones: [], aBordo: [], portalEnlaces: [], copias: [], cierres: [], lineasCierre: [], pedidos: {}, cesta: { equipo: '', receptor: null, lineas: [], obra: '', paso: 1 }, seq: { ent: 0 } });
       S.configApp = { modoDemo: false, demoBorrada: Date.now(), demoBorradaPor: S.operator };
     },
     rpc: () => ['limpiar_demostracion', {}],

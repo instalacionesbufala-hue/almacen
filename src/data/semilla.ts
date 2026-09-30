@@ -90,7 +90,7 @@ export function fresh(): Estado {
   return {
     v: 3, products: clone(SEED_PRODUCTS), movements: seedMovements(), albaranes: seedAlbaranes(),
     equipos: clone(SEED_EQUIPOS), tecnicos: clone(SEED_TECNICOS), entregas: seedEntregas(), herramientas: seedHerramientas(), propietarios: clone(SEED_PROPIETARIOS), pendientes: [], perfiles: [], rol: 'admin', avisos: [], minimosHerramienta: [{ modelo: 'Makita DDF484', minimo: 1, proveedor: 'Saltoki Alcobendas' }], configAvisos: clone(CONFIG_AVISOS_DEFECTO), envios: [], actas: [],
-    vehiculos: clone(SEED_VEHICULOS), asignaciones: seedAsignaciones(), aBordo: seedABordo(), configApp: { modoDemo: true }, portalEnlaces: [], copias: [],
+    vehiculos: clone(SEED_VEHICULOS), asignaciones: seedAsignaciones(), aBordo: seedABordo(), configApp: { modoDemo: true, kitFijacion: 'A' }, portalEnlaces: [], copias: [], cierres: [], lineasCierre: [], equivalencias: [], kits: {}, integraciones: [],
     operator: OFICINA, pedidos: {}, cesta: { equipo: 'F01', receptor: 'T1', lineas: [], obra: '', paso: 1 }, seq: { ent: 412 },
   };
 }
