@@ -417,7 +417,7 @@ Decisiones posteriores del usuario (29/09/2026, misma sesión):
 **Servidor** (`supabase/functions/leer-albaran/index.ts`, Edge Function de Supabase):
 - Recibe la foto (JPG, PNG, WebP, HEIC) o el PDF, de 10 MB como máximo.
 - Solo atiende a usuarios con sesión y activos (`es_usuario_activo`). El catálogo se lee con la sesión del usuario (RLS), así que nunca ve costes.
-- Llama a Gemini (`gemini-2.5-flash`, cambiable con el secreto `GEMINI_MODELO`) con salida JSON estructurada.
+- Llama a Gemini (`gemini-flash-latest` desde el 30/09/2026, porque Google retiró `gemini-2.5-flash`; cambiable con el secreto `GEMINI_MODELO`) con salida JSON estructurada.
 - La clave `GEMINI_API_KEY` solo existe en los secretos de Supabase; el navegador nunca la ve.
 - Si se pasa del límite gratuito, devuelve un mensaje claro (429).
 

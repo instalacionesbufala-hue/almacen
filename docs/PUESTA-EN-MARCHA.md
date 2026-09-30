@@ -160,6 +160,8 @@ Son tres pequeños programas que se ejecutan en Supabase, donde las claves no es
 
 Si aparece *Se ha alcanzado el límite gratuito*, has pasado el cupo diario de Gemini: vuelve a intentarlo al día siguiente.
 
+Si aparece *Gemini ha respondido 404* o *Gemini no reconoce el modelo*, Google ha retirado el modelo. La función usa `gemini-flash-latest`, que siempre apunta al vigente. Vuelve a desplegarla con `npx.cmd supabase functions deploy leer-albaran` y, si creaste el secreto `GEMINI_MODELO`, bórralo en Supabase → **Edge Functions** → **Secrets**.
+
 ## 8. Avisos de reposición: correo, push y Telegram (opcional)
 
 Los avisos **en la app** funcionan desde ya. Para recibirlos fuera, activa los canales que quieras. Primero, lo común a todos:

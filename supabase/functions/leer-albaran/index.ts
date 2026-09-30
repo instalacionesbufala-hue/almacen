@@ -10,7 +10,8 @@ import { construirPrompt, ESQUEMA_RESPUESTA, normalizarRespuesta, type ItemCatal
 const URL = Deno.env.get('SUPABASE_URL')!;
 const ANON = Deno.env.get('SUPABASE_ANON_KEY')!;
 const CLAVE = Deno.env.get('GEMINI_API_KEY') || '';
-const MODELO = Deno.env.get('GEMINI_MODELO') || 'gemini-2.5-flash';
+// Alias que Google mantiene apuntando al Flash vigente: los modelos con número se retiran (gemini-2.5-flash ya no admite usuarios nuevos)
+const MODELO = Deno.env.get('GEMINI_MODELO') || 'gemini-flash-latest';
 const MAX_BYTES = 10 * 1024 * 1024;
 
 function base64(buf: ArrayBuffer): string {
@@ -48,6 +49,8 @@ Deno.serve(conCors(async (req) => {
     }),
   });
   if (r.status === 429) return json({ error: 'Se ha alcanzado el límite gratuito de lecturas de Gemini. Prueba más tarde.' }, 429);
+  if (r.status === 404) return json({ error: `Gemini no reconoce el modelo "${MODELO}" (Google lo habrá retirado). Quita el secreto GEMINI_MODELO o pon uno vigente, y vuelve a desplegar leer-albaran.` }, 502);
+  if (r.status === 400 || r.status === 403) return json({ error: `Gemini rechaza la petición (${r.status}): revisa que GEMINI_API_KEY sea correcta y esté activa en Google AI Studio.` }, 502);
   if (!r.ok) return json({ error: `Gemini ha respondido ${r.status}` }, 502);
   const g = await r.json();
   const texto = g?.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text || '').join('') || '';
