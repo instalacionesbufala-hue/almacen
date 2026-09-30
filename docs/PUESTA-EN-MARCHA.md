@@ -40,24 +40,26 @@ Esta guía convierte la demo en la app real: con usuarios y contraseñas, con lo
 
 Las "migraciones" son los archivos de `supabase/migrations/`: crean las tablas, las reglas y los permisos. Se aplican con la herramienta oficial de Supabase, que se descarga sola con `npx`.
 
+> **Cómo escribir los comandos de esta guía.** Copia solo lo que hay dentro de cada recuadro gris. La palabra `bash` que a veces aparece encima no se escribe: solo indica el tipo de bloque. En Windows los comandos llevan `npx.cmd` (no `npx`), porque PowerShell bloquea `npx` a secas con el error *la ejecución de scripts está deshabilitada*.
+
 - [ ] 2.1. Abre una terminal en la carpeta `almacen`: en el Explorador de Windows entra en la carpeta, clic derecho en un hueco → **Abrir en Terminal**. Escribe y pulsa Enter:
   ```bash
-  npx supabase login
+  npx.cmd supabase login
   ```
   Se abre el navegador: pulsa **Authorize**. La terminal dirá *You are now logged in*.
 - [ ] 2.2. Enlaza la carpeta con tu proyecto. Cambia `abcdefghijkl` por tu referencia del paso 1.4:
   ```bash
-  npx supabase link --project-ref abcdefghijkl
+  npx.cmd supabase link --project-ref abcdefghijkl
   ```
   Cuando pida la **database password**, escribe la del paso 1.2. Mientras la escribes no se ve nada en pantalla; es normal.
 - [ ] 2.3. Crea las tablas:
   ```bash
-  npx supabase db push
+  npx.cmd supabase db push
   ```
   Te enseña la lista de migraciones (7 archivos) y pregunta si continúa: escribe `Y` y pulsa Enter. Termina con *Finished supabase db push*.
 - [ ] 2.4. **(Opcional) Cargar los datos de demostración** (referencias, furgonetas y técnicos de ejemplo). Sirve para probar la app antes de meter lo real:
   ```bash
-  npx supabase db push --include-seed
+  npx.cmd supabase db push --include-seed
   ```
   Si prefieres empezar vacío, sáltate este paso: las referencias reales se dan de alta con la cámara o con "Añadir referencia". Los datos de ejemplo también se pueden borrar después, desde la ficha de cada referencia.
 - [ ] 2.5. Comprueba que ha ido bien: en Supabase, **Table Editor** debe listar `productos`, `movimientos`, `entregas`, `perfiles` y otras. En **Storage** deben aparecer dos espacios **privados** (con candado): `justificantes` y `fotos-articulos`. Si `fotos-articulos` saliera como *Public*, ábrelo → **Edit bucket** → desmarca *Public bucket*: las fotos de Saltoki y de fabricantes no deben quedar públicas.
@@ -113,18 +115,18 @@ Son tres pequeños programas que se ejecutan en Supabase, donde las claves no es
 
 - [ ] 6.1. En la terminal de la carpeta `almacen` (con la sesión del paso 2.1):
   ```bash
-  npx supabase functions deploy usuarios
+  npx.cmd supabase functions deploy usuarios
   ```
   ```bash
-  npx supabase functions deploy notificar
+  npx.cmd supabase functions deploy notificar
   ```
   ```bash
-  npx supabase functions deploy leer-albaran
+  npx.cmd supabase functions deploy leer-albaran
   ```
   Cada comando termina con *Deployed Functions*. Compruébalo en Supabase → **Edge Functions**: deben aparecer las tres.
 - [ ] 6.2. Di a las funciones desde qué web se les puede llamar (así ninguna otra página puede usarlas con tu sesión). Es la dirección de la app del paso 5, **sin la ruta final**:
   ```bash
-  npx supabase secrets set ORIGEN_APP=https://instalacionesbufala-hue.github.io
+  npx.cmd supabase secrets set ORIGEN_APP=https://instalacionesbufala-hue.github.io
   ```
   Si algún día publicas la app en otro dominio, añádelo separado por comas (`ORIGEN_APP=https://instalacionesbufala-hue.github.io,https://almacen.tudominio.es`). `localhost` siempre está permitido para desarrollo.
 
@@ -139,7 +141,7 @@ Son tres pequeños programas que se ejecutan en Supabase, donde las claves no es
 - [ ] 7.1. Entra en **https://aistudio.google.com** con una cuenta de Google → **Get API key** → **Create API key**. Copia la clave, que empieza por `AIza`.
 - [ ] 7.2. Guárdala en Supabase (no en GitHub). Cambia `AIza...` por tu clave:
   ```bash
-  npx supabase secrets set GEMINI_API_KEY=AIza...
+  npx.cmd supabase secrets set GEMINI_API_KEY=AIza...
   ```
   (También se puede hacer desde Supabase → **Edge Functions** → **Secrets** → **Add new secret**.)
 - [ ] 7.3. En GitHub → **Variables** (como en el paso 4.1), crea:
@@ -161,7 +163,7 @@ Los avisos **en la app** funcionan desde ya. Para recibirlos fuera, activa los c
   1. Inventa una contraseña larga (por ejemplo, 30 letras y números al azar). Es la **clave de la tarea**.
   2. En la terminal (cambia `LA_CLAVE` por ella):
      ```bash
-     npx supabase secrets set CLAVE_CRON=LA_CLAVE
+     npx.cmd supabase secrets set CLAVE_CRON=LA_CLAVE
      ```
   3. En Supabase → **SQL Editor**, pega esto (con tu referencia y la misma clave) y pulsa **Run**:
      ```sql
@@ -175,7 +177,7 @@ Después, cada canal se configura en la app, en **Configuración → Avisos**, d
 - [ ] 8.1. Crea una cuenta gratis en **https://resend.com** → **API Keys** → **Create API Key** → copia la clave, que empieza por `re_`.
 - [ ] 8.2. Guárdala en Supabase:
   ```bash
-  npx supabase secrets set RESEND_API_KEY=re_...
+  npx.cmd supabase secrets set RESEND_API_KEY=re_...
   ```
 - [ ] 8.3. **Remitente.** Tienes dos opciones:
   - **Sin dominio propio:** usa `Almacén <onboarding@resend.dev>`. Solo llega **a tu propio correo**, el de la cuenta de Resend.
@@ -185,12 +187,12 @@ Después, cada canal se configura en la app, en **Configuración → Avisos**, d
 ### Notificaciones push en el móvil
 - [ ] 8.5. Genera el par de claves de push en la terminal:
   ```bash
-  npx web-push generate-vapid-keys
+  npx.cmd web-push generate-vapid-keys
   ```
   Te da una **Public Key** y una **Private Key**.
 - [ ] 8.6. Guárdalas en Supabase (con tus valores y tu correo):
   ```bash
-  npx supabase secrets set VAPID_PUBLICA=LA_PUBLICA VAPID_PRIVADA=LA_PRIVADA VAPID_CONTACTO=mailto:tu-correo@ejemplo.com
+  npx.cmd supabase secrets set VAPID_PUBLICA=LA_PUBLICA VAPID_PRIVADA=LA_PRIVADA VAPID_CONTACTO=mailto:tu-correo@ejemplo.com
   ```
 - [ ] 8.7. En GitHub → **Variables**, crea `VITE_VAPID_PUBLICA` con la **Public Key**; nunca la privada. Repite el paso 5.2.
 - [ ] 8.8. En cada móvil que deba recibir avisos, abre la app → **Configuración → Avisos → Push** → **Activar en este dispositivo** → acepta el permiso.
@@ -201,7 +203,7 @@ Después, cada canal se configura en la app, en **Configuración → Avisos**, d
 - [ ] 8.9. En Telegram, busca **@BotFather** → escribe `/newbot` → pon un nombre (por ejemplo, *Almacén Búfala*) y un usuario terminado en `bot`. Te da un **token** del tipo `123456:ABC...`.
 - [ ] 8.10. Guárdalo en Supabase:
   ```bash
-  npx supabase secrets set TELEGRAM_BOT_TOKEN=123456:ABC...
+  npx.cmd supabase secrets set TELEGRAM_BOT_TOKEN=123456:ABC...
   ```
 - [ ] 8.11. Busca tu bot en Telegram y escríbele cualquier cosa (por ejemplo, "hola"). Para un grupo, añade el bot al grupo y escribe algo en él.
 - [ ] 8.12. Averigua el `chat_id`: abre en el navegador `https://api.telegram.org/botTU_TOKEN/getUpdates`, con tu token. Busca `"chat":{"id":` y copia el número que sigue; en los grupos empieza por `-`.
@@ -272,6 +274,8 @@ Si los seis pasos salen bien, la app está en marcha.
 | Los albaranes siguen en modo simulado | Falta `VITE_ALBARANES_URL` o no has repetido el paso 5.2. |
 | "La lectura con IA no está configurada" | Falta el secreto `GEMINI_API_KEY` (paso 7.2). |
 | Los avisos se quedan en "pendiente" en el Registro de envíos | Faltan los pasos 8.0 (clave de la tarea y Vault) o la clave del canal. El error concreto sale en el registro. |
+| *No se puede cargar el archivo …npx.ps1 porque la ejecución de scripts está deshabilitada* | Escribe `npx.cmd` en lugar de `npx`. No hace falta cambiar ninguna opción de seguridad de Windows. |
+| *bash no se reconoce como nombre de un cmdlet* | La palabra `bash` no se escribe: copia solo el comando que hay dentro del recuadro. |
 | Supabase dice *Project paused* | Pulsa **Restore project**. Para que no vuelva a pasar, haz el paso 10. |
 | Las fotos no se ven en otro móvil | La foto se sube en cuanto el móvil que la hizo tiene cobertura y la app abierta; mientras tanto, en su ficha pone *Pendiente de subir*. |
 | No llegan las push en iPhone | Hay que abrir la app desde el icono de la pantalla de inicio (paso 8.8). |
