@@ -1,0 +1,29 @@
+campo_wizard;condición;artículo(s) del almacén;cantidad;estado
+metrosLinea;tipoLinea=tubo · fase=mono · sección=6;6000650603 + 6000650604 + 6000650605;metrosLinea m de cada conductor (fase marrón, neutro azul, tierra AV);directa
+metrosLinea;tipoLinea=tubo · fase=mono · sección=10;6000650653 + 6000650654 + 6000650655;metrosLinea m de cada conductor;directa
+metrosLinea;tipoLinea=tubo · fase=trifásica · sección=6;6000650603 + 6000650601 + 6000650602 + 6000650604 + 6000650605;metrosLinea m de cada conductor (3 fases + neutro + tierra);directa
+metrosLinea;tipoLinea=tubo · trifásica 10 · o sección 16/25;(sin artículo en stock);—;PENDIENTE: dar de alta
+metrosLinea;tipoLinea=manguera · fase=mono · sección=6;6040610306 (RZ1-K 3G6);metrosLinea m;directa
+metrosLinea;tipoLinea=manguera · resto de secciones o trifásica;"(3G10 pendiente de servir; resto sin artículo)";—;PENDIENTE: dar de alta
+metrosUtp;hardware = V2C (Trydan);7270020010 (Cat6 U/UTP);metrosUtp m;directa (usuario)
+metrosUtp;hardware = Policharger;7270021010 (Cat6 F/UTP);metrosUtp m;directa (usuario)
+metrosUtp;otro modelo o sin hardware;(a Pendientes para elegir);—;revisión manual
+rj45;—;7280040060 (sobre de 25);rj45 / 25 sobres;directa · fracción del sobre
+bornasMono;—;8909080510;1 ud por kit;directa
+bornasTrif;—;(sin artículo);—;PENDIENTE: dar de alta
+pvc32;—;6201000032;pvc32 m (lo indica el técnico);directa
+corr32;—;6200020032;corr32 m (lo indica el técnico);directa
+acero32;—;6203000032;acero32 m (lo indica el técnico);directa
+canaleta;canaleta del wizard = moldura Hager (confirmado);6222106082 moldura Hager ATEHA 30x12;canaleta m;directa (usuario)
+acero40 · sot50 · sot90;—;(sin artículo);—;PENDIENTE: dar de alta
+pvc32 (manguitos);si pvc32 > 0;6201025023 manguito M-32;floor(pvc32 / 3) + 1  → 3 m = 2 · 4 m = 2 · 6 m = 3;estimada (regla del usuario)
+acero32 (manguitos);si acero32 > 0;(manguito acero M-32: sin artículo);floor(acero32 / 3) + 1;PENDIENTE: dar de alta
+pvc32 + acero32 (fijaciones);1 fijación cada 0,50 m · el corrugado NO cuenta;kit de fijación por defecto;ceil(metros / 0,5);estimada (regla del usuario)
+kit de fijación A (por defecto);clip + clavo;5102012032 clip BTM 32-35 + clavo (sin artículo en stock);por fijación: 1 clip · 1 clavo;estimada · PENDIENTE: dar de alta el clavo
+kit de fijación B (alternativo);clip + tornillo + taco;5102012032 clip BTM + 5301012054 tornillo 5x40 + 5150000106 taco 6x30 (bote de 1000);por fijación: 1 · 1 · 1/1000 bote;estimada · configurable
+kit de fijación C (alternativo);abrazadera + tirafondo + taco;5101010032 abrazadera M6 32 + 5108000003 tirafondo M6x30 + taco;por fijación: 1 · 1 · 1/1000 bote;estimada · configurable
+cajaReg · caja6 · caja12 · caja18 · cerradura;—;(sin artículo);—;PENDIENTE: dar de alta
+mag1025 · mag32 · mag40;—;(sin artículo);—;PENDIENTE: dar de alta
+pica · preinst;kit;(sin artículo);—;PENDIENTE: dar de alta
+hardware (modelo del cargador);Trydan 7,4 kW / 22 kW / 7,4 kW + Schuko;8900590300 · 8900500025 · 8900500015 (custodia Esmove);"1 ud → ""Instalado en obra"" con numInst (sin n.º de serie; lo registra Esbrain / Instant Box)";directa
+medidor (si lo indica el cierre);—;8900500101 medidor V2C (custodia Esmove);1 ud;PENDIENTE: el wizard no tiene campo para el medidor
