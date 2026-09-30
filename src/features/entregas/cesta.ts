@@ -17,9 +17,10 @@ export const cambiarTalla = (sku: string, nuevo: string) => hecho(D.cambiarTalla
 export const escanearEnCesta = (raw: string) => hecho(D.escanear(S(), cesta(), raw), true);
 export const disponible = (sku: string) => { const E = S(), p = E.products.find(x => x.sku === sku); return p ? D.disponibleEnCesta(E, cesta(), p) : 0; };
 
-export function paraQuien(receptor: string) {
-  const E = S(), c = cesta(), eq = E.equipos.find(e => e.tecnicos.includes(receptor));
-  c.receptor = receptor; c.equipo = eq?.id || '';
+/** E-017: la entrega es para un equipo; el técnico que recoge se elige al firmar */
+export function paraEquipo(equipo: string) {
+  const c = cesta();
+  c.equipo = equipo; c.receptor = null;
   guardar();
 }
 export const irAPaso = (paso: 1 | 2 | 3) => { cesta().paso = paso; guardar(); };

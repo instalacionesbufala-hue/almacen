@@ -8,16 +8,24 @@ export { generarToken, hashToken, tokenDeRuta, type DatosPortal } from '../../su
 /** Dirección del portal: la de la app con #/tecnico/<token> */
 export const enlacePortal = (token: string, base: { origin: string; pathname: string } = location) => `${base.origin}${base.pathname}#/tecnico/${token}`;
 
-/** Demostración (sin Supabase): lo que vería el técnico, con la misma forma que devuelve el servidor. Solo SUS entregas. */
+/** ¿Pertenecía el técnico a ese equipo en ese momento? (historial de asignaciones; sin historial, la composición actual) */
+export function eraDelEquipo(S: Pick<Estado, 'asignaciones' | 'equipos'>, tecnico: string, equipo: string, ts: number) {
+  const hist = S.asignaciones.filter(a => a.tipo === 'tecnico' && a.sujeto === tecnico);
+  if (!hist.length) return !!S.equipos.find(e => e.id === equipo)?.tecnicos.includes(tecnico);
+  return hist.some(a => a.equipo === equipo && a.desde <= ts && (a.hasta === undefined || ts < a.hasta));
+}
+
+/** Demostración (sin Supabase): lo que vería el técnico, con la misma forma que devuelve el servidor.
+    E-017: las entregas DE SU EQUIPO mientras pertenece a él (ni las de equipos anteriores ni las posteriores). */
 export function datosPortalLocal(S: Estado, tecnicoId: string): DatosPortal | null {
   const t = S.tecnicos.find(x => x.id === tecnicoId); if (!t) return null;
   const eq = S.equipos.find(e => e.tecnicos.includes(t.id));
   const veh = eq ? vehiculoDeEquipo(S, eq.id) : undefined, v = S.vehiculos.find(x => x.id === veh);
   return {
     tecnico: { id: t.id, nombre: t.nombre, equipo: eq?.nombre ?? null },
-    entregas: S.entregas.filter(e => e.receptor === t.id && (e.estado ?? 'firmada') === 'firmada').sort((a, b) => b.ts - a.ts).map(e => ({
+    entregas: S.entregas.filter(e => (e.estado ?? 'firmada') === 'firmada' && eraDelEquipo(S, t.id, e.equipo, e.ts)).sort((a, b) => b.ts - a.ts).map(e => ({
       id: e.id, numero: e.numero || e.id, fecha: new Date(e.ts).toISOString(), obra: e.obra || '',
-      equipo: S.equipos.find(q => q.id === e.equipo)?.nombre ?? null, vehiculo: S.vehiculos.find(x => x.id === e.vehiculo)?.matricula ?? null,
+      equipo: S.equipos.find(q => q.id === e.equipo)?.nombre ?? null, vehiculo: S.vehiculos.find(x => x.id === e.vehiculo)?.matricula ?? null, recoge: S.tecnicos.find(x => x.id === e.receptor)?.nombre ?? null,
       lineas: e.lineas.map(l => { const p = find(S, l.sku), h = S.herramientas.find(x => x.id === l.dotacion);
         return { nombre: h?.nombre || p?.name || l.sku, codigo: h ? h.serie : l.sku, cantidad: h ? 1 : l.qty, unidad: h ? 'ud' : p?.unit || 'ud', foto: p?.fotoMini ?? null }; }),
     })),

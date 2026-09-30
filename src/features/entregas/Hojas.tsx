@@ -1,7 +1,7 @@
 /* E-011 · Piezas de la entrega: panel de firma en pantalla grande (con el correo de la copia), entregas preparadas,
    albarán con el estado de la copia por correo, tallas del técnico e informe de entregas. Sin plantillas. */
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import type { Entrega, LineaEntrega, Tallas, TipoTalla } from '../../data/tipos';
+import type { Entrega, LineaEntrega, Tallas, TipoTalla, Tecnico } from '../../data/tipos';
 import { MARCA } from '../../data/catalogo';
 import { find, nombreVehiculo, numEntrega, qtyTxt } from '../../domain/reglas';
 import { fechaHora, num } from '../../domain/formato';
@@ -16,46 +16,60 @@ import { procesarAhora } from '../../store/nube/avisos';
 import { closeModal, openModal, SheetFoot, SheetHead } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 import { Firma, firmaPNG, type Trazo } from '../../ui/firma';
-import { BTN_P, BTN_S, Campo, FirmaImg, Icon, INP, LBL, Vacio } from '../../ui/base';
+import { BTN_P, BTN_S, Campo, FirmaImg, Icon, INP, LBL, Vacio, Avatar } from '../../ui/base';
 import { FotoLinea } from '../../ui/foto';
 import { compartirJustificante, descargarJustificante } from './justificante';
 import { enlaceWhatsApp, normalizarTelefono, textoWhatsApp } from '../../domain/whatsapp';
 import { enlacePortal, generarToken, hashToken } from '../../domain/portal';
+import { esPersonal, firmantesDe } from '../../domain/entregas';
 
 /** Sin dominio propio verificado en Resend, la copia solo llega al correo del administrador */
 export const sinDominioResend = (remitente: string) => !remitente.trim() || /resend\.dev/i.test(remitente);
 
 /* ---------- Panel de firma: resumen grande con fotos, correo de la copia y firma con el dedo ---------- */
-export function PanelFirma({ lineas, receptor, obra, onFirmar, enPagina, extra }: { lineas: LineaEntrega[]; receptor: string; obra?: string; onFirmar: (firma: string, email: string, telefono: string) => Promise<boolean>; enPagina?: boolean; extra?: ReactNode }) {
-  const E = useAlmacen(), t = E.tecnicos.find(x => x.id === receptor);
+/** E-017: la entrega es del equipo; firma el técnico del equipo que recoge (se elige aquí; con uno solo, ya viene elegido) */
+export interface DatosFirma { firma: string; email: string; telefono: string; recoge: string; copiaEquipo: boolean }
+export function PanelFirma({ lineas, equipo, receptor, obra, onFirmar, enPagina, extra }: { lineas: LineaEntrega[]; equipo: string; receptor?: string; obra?: string; onFirmar: (d: DatosFirma) => Promise<boolean>; enPagina?: boolean; extra?: ReactNode }) {
+  const E = useAlmacen(), firmantes = firmantesDe(E, equipo), eqF = E.equipos.find(q => q.id === equipo);
+  const [recoge, setRecoge] = useState(receptor && firmantes.some(x => x.id === receptor) ? receptor : firmantes.length === 1 ? firmantes[0].id : '');
+  const t = E.tecnicos.find(x => x.id === recoge);
   const [firma, setFirma] = useState<Trazo[]>([]);
   const [email, setEmail] = useState(t?.email || '');
   const [telefono, setTelefono] = useState(t?.telefono || '');
+  const [copiaEquipo, setCopiaEquipo] = useState(false);
+  const elegir = (id: string) => { const x = E.tecnicos.find(y => y.id === id); setRecoge(id); setEmail(x?.email || ''); setTelefono(x?.telefono || ''); };
   const [ocupado, setOcupado] = useState(false);
   const malo = !!email.trim() && !emailValido(email);
   const telMalo = !!telefono.trim() && !normalizarTelefono(telefono);
   const firmar = async () => {
+    if (!recoge) return toast('Elige qué técnico del equipo recoge y firma.', 'err');
     if (malo) return toast('El correo no es válido: corrígelo o déjalo vacío.', 'err');
     if (telMalo) return toast('El teléfono no es válido: 9 cifras o con el prefijo del país (+34 600 000 000).', 'err');
     setOcupado(true);
-    try { if (await onFirmar(firmaPNG(firma), email.trim().toLowerCase(), telefono.trim() ? normalizarTelefono(telefono)! : '')) setFirma([]); } finally { setOcupado(false); }
+    try { if (await onFirmar({ firma: firmaPNG(firma), email: email.trim().toLowerCase(), telefono: telefono.trim() ? normalizarTelefono(telefono)! : '', recoge, copiaEquipo })) setFirma([]); } finally { setOcupado(false); }
   };
   return (<>
     <div className="p-4 lg:p-5 flex flex-col gap-4">
+      <div><div className={`${LBL} mb-1`}>Recoge y firma (técnico de {eqF?.nombre || 'el equipo'})</div>
+        {!firmantes.length ? <p className="text-body-sm text-error">El equipo no tiene técnicos asignados: asígnale alguno en Equipos y técnicos.</p>
+          : <div className="flex flex-wrap gap-2">{firmantes.map(x => <button key={x.id} type="button" onClick={() => elegir(x.id)}
+            className={`min-h-14 px-4 rounded-xl flex items-center gap-2 font-semibold ${recoge === x.id ? 'bg-primary text-white' : 'bg-surface-container-low hover:bg-surface-container'}`}>
+            <Avatar n={x.nombre} c={recoge === x.id ? 'bg-white/20 text-white' : undefined} />{x.nombre}{recoge === x.id && <Icon n="check_circle" className="ico-fill" />}</button>)}</div>}</div>
       <ul className="flex flex-col">{lineas.map((l, i) => { const p = find(E, l.sku), h = E.herramientas.find(x => x.id === l.dotacion); return (
         <li key={i} className="flex items-center gap-3 py-2.5 border-b border-surface-container">
           <FotoLinea sku={l.sku} herramienta={l.dotacion} size="w-14 h-14" />
           <span className="flex-1 min-w-0 text-body-lg font-medium leading-snug">{h ? `${h.nombre} · ${h.serie}` : p?.name || l.sku}
             {l.serials.length ? <span className="block font-mono text-label-md text-secondary">S/N {l.serials.join(', ')}</span> : null}
-            {p?.talla ? <span className="block text-body-sm text-secondary">Talla {p.talla}</span> : null}</span>
+            {p?.talla ? <span className="block text-body-sm text-secondary">Talla {p.talla}</span> : null}
+            {(h || (p && esPersonal(p))) ? <span className="block text-body-sm text-violet-800">Dotación personal de {t?.nombre || 'quien firme'}</span> : null}</span>
           <b className="text-headline-sm whitespace-nowrap">{h ? '1 ud' : p ? qtyTxt(p, l.qty) : num(l.qty)}</b></li>); })}</ul>
       {obra && <p className="text-body-sm">Obra: <b>{obra}</b></p>}
-      <Campo label={`WhatsApp de ${t?.nombre || 'el técnico'} (para enviarle la copia y su enlace)`}>
+      <Campo label={`WhatsApp de ${t?.nombre || 'quien recoge'} (para enviarle la copia y su enlace)`}>
         <input value={telefono} onChange={e => setTelefono(e.target.value)} type="tel" inputMode="tel" autoComplete="off" placeholder="600 000 000"
           className={`${INP} h-14 ${telMalo ? 'ring-2 ring-error' : ''}`} />
       </Campo>
       {telMalo ? <p className="text-body-sm text-error -mt-2">Teléfono no válido.</p> : telefono.trim() && normalizarTelefono(telefono) !== (t?.telefono || null) ? <p className="text-body-sm text-secondary -mt-2">Se guardará en su ficha.</p> : null}
-      <Campo label={`Copia por correo a ${t?.nombre || 'el técnico'} (opcional)`}>
+      <Campo label={`Copia por correo a ${t?.nombre || 'quien recoge'} (opcional)`}>
         <input value={email} onChange={e => setEmail(e.target.value)} type="email" inputMode="email" autoComplete="off" placeholder="correo@ejemplo.es (opcional)"
           className={`${INP} h-14 ${malo ? 'ring-2 ring-error' : ''}`} />
       </Campo>
@@ -64,21 +78,22 @@ export function PanelFirma({ lineas, receptor, obra, onFirmar, enPagina, extra }
           : email.trim().toLowerCase() !== (t?.email || '') ? 'Se guardará en su ficha y le llegará el PDF de la entrega firmada.'
             : 'Al firmar le llega el PDF de la entrega firmada.'}
         {!!email.trim() && modoNube && sinDominioResend(E.configAvisos.correoRemitente) && <span className="block text-amber-800">Aviso: sin dominio propio verificado en Resend, la copia solo llega al correo del administrador (guía, paso 8). Podrás compartir el PDF por WhatsApp o correo.</span>}</p>
-      <div><div className={`${LBL} mb-1`}>Firma de {t?.nombre}</div><Firma trazos={firma} onChange={setFirma} />
+      {firmantes.length > 1 && <label className="flex items-center gap-2 text-body-md"><input type="checkbox" checked={copiaEquipo} onChange={e => setCopiaEquipo(e.target.checked)} className="w-5 h-5 accent-primary" />Enviar la copia por correo también a los demás técnicos del equipo</label>}
+      <div><div className={`${LBL} mb-1`}>Firma de {t?.nombre || 'quien recoge'}</div><Firma trazos={firma} onChange={setFirma} />
         <button onClick={() => setFirma([])} className="text-body-sm text-secondary mt-1 h-10">Borrar firma</button></div>
-      <p className="text-body-sm text-secondary">Al firmar confirmas que recibes este material revisado y completo.</p>
+      <p className="text-body-sm text-secondary">Al firmar confirmas que recoges para {eqF?.nombre || 'el equipo'} este material revisado y completo.</p>
     </div>
-    {(() => { const b = <><button onClick={() => void firmar()} disabled={!firma.length || ocupado || malo} className={`${BTN_P} w-full h-16 text-headline-sm`}><Icon n="check_circle" className="ico-fill" />{ocupado ? 'Firmando…' : 'Firmar y recibir'}</button>{extra}</>;
+    {(() => { const b = <><button onClick={() => void firmar()} disabled={!firma.length || ocupado || malo || !recoge} className={`${BTN_P} w-full h-16 text-headline-sm`}><Icon n="check_circle" className="ico-fill" />{ocupado ? 'Firmando…' : 'Firmar y recibir'}</button>{extra}</>;
       return enPagina ? <div className="p-4 border-t border-surface-container flex flex-col gap-2">{b}</div> : <SheetFoot className="flex flex-col gap-2">{b}</SheetFoot>; })()}
   </>);
 }
 
 /** Después de firmar: correo nuevo a la ficha (va antes en la cola), confirmación y, en la nube, envío inmediato de la copia */
-export async function confirmarFirma(id: string, firma: string, email: string, receptor: string, telefono = ''): Promise<boolean> {
+export async function confirmarFirma(id: string, firma: string, email: string, receptor: string, telefono = '', copiaEquipo = false): Promise<boolean> {
   const t = S().tecnicos.find(x => x.id === receptor);
   if (email !== (t?.email || '') && !ejecutar({ op: 'emailTecnico', args: { tecnico: receptor, email } })) return false;
   if (telefono && telefono !== (t?.telefono || '') && !ejecutar({ op: 'telefonoTecnico', args: { tecnico: receptor, telefono } })) return false;
-  if (!ejecutar({ op: 'confirmarEntrega', args: { id, firma } })) return false;
+  if (!ejecutar({ op: 'confirmarEntrega', args: { id, firma, recoge: receptor, copiaEquipo } })) return false;
   if (!modoNube) { const x = S().entregas.find(y => y.id === id)!; x.hash = await hashEntrega(x); guardar(); }
   // el administrador puede lanzar el envío al momento; si no, la tarea programada lo envía en menos de un minuto
   else if (S().rol === 'admin' && email) void procesarAhora();
@@ -90,12 +105,12 @@ export const abrirFirma = (id: string) => openModal(<FirmaPreparada id={id} />, 
 function FirmaPreparada({ id }: { id: string }) {
   const E = useAlmacen(), e = E.entregas.find(x => x.id === id);
   if (!e) return <SheetHead title="Entrega no encontrada" />;
-  const t = E.tecnicos.find(x => x.id === e.receptor);
+  const eqE = E.equipos.find(q => q.id === e.equipo);
   return (<>
-    <SheetHead title={`Entrega para ${t?.nombre}`} sub={`${numEntrega(e)} · ${E.equipos.find(q => q.id === e.equipo)?.nombre || ''}`} />
-    <PanelFirma lineas={e.lineas} receptor={e.receptor} obra={e.obra} onFirmar={async (firma, email, telefono) => {
-      if (!(await confirmarFirma(id, firma, email, e.receptor, telefono))) return false;
-      closeModal(); toast(`Entrega firmada por ${t?.nombre}. Stock descontado.`, 'ok', 6000); abrirRecibo(id);
+    <SheetHead title={`Entrega al equipo ${eqE?.nombre || e.equipo}`} sub={numEntrega(e)} />
+    <PanelFirma lineas={e.lineas} equipo={e.equipo} receptor={e.receptor} obra={e.obra} onFirmar={async d => {
+      if (!(await confirmarFirma(id, d.firma, d.email, d.recoge, d.telefono, d.copiaEquipo))) return false;
+      closeModal(); toast(`Entrega firmada por ${E.tecnicos.find(x => x.id === d.recoge)?.nombre}. Stock descontado.`, 'ok', 6000); abrirRecibo(id);
       return true;
     }} />
   </>);
@@ -111,7 +126,7 @@ export function Preparadas() {
       <h2 className="font-semibold flex items-center gap-2"><Icon n="inventory" className="text-amber-800" />Preparadas: el stock está reservado hasta que el técnico firme</h2>
       {lista.map(e => { const caducada = (e.caduca ?? 0) <= Date.now(), t = E.tecnicos.find(x => x.id === e.receptor); return (
         <div key={e.id} className="flex flex-wrap items-center gap-3 bg-white rounded-lg p-3">
-          <div className="flex-1 min-w-[200px]"><div className="font-semibold">{numEntrega(e)} · {t?.nombre} · {E.equipos.find(q => q.id === e.equipo)?.nombre || ''}</div>
+          <div className="flex-1 min-w-[200px]"><div className="font-semibold">{numEntrega(e)} · {E.equipos.find(q => q.id === e.equipo)?.nombre || e.equipo}{t ? ` · ${t.nombre}` : ''}</div>
             <div className="text-body-sm text-secondary">{e.lineas.length} líneas{e.obra ? ` · ${e.obra}` : ''} · {caducada ? <span className="text-error">reserva caducada: anúlala y prepárala de nuevo</span> : `reserva hasta ${fechaHora(e.caduca!)}`}</div></div>
           <button onClick={() => { if (ejecutar({ op: 'anularEntrega', args: { id: e.id } })) toast('Entrega anulada: el stock vuelve a estar libre.', 'ok'); }} className={`${BTN_S} h-14 px-4`}>Anular</button>
           {!caducada && <button onClick={() => abrirFirma(e.id)} className={`${BTN_P} h-14 px-5`}><Icon n="draw" className="ico-20" />Firmar</button>}
@@ -147,17 +162,17 @@ function Recibo({ id }: { id: string }) {
     <div id="impresion" className="p-5 flex flex-col gap-3 bg-white">
       <div className="flex justify-between"><div><div className="font-bold">{MARCA.nombre}</div><div className="text-body-sm text-secondary">{MARCA.nave}</div></div><div className="text-right font-mono text-label-md">{numEntrega(e)}<br />{fechaHora(e.ts)}</div></div>
       <div className="grid grid-cols-2 gap-2 text-body-sm">
-        <div className="bg-surface-container-low rounded-lg p-2.5"><div className={LBL}>Equipo / vehículo</div>{eq ? eq.nombre : e.equipo}{e.vehiculo ? ` · ${nombreVehiculo(E, e.vehiculo).split(' · ').pop()}` : ''}</div>
-        <div className="bg-surface-container-low rounded-lg p-2.5"><div className={LBL}>Recibe</div>{rec?.nombre} · DNI {e.dni || rec?.dni}</div></div>
+        <div className="bg-surface-container-low rounded-lg p-2.5"><div className={LBL}>Entrega al equipo</div>{eq ? eq.nombre : e.equipo}{e.vehiculo ? ` · ${nombreVehiculo(E, e.vehiculo).split(' · ').pop()}` : ''}</div>
+        <div className="bg-surface-container-low rounded-lg p-2.5"><div className={LBL}>Recoge y firma</div>{rec?.nombre || '—'}{rec ? ` · DNI ${e.dni || rec.dni}` : ''}</div></div>
       <table className="w-full text-body-sm"><thead><tr className={`text-left ${LBL}`}><th className="py-1">Material</th><th>S/N</th><th className="text-right">Cant.</th></tr></thead>
         <tbody>{e.lineas.map((l, i) => { const p = find(E, l.sku), h = E.herramientas.find(x => x.id === l.dotacion); return <tr key={i} className="border-t border-surface-container"><td className="py-1.5">
           <span className="flex items-center gap-2"><FotoLinea sku={l.sku} herramienta={l.dotacion} size="w-9 h-9" /><span>{h ? h.nombre : p ? p.name : l.sku}<span className="block font-mono text-label-sm text-secondary">{h ? h.serie : l.sku}</span></span></span></td>
           <td className="font-mono text-label-sm">{(l.serials || []).map(s => <div key={s}>{s}</div>)}</td><td className="text-right font-semibold">{h ? '1 ud' : p ? qtyTxt(p, l.qty) : num(l.qty)}</td></tr>; })}</tbody></table>
-      {firmada ? <div className="flex items-end justify-between gap-3 border-t border-surface-container pt-3"><div><FirmaImg f={e.firma} className="h-16 w-44" /><div className="text-body-sm text-secondary">Firma del receptor</div></div>
+      {firmada ? <div className="flex items-end justify-between gap-3 border-t border-surface-container pt-3"><div><FirmaImg f={e.firma} className="h-16 w-44" /><div className="text-body-sm text-secondary">Firma de quien recoge</div></div>
         <div className="font-mono text-[9px] text-secondary break-all max-w-[55%] text-right">Huella SHA-256<br />{e.hash || 'Se calcula en el servidor al sincronizar'}</div></div>
         : <p className="text-body-sm text-amber-800">Pendiente de firma{e.estado === 'anulada' ? ' (anulada)' : ''}.</p>}
       {e.obra && <p className="text-body-sm">Obra: <b>{e.obra}</b></p>}
-      <p className="text-body-sm text-secondary">Aceptación de la entrega por el receptor. Registrado por {e.operator}.</p>
+      <p className="text-body-sm text-secondary">Recogida por {rec?.nombre || 'un técnico del equipo'} para el equipo {eq?.nombre || e.equipo}. Registrado por {e.operator}.</p>
     </div>
     {firmada && <CopiaWhatsApp e={e} />}
     {firmada && <CopiaCorreo e={e} email={email} setEmail={setEmail} />}
@@ -174,30 +189,36 @@ function Recibo({ id }: { id: string }) {
 /* ---------- E-014 · Copia por WhatsApp con el enlace a su portal ---------- */
 function CopiaWhatsApp({ e }: { e: Entrega }) {
   const E = useAlmacen(), t = E.tecnicos.find(x => x.id === e.receptor);
+  // E-017: la copia va al técnico que firmó; opcionalmente, también a los demás técnicos del equipo (cada uno con su enlace)
+  const otros = firmantesDe(E, e.equipo).filter(x => x.id !== e.receptor);
   const [tel, setTel] = useState(t?.telefono || '');
-  // el token se prepara al abrir el albarán para que el botón abra WhatsApp en el mismo toque (los móviles bloquean las ventanas abiertas tarde)
-  const [enlace, setEnlace] = useState<{ token: string; hash: string } | null>(null);
-  useEffect(() => { let vivo = true; const token = generarToken(); void hashToken(token).then(hash => { if (vivo) setEnlace({ token, hash }); }); return () => { vivo = false; }; }, []);
+  // los tokens se preparan al abrir el albarán para que el botón abra WhatsApp en el mismo toque (los móviles bloquean las ventanas abiertas tarde)
+  const [enlaces, setEnlaces] = useState<Record<string, { token: string; hash: string }>>({});
+  const preparar = (id: string) => { const token = generarToken(); void hashToken(token).then(hash => setEnlaces(x => ({ ...x, [id]: { token, hash } }))); };
+  useEffect(() => { [e.receptor, ...otros.map(o => o.id)].filter(Boolean).forEach(preparar); }, []);   // eslint-disable-line react-hooks/exhaustive-deps
   const n = normalizarTelefono(tel), enviadas = E.copias.filter(c => c.entrega === e.id && c.canal === 'whatsapp').length;
-  const enviar = () => {
-    if (!n) return toast('Escribe el teléfono del técnico: 9 cifras o con el prefijo del país.', 'err');
-    if (!enlace || !t) return;
-    const url = enlaceWhatsApp(n, textoWhatsApp({ nombre: t.nombre, numero: numEntrega(e), fecha: e.ts, lineas: e.lineas.length, enlace: enlacePortal(enlace.token) }))!;
+  const enviarA = (tec: Tecnico, telefono: string) => {
+    const enlace = enlaces[tec.id]; if (!enlace) return;
+    const url = enlaceWhatsApp(telefono, textoWhatsApp({ nombre: tec.nombre, numero: numEntrega(e), fecha: e.ts, lineas: e.lineas.length, enlace: enlacePortal(enlace.token) }))!;
     window.open(url, '_blank', 'noopener');
-    if (n !== (t.telefono || '')) ejecutar({ op: 'telefonoTecnico', args: { tecnico: t.id, telefono: n } });
-    ejecutar({ op: 'enlacePortal', args: { tecnico: t.id, hash: enlace.hash, entrega: e.id } });
-    ejecutar({ op: 'copiaEntrega', args: { id: nuevoId(), entrega: e.id, canal: 'whatsapp', destino: n } });
-    const token = generarToken(); void hashToken(token).then(hash => setEnlace({ token, hash }));   // el siguiente envío lleva otro enlace
+    if (telefono !== (tec.telefono || '')) ejecutar({ op: 'telefonoTecnico', args: { tecnico: tec.id, telefono } });
+    ejecutar({ op: 'enlacePortal', args: { tecnico: tec.id, hash: enlace.hash, entrega: e.id } });
+    ejecutar({ op: 'copiaEntrega', args: { id: nuevoId(), entrega: e.id, canal: 'whatsapp', destino: telefono } });
+    preparar(tec.id);   // el siguiente envío lleva otro enlace
   };
+  const enviar = () => { if (!n) return toast('Escribe el teléfono del técnico: 9 cifras o con el prefijo del país.', 'err'); if (t) enviarA(t, n); };
   return (
     <div className="mx-5 mb-3 rounded-xl p-3 flex flex-col gap-2 bg-[#e7f8ee]">
       <div className="flex flex-wrap gap-2">
-        <input value={tel} onChange={x => setTel(x.target.value)} type="tel" inputMode="tel" placeholder="Teléfono del técnico" aria-label="Teléfono para WhatsApp"
+        <input value={tel} onChange={x => setTel(x.target.value)} type="tel" inputMode="tel" placeholder={`Teléfono de ${t?.nombre || 'quien firmó'}`} aria-label="Teléfono para WhatsApp"
           className={`${INP} h-14 flex-1 min-w-[180px] ${tel.trim() && !n ? 'ring-2 ring-error' : ''}`} />
-        <button onClick={enviar} disabled={!enlace} className="h-14 px-5 rounded-xl bg-[#128c3e] hover:bg-[#0f7a36] text-white font-semibold inline-flex items-center gap-2 disabled:opacity-50">
+        <button onClick={enviar} disabled={!t || !enlaces[t.id]} className="h-14 px-5 rounded-xl bg-[#128c3e] hover:bg-[#0f7a36] text-white font-semibold inline-flex items-center gap-2 disabled:opacity-50">
           <Icon n="chat" className="ico-fill" />{enviadas ? 'Reenviar por WhatsApp' : 'Enviar por WhatsApp'}</button>
       </div>
-      <p className="text-body-sm text-secondary">Le llega un mensaje breve con el enlace a <b>su portal</b>: sus entregas, el PDF firmado y lo que lleva su vehículo. Sin usuario ni contraseña; el administrador puede revocar sus enlaces desde su ficha.</p>
+      {otros.length > 0 && <div className="flex flex-wrap items-center gap-2 text-body-sm"><span className="text-secondary">También al resto del equipo:</span>
+        {otros.map(o => { const to = normalizarTelefono(o.telefono); return <button key={o.id} disabled={!to || !enlaces[o.id]} onClick={() => to && enviarA(o, to)} title={to ? '' : 'Sin teléfono en su ficha'}
+          className="h-10 px-3 rounded-lg bg-white font-semibold text-[#0f7a36] disabled:opacity-40 inline-flex items-center gap-1"><Icon n="chat" className="ico-18" />{o.nombre}</button>; })}</div>}
+      <p className="text-body-sm text-secondary">Le llega un mensaje breve con el enlace a <b>su portal</b>: las entregas de su equipo, el PDF firmado y lo que lleva su vehículo. Sin usuario ni contraseña; el administrador puede revocar sus enlaces desde su ficha.</p>
     </div>
   );
 }
@@ -263,23 +284,25 @@ function InformeEntregas() {
   const [mes, setMes] = useState(`${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}`);
   const [a, m] = mes.split('-').map(Number), desde = new Date(a, m - 1, 1).getTime(), hasta = new Date(a, m, 1).getTime();
   const filas = useMemo(() => {
-    const g = new Map<string, { tecnico: string; entregas: Set<string>; lineas: number; obras: Set<string> }>();
+    // E-017: por equipo (el destinatario), con quién recogió cada vez
+    const g = new Map<string, { equipo: string; entregas: Set<string>; lineas: number; obras: Set<string>; recogen: Set<string> }>();
     for (const e of E.entregas) {
       if ((e.estado ?? 'firmada') !== 'firmada' || e.ts < desde || e.ts >= hasta) continue;
-      const f = g.get(e.receptor) || { tecnico: E.tecnicos.find(t => t.id === e.receptor)?.nombre || e.receptor, entregas: new Set<string>(), lineas: 0, obras: new Set<string>() };
+      const f = g.get(e.equipo) || { equipo: E.equipos.find(q => q.id === e.equipo)?.nombre || e.equipo, entregas: new Set<string>(), lineas: 0, obras: new Set<string>(), recogen: new Set<string>() };
       f.entregas.add(e.id); f.lineas += e.lineas.length; if (e.obra) f.obras.add(e.obra);
-      g.set(e.receptor, f);
+      const r = E.tecnicos.find(t => t.id === e.receptor)?.nombre; if (r) f.recogen.add(r);
+      g.set(e.equipo, f);
     }
-    return [...g.values()].sort((x, y) => x.tecnico.localeCompare(y.tecnico));
+    return [...g.values()].sort((x, y) => x.equipo.localeCompare(y.equipo));
   }, [E, desde, hasta]);
-  const csv = () => descargarCsv(`entregas-por-tecnico-${mes}.csv`, [['Técnico', 'Entregas', 'Líneas', 'Obras'],
-    ...filas.map(f => [f.tecnico, f.entregas.size, f.lineas, [...f.obras].join(' | ')])]);
+  const csv = () => descargarCsv(`entregas-por-equipo-${mes}.csv`, [['Equipo', 'Entregas', 'Líneas', 'Recogido por', 'Obras'],
+    ...filas.map(f => [f.equipo, f.entregas.size, f.lineas, [...f.recogen].join(' | '), [...f.obras].join(' | ')])]);
   return (<>
-    <SheetHead title="Entregas por técnico" sub="Qué se ha entregado a cada técnico en el mes, y para qué obras." />
+    <SheetHead title="Entregas por equipo" sub="Qué se ha entregado a cada equipo en el mes, quién lo recogió y para qué obras." />
     <div className="p-5 flex flex-col gap-3">
       <Campo label="Mes"><input type="month" value={mes} onChange={e => setMes(e.target.value)} className={`${INP} h-11 !w-48`} /></Campo>
-      {filas.length ? <table className="tabla w-full text-body-sm"><thead><tr><th>Técnico</th><th>Entregas</th><th>Líneas</th><th>Obras</th></tr></thead>
-        <tbody>{filas.map((f, i) => <tr key={i}><td>{f.tecnico}</td><td>{f.entregas.size}</td><td>{f.lineas}</td><td>{[...f.obras].join(', ') || '—'}</td></tr>)}</tbody></table>
+      {filas.length ? <table className="tabla w-full text-body-sm"><thead><tr><th>Equipo</th><th>Entregas</th><th>Líneas</th><th>Recogido por</th><th>Obras</th></tr></thead>
+        <tbody>{filas.map((f, i) => <tr key={i}><td>{f.equipo}</td><td>{f.entregas.size}</td><td>{f.lineas}</td><td>{[...f.recogen].join(', ') || '—'}</td><td>{[...f.obras].join(', ') || '—'}</td></tr>)}</tbody></table>
         : <Vacio>No hay entregas firmadas en ese mes.</Vacio>}
     </div>
     <SheetFoot><button onClick={csv} disabled={!filas.length} className={`${BTN_S} w-full h-12`}><Icon n="table" className="ico-20" />Descargar CSV</button></SheetFoot>

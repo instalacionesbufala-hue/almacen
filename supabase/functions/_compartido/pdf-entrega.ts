@@ -28,7 +28,7 @@ export async function pdfEntrega(db: SupabaseClient, id: string): Promise<{ nume
   const d = new Map((dotacion || []).map(x => [x.id, x]));
   const pdf = construirJustificante(jsPDF as unknown as ConstructorPdf, {
     numero: e.numero, fecha: new Date(e.firmada_ts || e.ts).getTime(),
-    equipo: [eq?.nombre || e.equipo_id, veh ? `vehículo ${veh.matricula}${veh.modelo ? ' (' + veh.modelo + ')' : ''}` : ''].filter(Boolean).join(' · '), receptor: t?.nombre || e.receptor_id, dni: e.dni, obra: e.obra || undefined,
+    equipo: `${eq?.nombre || e.equipo_id}${veh ? ` (${veh.matricula})` : ''}`, receptor: t?.nombre || e.receptor_id || '—', dni: e.dni, obra: e.obra || undefined,
     lineas: (lineas || []).map(l => l.tipo === 'herramienta'
       ? { nombre: d.get(l.dotacion_id)?.nombre || l.dotacion_id, codigo: d.get(l.dotacion_id)?.serie || '', cantidad: '1 ud', series: [] }
       : { nombre: p.get(l.sku)?.nombre || l.sku, codigo: l.sku, cantidad: `${cifra(Number(l.cantidad))} ${p.get(l.sku)?.unidad || 'ud'}`, series: [] }),

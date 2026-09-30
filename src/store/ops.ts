@@ -62,8 +62,8 @@ export type Op =
   | { op: 'propietario'; args: Propietario }
   | { op: 'cambiarPropiedad'; args: { sku: string; propiedad: 'propia' | 'custodia'; propietario?: string } }
   | { op: 'envio'; args: { canal: 'correo' | 'push' | 'telegram'; tipo: 'prueba' | 'solicitud' | 'informe'; asunto: string; cuerpo: string; destinatarios: string[]; csv?: string } }
-  | { op: 'prepararEntrega'; args: { id: string; equipo: string; receptor: string; obra: string; lineas: LineaEntrega[]; numero?: string; caduca?: number } }
-  | { op: 'confirmarEntrega'; args: { id: string; firma: string; hash?: string } }
+  | { op: 'prepararEntrega'; args: { id: string; equipo: string; receptor?: string | null; obra: string; lineas: LineaEntrega[]; numero?: string; caduca?: number } }
+  | { op: 'confirmarEntrega'; args: { id: string; firma: string; hash?: string; recoge?: string; copiaEquipo?: boolean } }
   | { op: 'anularEntrega'; args: { id: string } }
   | { op: 'emailTecnico'; args: { tecnico: string; email: string } }
   | { op: 'reenviarCopia'; args: { entrega: string; email?: string } }
@@ -658,8 +658,10 @@ export const OPS: Defs = {
     local: (S, a) => {
       if (S.entregas.some(e => e.id === a.id)) return;
       const eq = S.equipos.find(e => e.id === a.equipo); if (!eq) throw new Error('Equipo no encontrado');
-      const t = S.tecnicos.find(x => x.id === a.receptor); if (!t) throw new Error('Receptor no encontrado');
-      if (!eq.tecnicos.includes(t.id)) throw new Error(`${t.nombre} no pertenece a ese equipo`);
+      // E-017: se prepara para el equipo; si ya se indica quién recoge, tiene que ser de ese equipo
+      const t = a.receptor ? S.tecnicos.find(x => x.id === a.receptor) : undefined;
+      if (a.receptor && !t) throw new Error('Técnico no encontrado');
+      if (t && !eq.tecnicos.includes(t.id)) throw new Error(`${t.nombre} no pertenece a ese equipo`);
       if (!a.lineas.length) throw new Error('La entrega no tiene material');
       for (const l of a.lineas) {
         if (l.tipo === 'herramienta') {
@@ -676,12 +678,12 @@ export const OPS: Defs = {
         if (p.cat !== 'ropa' && p.cat !== 'epis' && !vehiculoDeEquipo(S, eq.id)) throw new Error(`El equipo ${eq.nombre} no tiene vehículo asignado: asígnale uno en Equipos para entregarle material de instalación`);
       }
       const numero = a.numero || (/^ENT-/.test(a.id) ? a.id : undefined);
-      S.entregas.unshift({ id: a.id, numero, ts: Date.now(), equipo: a.equipo, receptor: a.receptor, dni: t.dni, lineas: JSON.parse(JSON.stringify(a.lineas)), firma: '', operator: S.operator,
+      S.entregas.unshift({ id: a.id, numero, ts: Date.now(), equipo: a.equipo, receptor: a.receptor || '', dni: t?.dni || '', lineas: JSON.parse(JSON.stringify(a.lineas)), firma: '', operator: S.operator,
         estado: 'preparada', obra: a.obra, vehiculo: vehiculoDeEquipo(S, eq.id), caduca: a.caduca || Date.now() + (S.configAvisos.horasReserva || 48) * 3600e3 });
     },
-    rpc: a => ['preparar_entrega', { p_id: a.id, p_equipo: a.equipo, p_receptor: a.receptor, p_obra: a.obra, p_plantilla: null,
+    rpc: a => ['preparar_entrega', { p_id: a.id, p_equipo: a.equipo, p_receptor: a.receptor || null, p_obra: a.obra, p_plantilla: null,
       p_lineas: a.lineas.map(l => l.tipo === 'herramienta' ? { tipo: 'herramienta', dotacion_id: l.dotacion } : { tipo: 'stock', sku: l.sku, cantidad: l.qty }) }],
-    desc: (S, a) => `Preparar entrega para ${S.tecnicos.find(t => t.id === a.receptor)?.nombre || a.receptor}`,
+    desc: (S, a) => `Preparar entrega para ${S.equipos.find(e => e.id === a.equipo)?.nombre || a.equipo}`,
   },
   confirmarEntrega: {
     local: (S, a) => {
@@ -689,7 +691,12 @@ export const OPS: Defs = {
       if (e.estado === 'firmada' || !e.estado) return;
       if (e.estado === 'anulada') throw new Error('La entrega está anulada');
       if ((e.caduca ?? 0) <= Date.now()) throw new Error('La reserva ha caducado: prepárala de nuevo');
-      if (!a.firma) throw new Error('Falta la firma del receptor');
+      if (!a.firma) throw new Error('Falta la firma de quien recoge');
+      // E-017: firma un técnico ACTUAL del equipo; queda como "recogido por"
+      const tec = a.recoge || e.receptor, t = S.tecnicos.find(x => x.id === tec), eqF = S.equipos.find(x => x.id === e.equipo);
+      if (!tec) throw new Error('Elige qué técnico del equipo recoge y firma');
+      if (!t || !eqF?.tecnicos.includes(tec)) throw new Error(`${t?.nombre || tec} no pertenece al equipo ${eqF?.nombre || e.equipo}: firma uno de sus técnicos`);
+      e.receptor = tec; e.dni = t.dni;
       const copia = JSON.stringify({ products: S.products, herramientas: S.herramientas, movements: S.movements, aBordo: S.aBordo });
       const veh = vehiculoDeEquipo(S, e.equipo), ref = (e.numero || 'Entrega') + (e.obra ? ' · ' + e.obra : '');
       try {
@@ -715,7 +722,7 @@ export const OPS: Defs = {
       e.vehiculo = veh;
       e.estado = 'firmada'; e.firma = a.firma; e.ts = Date.now(); e.hash = a.hash; e.caduca = undefined;
     },
-    rpc: a => ['confirmar_entrega', { p_id: a.id, p_firma: a.firma }],
+    rpc: a => ['confirmar_entrega', { p_id: a.id, p_firma: a.firma, p_recoge: a.recoge ?? null, p_copia_equipo: !!a.copiaEquipo }],
     desc: (S, a) => `Firma de la entrega ${S.entregas.find(e => e.id === a.id)?.numero || ''}`,
   },
   anularEntrega: {

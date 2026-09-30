@@ -4,7 +4,7 @@ import type { Estado } from '../data/tipos';
 import { fresh } from '../data/semilla';
 import { aLineas, anadir, cambiarTalla, cestaVacia, escanear, fijar, problemas, restar, sumar, tallaPreferida, tipoTalla, variantes } from './entregas';
 import { applyMovement, find, qrContenido, reservado } from './reglas';
-import { aplicarLocal, nuevoId } from '../store/ops';
+import { aplicarLocal, nuevoId, rpcDe } from '../store/ops';
 
 let S: Estado;
 beforeEach(() => { S = fresh(); S.cesta = { ...cestaVacia('F01'), receptor: 'T1' }; });
@@ -72,9 +72,22 @@ describe('líneas de la cesta', () => {
     sumar(S, S.cesta, 'CAB-RZ1K-5G6');
     expect(problemas(S, S.cesta)[0]).toMatch(/no tiene vehículo asignado/);
   });
-  it('pide receptor con equipo y cesta con material', () => {
+  it('E-017: la entrega es para un equipo (con técnicos y vehículo) y necesita material', () => {
+    S.cesta = cestaVacia('');
+    expect(problemas(S, S.cesta)).toEqual(['Elige el equipo que recibe el material', 'La cesta está vacía']);
     S.cesta = cestaVacia('F01');
-    expect(problemas(S, S.cesta)).toEqual(['Elige quién recibe el material', 'La cesta está vacía']);
+    expect(problemas(S, S.cesta)).toEqual(['La cesta está vacía']);                 // ya no hace falta elegir técnico antes de firmar
+  });
+  it('E-017: firma un técnico del equipo (queda como "recogido por") y la dotación personal va a quien firma', () => {
+    const id = 'ENT-EQ-1';
+    aplicarLocal(S, { op: 'prepararEntrega', args: { id, equipo: 'F01', obra: '', lineas: [{ tipo: 'stock', sku: 'ROPA-PANT-44', qty: 1, serials: [] }, { tipo: 'stock', sku: 'CAB-RZ1K-5G6', qty: 5, serials: [] }] } });
+    expect(S.entregas.find(e => e.id === id)).toMatchObject({ equipo: 'F01', receptor: '' });
+    expect(() => aplicarLocal(S, { op: 'confirmarEntrega', args: { id, firma: 'f' } })).toThrow(/Elige qué técnico/);
+    expect(() => aplicarLocal(S, { op: 'confirmarEntrega', args: { id, firma: 'f', recoge: 'T3' } })).toThrow(/no pertenece al equipo/);
+    aplicarLocal(S, { op: 'confirmarEntrega', args: { id, firma: 'f', recoge: 'T2' } });
+    expect(S.entregas.find(e => e.id === id)).toMatchObject({ estado: 'firmada', receptor: 'T2', dni: S.tecnicos.find(t => t.id === 'T2')!.dni });
+    expect(S.herramientas.find(h => h.clase === 'ropa' && h.talla === '44' && h.tecnico === 'T2')).toBeTruthy();
+    expect(rpcDe({ op: 'confirmarEntrega', args: { id, firma: 'f', recoge: 'T2', copiaEquipo: true } })).toEqual(['confirmar_entrega', { p_id: id, p_firma: 'f', p_recoge: 'T2', p_copia_equipo: true }]);
   });
 });
 

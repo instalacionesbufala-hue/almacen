@@ -32,7 +32,7 @@ export function construirJustificante(J: ConstructorPdf, d: DatosJustificante): 
   y += 7; doc.text(`${d.empresa || 'Almacén Búfala'} · ${fechaEs(d.fecha)}`, X, y);
   doc.setTextColor(11, 28, 48);
   y += 8;
-  for (const t of [`Equipo: ${d.equipo}`, `Recibe: ${d.receptor}${d.dni ? ` · DNI ${d.dni}` : ''}`, d.obra ? `Obra: ${d.obra}` : '']) if (t) { doc.text(t, X, y); y += 6; }
+  for (const t of [`Entrega al equipo ${d.equipo}`, `Recoge y firma: ${d.receptor}${d.dni ? ` · DNI ${d.dni}` : ''}`, d.obra ? `Obra: ${d.obra}` : '']) if (t) { doc.text(t, X, y); y += 6; }
   y += 2; doc.setDrawColor(196, 197, 215); doc.line(X, y, X + ANCHO, y); y += 7;
 
   doc.setFont('helvetica', 'bold'); doc.setFontSize(9);
@@ -55,7 +55,7 @@ export function construirJustificante(J: ConstructorPdf, d: DatosJustificante): 
   if (d.firma?.startsWith('data:image/')) { try { doc.addImage(d.firma, d.firma.includes('image/jpeg') ? 'JPEG' : 'PNG', X, y, 70, 27); } catch { /* firma ilegible */ } }
   y += 32; doc.text(`Firma de ${d.receptor}`, X, y);
   y += 6; doc.setFontSize(8); doc.setTextColor(86, 94, 116);
-  doc.text('Aceptación de la entrega por el receptor: comprueba el material y firma su recepción.', X, y);
+  doc.text(`Recogida para el equipo ${d.equipo}: quien firma ha comprobado el material y lo recoge completo.`, X, y);
   if (d.operador) { y += 4; doc.text(`Registrado por ${d.operador}.`, X, y); }
   y += 5; doc.setFontSize(7); doc.text(doc.splitTextToSize(`Huella SHA-256: ${d.hash || 'se calcula en el servidor al sincronizar'}`, ANCHO), X, y);
   return doc.output('arraybuffer');

@@ -72,12 +72,12 @@ export default function PortalTecnico({ token }: { token: string }) {
                   </div>); })}
           </section>
           <section className="flex flex-col gap-3">
-            <h2 className="text-headline-sm font-semibold flex items-center gap-2 px-1"><Icon n="draw" className="text-primary" />Tus entregas firmadas ({d.entregas.length})</h2>
+            <h2 className="text-headline-sm font-semibold flex items-center gap-2 px-1"><Icon n="draw" className="text-primary" />Entregas a tu equipo ({d.entregas.length})</h2>
             {!d.entregas.length && <p className="text-body-sm text-secondary px-1">Todavía no hay entregas firmadas.</p>}
             {d.entregas.map(e => (
               <article key={e.id} className="bg-surface-container-lowest rounded-xl shadow-sm p-4 flex flex-col gap-2">
                 <div className="flex items-start justify-between gap-2"><div><div className="font-semibold">{e.numero}</div>
-                  <div className="text-body-sm text-secondary">{fecha(e.fecha)}{e.equipo ? ` · ${e.equipo}` : ''}{e.vehiculo ? ` · ${e.vehiculo}` : ''}{e.obra ? ` · ${e.obra}` : ''}</div></div>
+                  <div className="text-body-sm text-secondary">{fecha(e.fecha)}{e.equipo ? ` · ${e.equipo}` : ''}{e.vehiculo ? ` · ${e.vehiculo}` : ''}{e.obra ? ` · ${e.obra}` : ''}{e.recoge ? ` · recogió ${e.recoge}` : ''}</div></div>
                   <button onClick={() => void verPdf(e.id)} disabled={!!pdf} className="h-12 px-4 rounded-xl bg-primary text-white font-semibold inline-flex items-center gap-2 shrink-0 disabled:opacity-50"><Icon n="picture_as_pdf" className="ico-20" />{pdf === e.id ? 'Abriendo…' : 'PDF'}</button></div>
                 <ul>{e.lineas.map((l, i) => <li key={i} className="flex items-center gap-3 py-1.5 border-t border-surface-container">
                   {l.foto ? <img src={l.foto} alt="" className="w-10 h-10 rounded-lg object-cover" /> : <span className="w-10 h-10 rounded-lg bg-surface-container-low grid place-items-center"><Icon n="inventory_2" className="ico-20 text-secondary" /></span>}

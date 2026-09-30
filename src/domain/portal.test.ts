@@ -55,6 +55,18 @@ describe('datos del portal (demostración)', () => {
     expect(S.tecnicos.find(t => t.id === 'T2')!.telefono).toBe('+34600112233');
     expect(() => aplicarLocal(S, { op: 'telefonoTecnico', args: { tecnico: 'T2', telefono: '123' } })).toThrow(/Teléfono no válido/);
   });
+  it('E-017: ve las entregas de su equipo solo mientras pertenece a él (historial de asignaciones)', () => {
+    const S = fresh(), ahora = Date.now();
+    S.asignaciones = [{ tipo: 'tecnico', sujeto: 'T1', equipo: 'F01', desde: ahora - 10 * 864e5, hasta: ahora - 2 * 864e5 }, { tipo: 'tecnico', sujeto: 'T1', equipo: 'F03', desde: ahora - 2 * 864e5 }];
+    const base = S.entregas.find(e => (e.estado ?? 'firmada') === 'firmada')!;
+    S.entregas = [
+      { ...base, id: 'A', equipo: 'F01', receptor: 'T2', ts: ahora - 5 * 864e5 },        // Búfala 1 cuando era suyo: sí
+      { ...base, id: 'B', equipo: 'F01', receptor: 'T2', ts: ahora - 864e5 },            // Búfala 1 después de irse: no
+      { ...base, id: 'C', equipo: 'F03', receptor: 'T5', ts: ahora - 5 * 864e5 },        // Búfala 3 antes de llegar: no
+      { ...base, id: 'D', equipo: 'F03', receptor: 'T5', ts: ahora - 3600e3 },           // Búfala 3 ya siendo suyo: sí
+    ];
+    expect(datosPortalLocal(S, 'T1')!.entregas.map(e => [e.id, e.recoge])).toEqual([['D', 'Marta Gil'], ['A', 'Jorge Ruiz']]);
+  });
   it('las fotos se sustituyen por su URL firmada', () => {
     const d = { tecnico: { id: 'T1', nombre: 'x', equipo: null }, vehiculo: null,
       entregas: [{ id: 'e', numero: 'n', fecha: '', obra: '', equipo: null, vehiculo: null, lineas: [{ nombre: 'a', codigo: 'A', cantidad: 1, unidad: 'ud', foto: 'productos/A/1-mini.webp' }] }],

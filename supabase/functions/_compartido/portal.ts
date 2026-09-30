@@ -22,7 +22,7 @@ export function tokenDeRuta(hash: string): string | null {
 }
 
 export interface LineaPortal { nombre: string; codigo: string; cantidad: number; unidad: string; foto: string | null }
-export interface EntregaPortal { id: string; numero: string; fecha: string; obra: string; equipo: string | null; vehiculo: string | null; lineas: LineaPortal[] }
+export interface EntregaPortal { id: string; numero: string; fecha: string; obra: string; equipo: string | null; vehiculo: string | null; recoge?: string | null; lineas: LineaPortal[] }
 export interface ABordoPortal { sku: string; nombre: string; unidad: string; contenido: number; unidades: number; foto: string | null }
 export interface DatosPortal {
   tecnico: { id: string; nombre: string; equipo: string | null };

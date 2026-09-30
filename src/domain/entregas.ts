@@ -107,9 +107,10 @@ export function escanear(S: Estado, c: Cesta, raw: string): Resultado {
 /** Lo que impide entregar (vacío = se puede firmar o guardar preparada) */
 export function problemas(S: Estado, c: Cesta): string[] {
   const out: string[] = [];
-  const t = S.tecnicos.find(x => x.id === c.receptor), eq = S.equipos.find(e => e.id === c.equipo);
-  if (!t) out.push('Elige quién recibe el material');
-  else if (!eq || !eq.tecnicos.includes(t.id)) out.push(`${t.nombre} no tiene equipo asignado: asígnalo en Equipos y técnicos`);
+  // E-017: la entrega es para un EQUIPO; quién recoge y firma se elige al firmar, entre sus técnicos
+  const eq = S.equipos.find(e => e.id === c.equipo);
+  if (!eq) out.push('Elige el equipo que recibe el material');
+  else if (!eq.tecnicos.length) out.push(`${eq.nombre} no tiene técnicos: asígnale alguno en Equipos y técnicos para que puedan firmar la recogida`);
   else if (!vehiculoDeEquipo(S, eq.id) && c.lineas.some(l => { const p = find(S, l.sku); return p && !esPersonal(p); }))
     out.push(`${eq.nombre} no tiene vehículo asignado: asígnale uno en Equipos para entregarle material de instalación (la ropa y los EPIs sí se pueden entregar)`);
   if (!c.lineas.length) out.push('La cesta está vacía');
@@ -127,6 +128,12 @@ export const aLineas = (c: Cesta): LineaEntrega[] =>
   c.lineas.filter(l => l.qty > 0).map(l => ({ tipo: 'stock' as const, sku: l.sku, qty: l.qty, serials: [] }));
 
 export const cestaVacia = (equipo = ''): Cesta => ({ equipo, receptor: null, lineas: [], obra: '', paso: 1 });
+
+/** E-017: quién puede recoger y firmar una entrega del equipo (sus técnicos actuales) */
+export const firmantesDe = (S: Pick<Estado, 'equipos' | 'tecnicos'>, equipo: string) => {
+  const eq = S.equipos.find(e => e.id === equipo);
+  return eq ? S.tecnicos.filter(t => eq.tecnicos.includes(t.id)) : [];
+};
 
 /** Correo válido (el mismo criterio que el servidor) */
 export const emailValido = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim());

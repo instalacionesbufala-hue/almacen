@@ -473,7 +473,7 @@ Hoy hay 3 equipos (Búfala 1, 2 y 3), cada uno con 2 técnicos y 1 furgoneta. **
 - **Fotos:** las de las bridas incoloras (5102050137 y 5102050149) se ven prácticamente en blanco, porque la foto de Saltoki es transparente sobre blanco. El usuario las sustituirá con la cámara. En las miniaturas, usar un fondo gris muy claro en lugar de blanco para que se distingan las piezas blancas.
 - **Sin foto:** 2804000757 (bolsas de basura) y 8900590300 (Trydan Esmove); se harán con la cámara.
 
-### E-017 · Salidas de material por equipo, no por técnico · PENDIENTE
+### E-017 · Salidas de material por equipo, no por técnico · HECHO
 **Decisión del usuario:** las salidas de material se hacen **al equipo**, no a un técnico. Hoy el paso 1 de la entrega ("¿Quién recibe el material?") lista **técnicos** y deduce el equipo (`EntregasView.tsx`, `PasoQuien`). Hay que darle la vuelta.
 
 **1. Nuevo flujo de entrega**
@@ -1336,3 +1336,53 @@ Cubren también el formato de cantidades, las respuestas envueltas en ```json y 
 Comprobado en producción: la cinta blanca (9900101044) no existe, así que no hay nada que retirar. La tapa final (30) y el ángulo exterior (20) tienen otras entradas legítimas; por eso se reasigna solo la línea de ese albarán.
 
 **Sin verificar aquí:** esos pasos sobre los datos reales (los hace el usuario) y una lectura real de albarán con el emparejado nuevo.
+
+### 30/09/2026 · E-017 · HECHO
+**1. Flujo de entrega** (`EntregasView.tsx`)
+1. **Para qué equipo:** tarjetas de equipo con matrícula y técnicos actuales, y la obra opcional.
+   - Un equipo sin vehículo, o sin técnicos, sale deshabilitado con el motivo.
+   - El buscador encuentra por equipo, técnico o matrícula, pero selecciona el equipo.
+2. **Material:** igual que antes; entra en el vehículo del equipo.
+3. **Firma** (`PanelFirma`): se elige con un toque, entre los técnicos **actuales** del equipo, quién recoge y firma (si hay uno solo, ya viene elegido).
+   - El WhatsApp y el correo de la copia se rellenan con los de esa persona.
+   - Casilla **"Enviar la copia por correo también a los demás técnicos del equipo"**.
+   - La ropa y los EPIs de la cesta indican "Dotación personal de …".
+- **Preparar para más tarde:** se prepara para el equipo sin técnico, y quién recoge se elige al firmar.
+
+**2. Datos** (migración `20261009000100_e017_entregas_por_equipo.sql`)
+- `entregas.equipo_id` es el destinatario. `receptor_id` es **"recogido por"**: admite nulo mientras está preparada y se fija al firmar, junto con el DNI.
+- `_entregas_inalterables` solo deja fijar quién recoge en el paso de preparada a firmada; una firmada sigue siendo inalterable.
+- `preparar_entrega` acepta el técnico vacío; si viene, tiene que pertenecer al equipo.
+- `confirmar_entrega(id, firma, recoge, copia_equipo)`:
+  - quien firma tiene que pertenecer al equipo **en ese momento, según el historial de asignaciones** (`_tecnico_del_equipo`);
+  - la dotación personal pasa a quien firma;
+  - el material de instalación, al vehículo;
+  - la huella se calcula con quién recogió.
+- `_encolar_copia_entrega(id, equipo)`: al que firma y, si se marca, a los demás técnicos actuales del equipo con correo.
+- **Entregas antiguas:** no se tocan. Conservan su equipo y su técnico, que pasa a leerse como "recogido por", y las huellas siguen cuadrando (hay prueba).
+
+**3. Pantallas e informes**
+- **Últimas entregas:** por equipo, con "recogido por".
+- **Informe:** **"Entregas por equipo"** con la columna "Recogido por" (y el CSV).
+- **Preparadas y albarán:** "Entrega al equipo" y "Recoge y firma".
+- **PDF** (app y servidor): "Entrega al equipo Búfala 2 (4299NGK)" · "Recoge y firma: …", y el texto de aceptación de la recogida.
+- **WhatsApp:** el botón principal envía al técnico que firmó; debajo, **"También al resto del equipo"** con un botón por técnico, cada uno con su enlace personal. El texto habla de "las entregas de tu equipo".
+- **Portal:** `portal_datos` y `portal_entrega_permitida` muestran las entregas del **equipo** firmadas mientras el técnico pertenecía a él, con quién recogió. No salen las de equipos anteriores ni las posteriores a irse. En la demostración, lo mismo con el historial local (`eraDelEquipo`).
+
+**4. Dotación personal:** sigue siendo de la persona; pasa al técnico que firma.
+
+**Pruebas:** 289 en verde (`npm test`).
+- `supabase/tests/e017.test.ts` (6):
+  - entrega al equipo con firma de uno de sus técnicos, con su DNI, la dotación a quien firma, el material al vehículo y la huella válida;
+  - rechazo si quien firma no pertenece al equipo;
+  - la pertenencia según el historial en el momento de firmar (un técnico que cambió de equipo ya no puede);
+  - equipo sin vehículo bloqueado;
+  - copia al que firma y al resto del equipo;
+  - **portal filtrado por pertenencia con fechas**;
+  - migración de entregas antiguas.
+- `src/domain/entregas.test.ts` (+2) y `src/domain/portal.test.ts` (+1): la misma lógica en local.
+- `tsc -b` sin errores, `npm run build` correcto y `deno check` sin errores.
+
+**Probado en el navegador (móvil, demostración):** Búfala 1 → 10 m de cable → en la firma, "Recoge y firma" con Luis y Jorge → Jorge firma → albarán "Entrega al equipo Búfala 1 · Recoge y firma: Jorge Ruiz". El PDF y el portal se han comprobado solo con pruebas.
+
+**Desplegado:** migración, `notificar` (PDF del correo) y `portal-tecnico`. La app se publica con este commit. En producción, las entregas ya firmadas no cambian.

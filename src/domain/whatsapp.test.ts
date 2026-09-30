@@ -28,7 +28,7 @@ describe('enlace de WhatsApp', () => {
   });
   it('texto breve con número, fecha, líneas y el enlace al portal', () => {
     const t = textoWhatsApp({ nombre: 'Luis Martín', numero: 'ENT-2026-0007', fecha: new Date(2026, 8, 30, 10).getTime(), lineas: 3, enlace: 'https://app/#/tecnico/tok' });
-    expect(t).toBe('Hola Luis: entrega de material ENT-2026-0007 del 30/09/2026 (3 líneas), firmada. Aquí tienes tus entregas, el PDF y lo que lleva tu vehículo: https://app/#/tecnico/tok');
+    expect(t).toBe('Hola Luis: entrega de material ENT-2026-0007 del 30/09/2026 (3 líneas), firmada. Aquí tienes las entregas de tu equipo, el PDF y lo que lleva vuestro vehículo: https://app/#/tecnico/tok');
     expect(t.length).toBeLessThan(250);
     expect(t).not.toMatch(/€/);
   });

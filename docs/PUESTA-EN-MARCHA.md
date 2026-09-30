@@ -308,6 +308,8 @@ La app deja de usar precios: solo cuenta material. El stock está en el **almac�
 
 ## 13. Copia por WhatsApp y portal del técnico (E-014)
 
+> **E-017 · Las entregas son al equipo.** En **Entregas y firmas** eliges el **equipo** (con su vehículo y sus técnicos); el material entra en su vehículo. Al firmar, tocas el nombre del **técnico que recoge** (si el equipo tiene uno solo, ya viene elegido) y firma él; queda como "recogido por". La ropa y los EPIs de la cesta pasan a esa persona. Puedes marcar que la copia por correo llegue también al resto del equipo, y en el albarán enviarla por WhatsApp a cada técnico. En su portal, cada técnico ve las entregas de su equipo mientras pertenece a él.
+
 - [ ] 13.1. En **Equipos y técnicos → Técnicos**, pon el **teléfono** de cada técnico (o escríbelo en la pantalla de firma: se guarda solo).
 - [ ] 13.2. Tras firmar una entrega, en el albarán pulsa **Enviar por WhatsApp**. Se abre WhatsApp con un mensaje breve y un **enlace personal** al portal del técnico: sus entregas firmadas (con el PDF) y el material que lleva su vehículo. Sin usuario ni contraseña.
 - [ ] 13.3. Cada envío (WhatsApp, PDF compartido o correo) queda en **Copias enviadas** del albarán, con fecha y quién lo mandó.

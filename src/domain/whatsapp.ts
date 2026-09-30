@@ -25,5 +25,5 @@ export function enlaceWhatsApp(telefono: string | undefined | null, texto: strin
 export function textoWhatsApp(o: { nombre: string; numero: string; fecha: number; lineas: number; enlace: string }): string {
   const fecha = new Date(o.fecha).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
   const nombre = o.nombre.split(' ')[0];
-  return `Hola ${nombre}: entrega de material ${o.numero} del ${fecha} (${o.lineas} ${o.lineas === 1 ? 'línea' : 'líneas'}), firmada. Aquí tienes tus entregas, el PDF y lo que lleva tu vehículo: ${o.enlace}`;
+  return `Hola ${nombre}: entrega de material ${o.numero} del ${fecha} (${o.lineas} ${o.lineas === 1 ? 'línea' : 'líneas'}), firmada. Aquí tienes las entregas de tu equipo, el PDF y lo que lleva vuestro vehículo: ${o.enlace}`;
 }
