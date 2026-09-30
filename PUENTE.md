@@ -473,9 +473,42 @@ Hoy hay 3 equipos (Búfala 1, 2 y 3), cada uno con 2 técnicos y 1 furgoneta. **
 - **Fotos:** las de las bridas incoloras (5102050137 y 5102050149) se ven prácticamente en blanco, porque la foto de Saltoki es transparente sobre blanco. El usuario las sustituirá con la cámara. En las miniaturas, usar un fondo gris muy claro en lugar de blanco para que se distingan las piezas blancas.
 - **Sin foto:** 2804000757 (bolsas de basura) y 8900590300 (Trydan Esmove); se harán con la cámara.
 
+### E-017 · Salidas de material por equipo, no por técnico · PENDIENTE
+**Decisión del usuario:** las salidas de material se hacen **al equipo**, no a un técnico. Hoy el paso 1 de la entrega ("¿Quién recibe el material?") lista **técnicos** y deduce el equipo (`EntregasView.tsx`, `PasoQuien`). Hay que darle la vuelta.
+
+**1. Nuevo flujo de entrega**
+1. **Para qué equipo:** tarjetas de **equipo** (Búfala 1, 2, 3…) con su vehículo (matrícula) y sus técnicos actuales, más la obra opcional.
+   - Un equipo **sin vehículo** aparece deshabilitado y explica el motivo.
+   - El buscador sigue encontrando por equipo, técnico o matrícula, pero selecciona el **equipo**.
+2. **Material:** igual que ahora. Entra en el **vehículo** del equipo (traspaso almacén → vehículo, E-013).
+3. **Firma:** firma **el técnico del equipo que recoge**. Se elige en la pantalla de firma entre los técnicos **actuales** de ese equipo, con un toque sobre su nombre, y queda como "recogido por". Si el equipo tiene un solo técnico, se preselecciona.
+
+**2. Datos**
+- **La entrega pertenece al equipo:** `entregas.equipo` es obligatorio y es el destinatario. `receptor` pasa a llamarse "recogido por": técnico, obligatorio para firmar y que debe pertenecer al equipo en ese momento, según el historial de asignaciones.
+- **Reservas, stock a bordo, cierres y consumos:** todo va por **equipo y vehículo**, sin cambios respecto a E-012 y E-013.
+- **Entregas antiguas:** migración sin pérdida. Las ya existentes conservan su equipo y su técnico, que pasa a ser "recogido por".
+
+**3. Pantallas e informes**
+- **Historial de entregas e informe:** se agrupan y filtran **por equipo**, con la columna "recogido por".
+- **Justificante PDF y WhatsApp:**
+  - el PDF dice "Entrega al equipo Búfala 2 (4299NGK) · recoge y firma: …";
+  - la copia se envía **al técnico que firma**; opcionalmente, también a los demás técnicos del equipo (casilla en la pantalla de firma).
+- **Portal del técnico (E-014):** cada técnico ve las entregas **de su equipo** mientras pertenece a él (según las fechas del historial) y el material del vehículo de su equipo. No ve las de equipos anteriores ni las posteriores.
+
+**4. Dotación personal: no cambia**
+La ropa, los EPIs y las herramientas personales se siguen asignando **a la persona**, porque van con su talla y su responsabilidad. Si se entregan en la misma cesta, esas líneas quedan asignadas al técnico que firma, y la app lo indica en la línea ("dotación personal de …").
+
+**5. Hecho cuando**
+- Hay pruebas de: entrega a equipo con firma de uno de sus técnicos, rechazo si quien firma no pertenece al equipo, equipo sin vehículo bloqueado, migración de entregas antiguas, portal filtrado por pertenencia con fechas, y dotación personal asignada a quien firma.
+
 ---
 
 ## Revisión del chat
+
+### 30/09/2026 · Chat: publicación fallida arreglada y salidas por equipo
+- **Publicación:** el fallo de `f43f1dc` lo causó el chat. La prueba del catálogo real esperaba 40 artículos, y al quitar la cinta blanca quedan 39. Se ha corregido en `16e0271` (257 pruebas en verde y publicación correcta). A partir de ahora el chat ejecuta las pruebas antes de subir cambios en `datos/`.
+- **E-017 (nuevo):** las salidas de material se hacen al equipo; el técnico solo firma la recogida.
+- **Orden: E-016 → E-017.**
 
 ### 30/09/2026 · Revisión de E-012 a E-015 y de la primera carga real
 Verificado desde el chat sobre `dc8bdc1`:
