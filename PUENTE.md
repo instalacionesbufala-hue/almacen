@@ -501,9 +501,46 @@ La ropa, los EPIs y las herramientas personales se siguen asignando **a la perso
 **5. Hecho cuando**
 - Hay pruebas de: entrega a equipo con firma de uno de sus técnicos, rechazo si quien firma no pertenece al equipo, equipo sin vehículo bloqueado, migración de entregas antiguas, portal filtrado por pertenencia con fechas, y dotación personal asignada a quien firma.
 
+### E-018 · Ajuste de inventario para el administrador · PENDIENTE
+**Qué ha visto el chat en la app real (30/09).** Al corregir la primera carga, el usuario creó la moldura (6222106082) y el ángulo interior (6222110054) **con stock inicial 20 m y 10 ud**, en lugar de 0, y no reasignó las líneas. Ahora ese material está **contado dos veces**:
+- la tapa final (6222110056) tiene **30** y deberían ser **10**;
+- el ángulo exterior (6222110053) tiene **20** y deberían ser **10**.
+
+El diálogo de movimientos solo ofrece Entrada, Salida, A vehículo, Devolución y Merma. **No hay "Ajuste"**, y registrarlo como merma sería falso.
+
+**Qué hacer**
+- **Nuevo tipo "Ajuste de inventario"** en el diálogo de movimientos, **solo para el administrador**:
+  - cantidad **positiva o negativa**, con **motivo obligatorio** (texto) y ubicación (almacén o vehículo);
+  - muestra "de X a Y" antes de confirmar;
+  - no cuenta como merma, ni como salida a obra, ni en consumos;
+  - queda en el historial y en la auditoría como "Ajuste".
+- **El personal de almacén** no ve la opción. Puede "Proponer ajuste", que llega a la bandeja del administrador, como los recuentos.
+- **Aviso al crear un artículo con stock inicial:** si su código aparece ya en un albarán ingresado, avisar de que "Ese código ya ha entrado por el albarán X; ¿seguro que quieres añadir stock inicial?".
+- **Guía, paso 15:** añadir qué hacer si ya se crearon con stock (ajuste −20 en la tapa final y −10 en el ángulo exterior, motivo "Duplicado de la corrección del albarán 3.322.577") en lugar de reasignar.
+
+**Hecho cuando**
+- Hay pruebas de: ajuste negativo y positivo del administrador, rechazo para el rol almacén, motivo obligatorio, sin efecto en mermas ni consumos, y el aviso de código ya ingresado por albarán.
+
 ---
 
 ## Revisión del chat
+
+### 30/09/2026 · Revisión de E-016 y E-017, y estado de la app real
+Verificado desde el chat sobre `75da231`:
+- **289 pruebas en verde**, `tsc -b` sin errores y build correcto.
+- La publicación de E-016 y E-017 está bien.
+- Las migraciones están aplicadas en Supabase: la sección Categorías funciona y la app aparece "Sincronizado".
+- El chat ha quitado "fontanería" de "Acerca de" y de la descripción de la web (`097d1f9` y `df1bb2e`).
+
+En la app real:
+- Unidades corregidas (m, botes, bolsas, sobres y pack).
+- La cinta negra tiene 20 ud.
+- Policharger NW T2 (24 ud, custodia de Esmove) dado de alta por el usuario.
+- 1 Trydan con Schuko traspasado a Búfala 1.
+- 18 equivalencias en borrador y ninguna en rojo; **faltan por confirmar**.
+- **Stock duplicado** en la tapa final y el ángulo exterior (se explica en E-018).
+
+**Orden: E-018.**
 
 ### 30/09/2026 · Chat: publicación fallida arreglada y salidas por equipo
 - **Publicación:** el fallo de `f43f1dc` lo causó el chat. La prueba del catálogo real esperaba 40 artículos, y al quitar la cinta blanca quedan 39. Se ha corregido en `16e0271` (257 pruebas en verde y publicación correcta). A partir de ahora el chat ejecuta las pruebas antes de subir cambios en `datos/`.
