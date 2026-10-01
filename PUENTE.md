@@ -604,9 +604,55 @@ Los artículos tienen el **código de Saltoki** como SKU, pero las cajas traen e
    - Hay pruebas de: SKU con URL rechazado en el servidor, alta desde un QR ajeno con SKU interno y código alternativo, foto subida para un SKU con `.` y `-`, reparación del artículo existente y reintento de la foto en cola.
    - En el iPhone del usuario se crea un artículo con la cámara y su foto se guarda.
 
+### E-022 · Borrar, fusionar y cambiar el código de una referencia sin quedarse bloqueado · PENDIENTE (urgente)
+**Qué le ha pasado al usuario, que es administrador (01/10).** Con la referencia **TRY32-1-L10-P**, un Trydan 7,4 kW con cable de 10 m en custodia de Esmove:
+1. **La borró**, la app dijo "borrada" y **volvió a aparecer**.
+2. **La fusionó** con otra.
+3. **Al cambiarle el SKU a 8900500020** salió **"Ya existe una referencia con el SKU 8900500020"**, sin decir cuál ni qué hacer.
+
+El administrador tiene que poder hacer estas tres cosas, y que queden reflejadas.
+
+**Causas encontradas por el chat en el código**
+- **Borrar:** `borrarProducto` en `ops.ts` solo comprueba en local los movimientos y el stock, y quita la referencia al momento. En el servidor, `borrar_producto` **también** rechaza si hay `pendientes` con ese SKU (y no mira entregas, cierres, líneas de albarán, códigos ni avisos). Si el servidor rechaza, la siguiente sincronización **devuelve la referencia** y el usuario no ve el motivo.
+- **SKU ocupado por un archivado:** `cambiar_codigo_producto` y el alta comprueban `exists (select 1 from productos where sku = v_nuevo)` **incluyendo los archivados**. Un artículo fusionado sigue ocupando su código para siempre, aunque no se vea en ninguna lista. Además, el mensaje no dice si el código lo tiene un artículo activo o uno archivado.
+
+**Qué hacer**
+1. **Las mismas reglas en local y en el servidor** para borrar:
+   - **Borrar definitivamente** solo si no hay ningún rastro: movimientos, pendientes, entregas (también preparadas o anuladas), líneas de albarán, consumos de cierres, avisos, códigos alternativos y fotos.
+   - **Si hay rastro,** el botón ofrece **"Archivar"**: deja de salir en listas, buscador, escáner y entregas, pero el historial la conserva. No dice "borrada".
+   - El mensaje explica qué la retiene ("Tiene 2 movimientos y 1 pendiente en tu bandeja").
+2. **Ninguna operación rechazada por el servidor puede quedar como hecha en pantalla:**
+   - si la cola recibe un rechazo, deshace el cambio local al momento;
+   - muestra un aviso con el motivo en lenguaje normal;
+   - lo deja en la **bandeja del administrador**, en "Operaciones rechazadas", con un botón para reintentar o descartar.
+   - Revisar todas las operaciones de `ops.ts` con este criterio, no solo borrar.
+3. **Los archivados no bloquean códigos:**
+   - al archivar o fusionar, el SKU del archivado pasa a un código interno (`<SKU>~A1`, `~A2`…) y el original se guarda en `sku_original`, para que el historial y el buscador de movimientos lo sigan encontrando por el código antiguo;
+   - con eso, `cambiar_codigo_producto`, el alta y la importación solo chocan con **activos**;
+   - migración para liberar los códigos de los archivados que ya existen.
+4. **Si el código choca con un artículo activo,** el mensaje dice **cuál es** (nombre y foto) y ofrece "Abrir esa ficha" o "Fusionar en ella".
+5. **Vista "Archivados" (solo administrador)** en Configuración o en el inventario con un filtro. Para cada uno: de qué se fusionó y en cuál, fecha y quién, y estas acciones:
+   - **Restaurar:** vuelve a estar activo con su código, si está libre; si no, pide otro.
+   - **Deshacer fusión:** si desde entonces no ha habido movimientos del destino que lo impidan, revierte los ajustes enlazados; si no, lo explica.
+   - **Borrar definitivamente:** solo sin ningún rastro.
+6. **Reparar el caso del usuario:**
+   - revisar en la base real el estado de **TRY32-1-L10-P** y **8900500020**: cuál está activo, cuál archivado, stock y movimientos;
+   - dejarlo como el usuario quiere, que es **un solo artículo activo con el SKU 8900500020** y todo su historial;
+   - si hace falta tocar datos reales, contarlo en la respuesta.
+7. **Hecho cuando**
+   - Hay pruebas de: borrar con y sin rastro (local y servidor iguales), rechazo del servidor que deshace el cambio local y deja la operación en la bandeja, fusión que libera el código, cambio de SKU al código de un archivado, restaurar y deshacer fusión, y mensaje de choque con un activo.
+   - El usuario puede dejar el Trydan como 8900500020.
+
+**Relación con E-021:** la referencia de los clavos (`HTTP://TAG.YT/ZESA7`, EAN 3439510575536) no admite foto por el SKU con `:` y `/`; lo resuelve E-021. Mientras tanto, el usuario puede cambiarle el SKU, por ejemplo a su EAN, y repetir la foto. Comprobar que ese cambio de código funciona con este artículo y que la foto que se quedó en la cola del móvil con la ruta antigua se descarta o se rehace sola.
+
 ---
 
 ## Revisión del chat
+
+### 01/10/2026 · Chat: borrar, fusionar y cambiar código
+- **Lo que le ha pasado al usuario:** una referencia que reaparece tras borrarla, y un código ocupado por un artículo fusionado (archivado).
+- **E-022 (urgente).**
+- **Orden: E-020 + E-021 + E-022 → E-019.**
 
 ### 01/10/2026 · Chat: firma bloqueada y escáner en iPhone
 - **Problemas reales en el iPhone del usuario:**
