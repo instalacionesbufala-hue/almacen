@@ -163,6 +163,9 @@ export const OPS: Defs = {
       if (nuevo && actual) throw new Error(`Ya existe una referencia con el SKU ${p.sku}`);
       if (!actual) { exigirSku(p.sku); const alt = S.codigos.find(c => c.codigo.replace(/\s/g, '').toUpperCase() === p.sku.toUpperCase()); if (alt) throw new Error(`El código ${p.sku} ya está asociado a ${find(S, alt.sku)?.name || alt.sku} (${alt.sku}) como código alternativo`); }                                     // E-021: los antiguos no válidos se pueden editar hasta cambiarles el código
       if (formatoEntero(p) && stockInicial !== Math.trunc(stockInicial)) throw new Error(`El stock inicial de ${p.name} va en ${p.unit} enteros`);
+      // E-023: el EAN es único (misma regla y mensaje que el servidor)
+      const conEan = p.ean ? [...S.products, ...(S.archivados || [])].find(x => x.sku !== p.sku && x.ean === p.ean) : undefined;
+      if (conEan) throw new Error(`El EAN ${p.ean} ya lo tiene el artículo ${conEan.sku} (${conEan.name})${conEan.archivado ? ' que está archivado: restáuralo o quítale el EAN en Configuración → Archivados' : ': quítaselo allí o fusiona los dos artículos'}`);
       if (actual) {
         // E-015: completar (aprobar) un borrador mete su stock inicial (la app lo envía precargado con lo que contó el almacén)
         const { stock, borrador } = actual;

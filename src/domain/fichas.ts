@@ -38,6 +38,12 @@ export function fusionarLocal(S: Estado, origen: string, destino: string, motivo
     S.movements[0].corrige = ida;
   }
   if (!b.foto && a.foto) Object.assign(b, { foto: a.foto, fotoMini: a.fotoMini, fotoOrigen: a.fotoOrigen });
+  // E-023: el EAN del que se archiva pasa al destino (si no tiene) o queda como código alternativo: el archivado no lo bloquea
+  if (a.ean) {
+    const e = a.ean; a.ean = undefined;
+    if (!b.ean) b.ean = e;
+    else if (e !== b.ean && !(S.codigos || []).some(c => c.codigo.toUpperCase() === e.toUpperCase())) (S.codigos ||= []).push({ codigo: e, sku: b.sku, tipo: 'EAN', ts: Date.now(), operator: S.operator });
+  }
   a.fusionadoEn = b.sku; a.archivado = true; a.archivadoTs = Date.now(); a.archivadoPor = S.operator;
   (S.codigos || []).forEach(c => { if (c.sku === a.sku) c.sku = b.sku; });   // E-020: los códigos alternativos pasan al destino
   S.products = S.products.filter(p => p.sku !== a.sku);

@@ -84,5 +84,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   input:not([type='checkbox']):not([type='radio']):not([type='range']), select, textarea { font-size: 16px !important; }
 }
 /* Nada puede ensanchar la página por los lados (lo ancho tiene su propio desplazamiento) */
-html, body { overflow-x: hidden; max-width: 100%; }
+/* Code (E-023): en body, clip y no hidden: hidden lo convierte en contenedor de desplazamiento y las cabeceras sticky dejan de quedarse fijas */
+html { overflow-x: hidden; }
+body { overflow-x: clip; max-width: 100%; }
 html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }

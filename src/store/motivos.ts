@@ -7,6 +7,7 @@ export function motivoLegible(msg: string | undefined | null): string {
   if (!m) return 'El servidor no ha dado el motivo.';
   if (/Ruta de la foto no válida|Invalid key|new row violates row-level security policy/i.test(m)) return MOTIVO_FOTO_SKU;
   if (/duplicate key value violates unique constraint "productos_pkey"/i.test(m)) return 'Ya existe un artículo con ese código.';
+  if (/productos_ean_key/i.test(m)) return 'Ese EAN ya lo tiene otro artículo: quítaselo allí o fusiona los dos artículos.';
   if (/violates foreign key constraint/i.test(m)) return 'El artículo tiene historial (movimientos, entregas…): no se puede borrar, solo archivar.';
   if (/permission denied|insufficient_privilege/i.test(m)) return 'Tu usuario no tiene permiso para hacer esto.';
   if (/JWT expired|invalid JWT|refresh token/i.test(m)) return 'La sesión ha caducado: vuelve a entrar.';

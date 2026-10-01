@@ -79,3 +79,17 @@ describe('operación rechazada por el servidor', () => {
     expect(find(rechazada, 'SIN-RASTRO')).toBeTruthy();                         // …y al rechazarse vuelve a salir tal como está en el servidor
   });
 });
+
+describe('EAN al fusionar y EAN repetido (E-023)', () => {
+  it('el caso actual del usuario: TRY32 (con EAN) se fusiona en el 8900500020 vacío y este se queda las 6 ud y el EAN', () => {
+    aplicarLocal(S, { op: 'producto', args: { producto: { ...prod('TRY32-1-L10-P'), ean: '8900500020' }, nuevo: true, stockInicial: 6 } });
+    alta('8900500020');
+    aplicarLocal(S, { op: 'fusionar', args: { origen: 'TRY32-1-L10-P', destino: '8900500020', motivo: 'Era el mismo' } });
+    expect(S.products.find(p => p.sku === '8900500020')).toMatchObject({ stock: 6, ean: '8900500020' });
+    expect(S.archivados!.find(p => p.sku === 'TRY32-1-L10-P')!.ean).toBeUndefined();
+  });
+  it('un EAN que ya tiene otro artículo se rechaza diciendo cuál', () => {
+    aplicarLocal(S, { op: 'producto', args: { producto: { ...prod('A-1'), ean: '8436000000031' }, nuevo: true, stockInicial: 0 } });
+    expect(() => aplicarLocal(S, { op: 'producto', args: { producto: { ...prod('B-1'), ean: '8436000000031' }, nuevo: true, stockInicial: 0 } })).toThrow(/El EAN 8436000000031 ya lo tiene el artículo A-1/);
+  });
+});

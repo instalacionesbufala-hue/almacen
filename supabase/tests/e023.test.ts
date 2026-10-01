@@ -32,3 +32,27 @@ describe('cambiar el código de un artículo que tiene EAN', () => {
     expect(await falla(db, 'select guardar_producto($1::jsonb)', [PROD('B-1', { ean: '8436000000031' })])).toMatch(/El EAN 8436000000031 ya lo tiene el artículo A-1/);
   });
 });
+
+describe('fusionar pasa el EAN (E-023, Code)', () => {
+  it('el caso actual del usuario: TRY32 con EAN se fusiona en el 8900500020 vacío y este se queda las 6 ud y el EAN', async () => {
+    const db = await nuevaBD();
+    await como(db, ADMIN);
+    await db.query('select guardar_producto($1::jsonb)', [PROD('TRY32-1-L10-P', { stock_inicial: 6, ean: '8900500020' })]);
+    await db.query('select guardar_producto($1::jsonb)', [PROD('8900500020')]);
+    await db.query('select fusionar_productos($1, $2, $3)', ['TRY32-1-L10-P', '8900500020', 'Era el mismo']);
+    expect(await ean(db, '8900500020')).toBe('8900500020');
+    expect(await ean(db, 'TRY32-1-L10-P')).toBeNull();
+    expect(await valor(db, "select stock::float from productos where sku = '8900500020'")).toBe(6);
+    expect(await valor(db, "select archivado from productos where sku = 'TRY32-1-L10-P'")).toBe(true);
+  });
+  it('si el destino ya tiene otro EAN, el del archivado queda como código alternativo', async () => {
+    const db = await nuevaBD();
+    await como(db, ADMIN);
+    await db.query('select guardar_producto($1::jsonb)', [PROD('A-1', { ean: '8436000000048' })]);
+    await db.query('select guardar_producto($1::jsonb)', [PROD('B-1', { ean: '8436000000055' })]);
+    await db.query('select fusionar_productos($1, $2, $3)', ['A-1', 'B-1', '']);
+    expect(await ean(db, 'B-1')).toBe('8436000000055');
+    expect(await valor(db, 'select sku from codigos_articulo where codigo = $1', ['8436000000048'])).toBe('B-1');
+    expect(await ean(db, 'A-1')).toBeNull();                                       // el archivado ya no lo bloquea
+  });
+});

@@ -645,7 +645,7 @@ El administrador tiene que poder hacer estas tres cosas, y que queden reflejadas
 
 **Relación con E-021:** la referencia de los clavos (`HTTP://TAG.YT/ZESA7`, EAN 3439510575536) no admite foto por el SKU con `:` y `/`; lo resuelve E-021. Mientras tanto, el usuario puede cambiarle el SKU, por ejemplo a su EAN, y repetir la foto. Comprobar que ese cambio de código funciona con este artículo y que la foto que se quedó en la cola del móvil con la ruta antigua se descarta o se rehace sola.
 
-### E-023 · Cambiar el código de un artículo con EAN y zoom del iPhone · PENDIENTE (urgente, lo primero)
+### E-023 · Cambiar el código de un artículo con EAN y zoom del iPhone · HECHO
 **Fallos reales del usuario (01/10), con capturas.**
 
 **Los ficheros ya los ha subido el chat al repositorio** (la migración, la prueba y `src/estilos.css`). Code solo tiene que **aplicar la migración en Supabase** y hacer las revisiones de abajo. Si ves un `PUENTE-chat.md` o un `chat-e023.patch` en la carpeta del proyecto, bórralos: ya no hacen falta.
@@ -1846,3 +1846,51 @@ En "Para el día a día" se explican el ajuste y el aviso.
 **En el navegador (demostración):**
 - **Escritorio:** 36 de 36 referencias en una tabla y sin "Página x de y". Al desplazar, la cabecera queda fija. Ordenar por "Almacén" da 1, 1, 1, 1, 2… y el segundo toque 915, 800, 600… "Agrupar por categoría" muestra 8 grupos con su número.
 - **Móvil (375 px):** las 36 tarjetas seguidas bajando y el botón "Subir" al final.
+
+### 01/10/2026 · E-023 · HECHO
+**1. Migración del chat:** revisada y **aplicada** (`20261014000100_e023_cambiar_codigo_ean.sql`, junto con el disparador `_ean_unico`). La prueba del chat pasa. No había `PUENTE-chat.md` ni `chat-e023.patch`.
+
+**2. Revisión del resto de funciones que tocan el EAN**
+- `guardar_producto`: solo pone el EAN del propio artículo. Si choca con otro, ahora sale el mensaje de `_ean_unico`.
+- `importar_catalogo`: no toca el EAN.
+- `fusionar_productos`: **sí tenía un fallo**. El archivado se quedaba su EAN y, como es único, nadie más podía usarlo, ni siquiera el artículo en el que se fusionó.
+  - Migración `20261014000200_e023_fusion_ean.sql` (**aplicada**): al fusionar, el EAN pasa al destino si no tiene; si tiene otro, queda como **código alternativo** del destino (E-020).
+  - La migración repara también los archivados que tuvieran EAN; en producción no había ninguno.
+  - En la app hace lo mismo (`fusionarLocal`), y el alta comprueba el EAN repetido con el mismo mensaje que el servidor.
+- `restaurar_producto` y `deshacer_fusion` no mueven el EAN. Un archivado ya no tiene EAN, así que no pueden chocar. Al deshacer, el EAN se queda en el destino, como los códigos alternativos.
+- `motivoLegible` traduce también `productos_ean_key`, por si llega de una versión antigua.
+
+**3. "Operaciones rechazadas" y estado real del Trydan**
+- **Esa bandeja no está en el servidor:** es la cola de **cada dispositivo** (almacenamiento local del móvil). Desde aquí no se puede leer.
+- La **auditoría** de producción (solo lectura) cuenta lo que pasó hoy:
+  - 08:39: fusión de `8900500020` en `TRY32-1-L10-P`;
+  - 10:32: **alta** de `8900500020`, que reactivó el archivado (E-022);
+  - 10:35: borrado de `8900500020`;
+  - 10:35: nueva alta de `8900500020`.
+- **Estado actual:**
+  - `8900500020` está **activo y vacío** (0 ud, sin EAN);
+  - `TRY32-1-L10-P` está activo con **6 ud** y tiene **`8900500020` puesto como EAN**.
+- **Lo que casi seguro hay en la bandeja de su móvil:**
+  - el **cambio de código** `TRY32-1-L10-P` → `8900500020`, rechazado con "productos_ean_key" (el fallo que arregla el chat);
+  - y quizá un **alta** de `8900500020` con ese mismo EAN, que chocaba con el del TRY32.
+- **Qué hacer:**
+  - **Descartar** esas operaciones, no reintentarlas. Un reintento del cambio de código fallaría ahora con "Ya existe un artículo activo con el código 8900500020", porque el usuario lo volvió a crear.
+  - Hacer: TRY32 → **Editar** → código `8900500020` → aparece "ya es de otro artículo activo" → **"Fusionar en ella"**. También vale ficha → "Fusionar en otro artículo" → `8900500020`.
+  - Resultado: **un solo `8900500020` activo con las 6 ud y el EAN**, y TRY32 archivado dentro. Hay prueba con estos mismos datos (`e023.test.ts` y `archivo.test.ts`).
+- **No he tocado datos reales.**
+
+**4. Zoom del iPhone y desbordes**
+- Los campos a 16 px del chat están bien: en 375 px no se descuadra nada (lo he comprobado en el formulario de edición).
+- **Corregido:** `overflow-x: hidden` en el `body` lo convierte en contenedor de desplazamiento, y la **cabecera fija del móvil dejaba de quedarse arriba**.
+  - Ahora: `html { overflow-x: hidden }` y `body { overflow-x: clip }`.
+  - Comprobado: tras bajar 1.500 px, la cabecera sigue arriba.
+- **Desbordes en 375 px:** he revisado con un script las 9 pantallas y la ficha de las 36 referencias de ejemplo, más un Trydan como el real (custodia, nombre largo, EAN y material en vehículo). **Nada ensancha la página.**
+  - Lo que sobresale es la tira de categorías, que se desplaza en horizontal a propósito.
+  - "Cuadr…" y "EN STOC…" de la captura eran esa tira y la pastilla de estado, vistas con la página ampliada.
+  - Aun así, he reforzado la cabecera de la ficha: `min-w-0`, `flex-wrap` en las etiquetas y la pastilla sin encoger.
+- `viewport` sin `maximum-scale` ni `user-scalable=no`: se puede ampliar si se quiere.
+
+**Pruebas:** 353 en verde.
+- `e023.test.ts`: 3 del chat y 2 mías (la fusión del caso actual con EAN, y el EAN como código alternativo cuando el destino ya tiene uno).
+- `archivo.test.ts` (+2).
+- `tsc -b` sin errores y build correcto.

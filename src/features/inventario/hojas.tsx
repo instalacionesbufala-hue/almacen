@@ -73,10 +73,10 @@ function Ficha({ sku }: { sku: string }) {
     <div className="p-5 flex flex-col gap-4">
       <EditorFoto p={p} />
       <div className="flex items-center gap-3">
-        <div className="flex-1"><div className={`text-headline-lg font-bold ${status(p) === 'red' ? 'text-error' : ''}`}>{qtyTxt(p, p.stock)} <span className="text-body-md font-normal text-secondary">en el almacén</span></div>
+        <div className="flex-1 min-w-0"><div className={`text-headline-lg font-bold break-words ${status(p) === 'red' ? 'text-error' : ''}`}>{qtyTxt(p, p.stock)} <span className="text-body-md font-normal text-secondary">en el almacén</span></div>
           <div className="text-body-sm text-secondary">Mínimo en almacén {p.minimoDefinido === false ? <b className="text-amber-800">sin definir</b> : qtyTxt(p, p.min)}</div>
-          <div className="flex gap-1 mt-1"><TagCustodia p={p} nombre={E.propietarios.find(o => o.id === p.propietario)?.nombre} />{p.borrador && <Tag c="bg-amber-100 text-amber-800">Borrador: falta completarla</Tag>}</div></div>
-        <Pill p={p} /></div>
+          <div className="flex flex-wrap gap-1 mt-1"><TagCustodia p={p} nombre={E.propietarios.find(o => o.id === p.propietario)?.nombre} />{p.borrador && <Tag c="bg-amber-100 text-amber-800">Borrador: falta completarla</Tag>}</div></div>
+        <span className="shrink-0"><Pill p={p} /></span></div>
       <div><div className={`${LBL} mb-1`}>Dónde está</div><Ubicaciones p={p} /></div>
       <div className="grid grid-cols-2 gap-2 text-body-sm">{datos.map(([k, v]) => <div key={k} className="bg-surface-container-low rounded-lg p-2.5"><div className={LBL}>{k}</div><div className="font-medium break-words">{v}</div></div>)}</div>
       <div className="flex items-center gap-4 bg-surface-container-low rounded-xl p-3">
