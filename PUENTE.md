@@ -542,9 +542,79 @@ El diálogo de movimientos solo ofrece Entrada, Salida, A vehículo, Devolución
 - Hay pruebas de: todas las referencias visibles sin paginación, filtros y orden aplicados sobre la lista completa, y CSV con la lista filtrada completa.
 - En el móvil se recorren las 40 referencias desplazando, sin tocar ningún botón de página.
 
+### E-020 · Firma sin bloqueos y escáner de códigos de barras en iPhone · PENDIENTE (urgente, antes que E-019 si no se ha terminado)
+**Qué ha visto el chat con capturas del usuario en su iPhone (01/10).**
+
+**1. Pantalla de firma: solo la firma es obligatoria.** **Ya aplicado por el chat** directamente en `Hojas.tsx` y `App.tsx` (commits del 01/10; 301 pruebas en verde, `tsc` y build correctos). Code solo tiene que revisarlo. Lo que se cambió:
+- **El botón ya no se desactiva por `!recoge`.** Hoy, en un equipo con 2 técnicos, si nadie toca un nombre arriba, el botón "Firmar y recibir" queda gris **sin decir por qué**: le pasó al usuario. Ahora el botón solo exige la firma. Si falta quién recoge, desplaza la vista al selector (`id="quien-recoge"`, resaltado en ámbar con "toca un nombre") y muestra un aviso.
+- **Teléfono, correo y "copia a los demás técnicos"** pasan a un `<details>` cerrado: **"Enviar copia por WhatsApp o correo (opcional)"**. Decisión del usuario: no hace falta poner ni teléfono ni correo. Tras firmar se abre el albarán con **"Compartir PDF"** como botón principal, y él lo envía.
+- **Sin firma,** el botón dice "Firma arriba para continuar".
+- **`App.tsx`:** `pb-28` pasa a `pb-[calc(10rem+env(safe-area-inset-bottom))]`. En el iPhone, la barra inferior y el botón flotante de escanear **tapaban** el botón de firmar.
+
+**2. El escáner no lee códigos de barras en iPhone (bug grave)**
+- **Causa:** `camara.ts` usa `BarcodeDetector` si existe y, si no, **jsQR, que solo lee QR**. Safari en iOS no tiene `BarcodeDetector`, así que en el iPhone **ningún código de barras (EAN-13, Code 128…) se lee**. En la captura leyó en su lugar el QR del fabricante (`http://tag.yt/zeSA7`) y salió "código desconocido".
+- **Solución:** sustituir jsQR por un lector multiformato que funcione en iOS. Por ejemplo, el ponyfill `barcode-detector` (basado en ZXing, WebAssembly) o `@zxing/browser`.
+  - **Formatos:** EAN-13, EAN-8, UPC-A/E, Code 128, Code 39, ITF, Codabar, QR y DataMatrix.
+  - **El `.wasm` empaquetado con la app**, sin CDN, para que funcione sin cobertura y sin depender de terceros.
+- **Cámara:**
+  - pedir 1920×1080 si se puede, con enfoque continuo y la linterna disponible;
+  - analizar el fotograma completo y probar también girado 90° (las cajas se escanean de lado);
+  - leer unas 6–8 veces por segundo.
+- **Prioridad del código del almacén:** si en el mismo fotograma hay un QR que es una URL ajena (como `tag.yt`) y un código de barras, gana el código de barras. Un QR `BUF:<SKU>` siempre gana. Si solo se lee una URL ajena, se muestra "QR del fabricante, no es un código del almacén" y se sigue escaneando unos segundos antes de darlo por desconocido.
+- **Pruebas:** imágenes de prueba con EAN-13, Code 128 y QR (fixtures) leídas por el mismo módulo que usa la cámara.
+
+**3. Asociar un código leído a un artículo que ya existe**
+Los artículos tienen el **código de Saltoki** como SKU, pero las cajas traen el **EAN** del fabricante. Aunque el escáner lo lea, sale "desconocido". Hace falta enseñárselo a la app una vez:
+- **En "Código desconocido",** además de "Crear con la cámara" y "Crear a mano", un botón principal **"Es un artículo que ya tengo"**. Abre un buscador con fotos y guarda el código leído como **código alternativo** de ese artículo.
+- **Tabla `codigos_articulo`:** `codigo` único, `sku`, `tipo` (EAN, UPC, Code 128, QR, otro), quién y cuándo. Un artículo puede tener varios. El escáner, el buscador, la cesta de entregas y el emparejado de albaranes buscan también ahí.
+- **Permisos:** el administrador asocia directamente. El personal de almacén también puede asociar, por rapidez en el pasillo, y queda en la auditoría; el administrador puede deshacerlo desde la ficha.
+- **En la ficha del artículo,** sección "Códigos": lista, añadir escaneando y quitar.
+- **Al crear un artículo nuevo** desde un código desconocido, ese código queda ya como su código alternativo.
+
+**4. Hecho cuando**
+- En el iPhone del usuario se leen los EAN de las cajas de cable y tubo de la nave.
+- Asociar un EAN a un artículo hace que el siguiente escaneo lo abra directamente.
+- Hay pruebas de: lector multiformato con fixtures, prioridad BUF y código de barras frente a URL ajena, asociación (alta, duplicado rechazado, borrado), y firma sin teléfono ni correo.
+
+### E-021 · No se puede guardar la foto de un artículo creado desde un código raro · PENDIENTE (urgente, junto a E-020)
+**Qué le ha pasado al usuario (01/10, desde el iPhone):** creó un artículo con la cámara desde un código "desconocido" y al guardar la foto salió **"Ruta de la foto no válida"**.
+
+**Causa:**
+- El escáner había leído el QR del fabricante `http://tag.yt/zeSA7` y la app lo usó **como SKU**.
+- `rutasFoto()` construye `productos/${SKU}/…`, de modo que con ese SKU la ruta queda `productos/HTTP://TAG.YT/ZESA7/xxxx.webp`.
+- En SQL, `_sku_de_ruta()` toma el segundo trozo separado por `/` (`HTTP:`), que no es igual al SKU, y `poner_foto` lanza "Ruta de la foto no válida".
+- Además, Storage no admite `:` en las rutas.
+- **Pasaría igual desde el ordenador:** es un fallo de datos, no del móvil.
+
+**Qué hacer**
+1. **Formato válido de SKU:** solo `A-Z`, `0-9`, `-`, `_` y `.`, sin espacios ni `/` ni `:`, de 2 a 40 caracteres. Se valida en la app y **en el servidor** (check en `productos.sku` y en las funciones de alta, edición e importación), con un mensaje claro en español.
+2. **Crear desde un código leído que no sirve como SKU** (una URL, o con caracteres no válidos o demasiado largo):
+   - la app **propone un SKU interno** (`BF-000123`, correlativo) que el usuario puede cambiar;
+   - el código leído se guarda como **código alternativo** del artículo (`codigos_articulo`, E-020 §3), y el siguiente escaneo lo abre.
+   - Un EAN normal (solo dígitos) sí puede ser el SKU si el usuario quiere, aunque se recomienda el código del proveedor.
+3. **Rutas de foto robustas:** la carpeta de la foto no debe depender de que el SKU sea "bonito".
+   - Usar una **clave segura** derivada del SKU (por ejemplo, el SKU con todo lo que no sea `A-Z0-9_.-` codificado de forma reversible, o el id interno del producto).
+   - Actualizar a la vez `rutasFoto()`, `_sku_de_ruta()`, `puede_subir_foto()` y `poner_foto()` (migración nueva), sin romper las fotos ya subidas.
+4. **Reparar lo que ya existe:**
+   - una migración o comprobación lista los productos con SKU no válido (al menos el creado hoy con `HTTP://TAG.YT/…`);
+   - el administrador los ve en su bandeja como "Código no válido: cámbialo" y los corrige con **Editar** (E-016), que mueve su historial;
+   - el código antiguo queda como código alternativo.
+5. **Mensajes de error comprensibles:** si una subida de foto falla, decir el motivo en lenguaje normal ("El código del artículo tiene caracteres no válidos (/ :). Cámbialo en Editar y vuelve a hacer la foto") y no el texto técnico del servidor. La foto queda en la cola del móvil y se reintenta sola cuando se corrige el código.
+6. **Hecho cuando**
+   - Hay pruebas de: SKU con URL rechazado en el servidor, alta desde un QR ajeno con SKU interno y código alternativo, foto subida para un SKU con `.` y `-`, reparación del artículo existente y reintento de la foto en cola.
+   - En el iPhone del usuario se crea un artículo con la cámara y su foto se guarda.
+
 ---
 
 ## Revisión del chat
+
+### 01/10/2026 · Chat: firma bloqueada y escáner en iPhone
+- **Problemas reales en el iPhone del usuario:**
+  - "Firmar y recibir" no se activaba porque no se había tocado quién recoge, y la pantalla no lo decía;
+  - el escáner no lee códigos de barras (solo QR).
+- **E-020 (urgente)** recoge los dos problemas, con la firma ya arreglada y subida por el chat.
+- **Error al guardar la foto** de un artículo creado desde el QR del fabricante: va en **E-021**.
+- **Orden: E-020 + E-021 → E-019** (o terminar E-019 si ya está casi hecho y seguir con E-020 y E-021).
 
 ### 30/09/2026 · Revisión de E-016 y E-017, y estado de la app real
 Verificado desde el chat sobre `75da231`:
