@@ -1,7 +1,7 @@
 /* E-003 · Lectura de albaranes: prompt, esquema de respuesta, normalización y emparejado con el catálogo.
    Módulo puro compartido por la función de servidor "leer-albaran" (Gemini) y por la app (emparejado local). */
 
-export interface ItemCatalogo { sku: string; ref?: string; ean?: string; nombre: string; unidad: string; contenido?: number; proveedor?: string; custodia?: boolean }
+export interface ItemCatalogo { sku: string; ref?: string; ean?: string; codigos?: string[]; nombre: string; unidad: string; contenido?: number; proveedor?: string; custodia?: boolean }
 export interface LineaLeida { codigo: string; descripcion: string; cantidad: number; sku: string | null; how: string | null; series: string[]; nota: string; confianza: number }
 export interface AlbaranLeido { proveedor: string; cif: string; numero: string; fecha: string; bultos?: number; lineas: LineaLeida[] }
 
@@ -12,7 +12,7 @@ export function mismoCodigo(p: ItemCatalogo, code: string | undefined): 'código
   const c = String(code || '').replace(/\s/g, '').toUpperCase();
   if (!c) return null;
   const eq = (v?: string) => !!v && v.toUpperCase() === c;
-  if (eq(p.sku) || eq(p.ean) || eq(p.ref)) return 'código';
+  if (eq(p.sku) || eq(p.ean) || eq(p.ref) || (p.codigos || []).some(eq)) return 'código';
   return [p.sku, p.ref].some(v => v && v.length >= 6 && c.startsWith(v.toUpperCase())) ? 'código (prefijo)' : null;
 }
 

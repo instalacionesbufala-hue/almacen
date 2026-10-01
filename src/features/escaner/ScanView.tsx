@@ -13,9 +13,11 @@ import { candidatos, codigoConocido, leerTexto } from './texto';
 import { FotoGrande } from '../../ui/foto';
 import { fotoDe } from '../../domain/fotos';
 import { abrirAltaCamara } from '../altaCamara/AltaCamara';
+import { abrirAsociarCodigo, asociarCodigo } from '../inventario/codigos';
+import { esUrl, guardarComoAlternativo, skuPropuesto } from '../../domain/codigos';
 
 type Modo = 'entrada' | 'salida' | 'consulta';
-interface Hit { code: string; sku: string | null; via: string }
+interface Hit { code: string; sku: string | null; via: string; formato?: string }
 
 const PRUEBAS: [string, string][] = [['BUF:BF-FIX-SX8', 'Caja tacos SX 8'], ['4006209700985', 'EAN tacos SX 6'], [qrContenido('WBX-PULSAR-22'), 'QR Wallbox 22 kW'], ['CP-VE-1F-40', 'Pegatina cuadro Esmove'], ['CAB-RZ1K-5G6', 'Bobina 5G6'], ['A9F74240', 'Ref. Schneider iC60N']];
 
@@ -30,12 +32,12 @@ export default function ScanView() {
   const p = hit?.sku ? find(E, hit.sku) : undefined;
 
   /* Se recrea en cada render; la cámara siempre llama a la última versión */
-  const alLeer = (raw: string, via: string) => {
+  const alLeer = (raw: string, via: string, formato?: string) => {
     const r = resolveCode(S(), raw);
     navigator.vibrate?.(r ? 60 : [40, 60, 40]);
-    setHit({ code: raw.trim(), sku: r ? r.p.sku : null, via }); setQty('1'); setRef(''); setReason(REASONS[modo === 'consulta' ? 'salida' : modo][0]);
+    setHit({ code: raw.trim(), sku: r ? r.p.sku : null, via, formato }); setQty('1'); setRef(''); setReason(REASONS[modo === 'consulta' ? 'salida' : modo][0]);
   };
-  const cam = useCamara(true, c => alLeer(c, 'cámara'));
+  const cam = useCamara(true, (c, f) => alLeer(c, 'cámara', f));
   const [leyendo, setLeyendo] = useState(false);
   /* E-008: los cuadros no llevan código de barras: se lee el texto de su pegatina */
   const leerPegatina = async () => {
@@ -74,6 +76,7 @@ export default function ScanView() {
           <div className="cam-fondo" /><video ref={cam.video} playsInline muted autoPlay />
           <div className="esq tl" /><div className="esq tr" /><div className="esq bl" /><div className="esq br" />
           {cam.estado.on && !hit && <div className="laser" />}
+          {cam.estado.aviso && !hit && <p className="absolute bottom-4 inset-x-4 rounded-lg bg-black/65 text-white text-body-sm p-3">{cam.estado.aviso}</p>}
           <span className="absolute top-4 left-4 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/45 text-tertiary-fixed font-mono text-label-md"><span className={`w-1.5 h-1.5 rounded-full bg-tertiary-fixed ${cam.estado.on ? 'pulso' : ''}`} />{cam.estado.on ? cam.estado.lector : 'CÁMARA APAGADA'}</span>
           <div className="absolute top-4 right-4 flex flex-col gap-2">
             {cam.estado.puedeTorch && <button onClick={cam.linterna} className="w-12 h-12 rounded-full bg-black/45 text-white grid place-items-center" aria-label="Linterna"><Icon n={cam.estado.torch ? 'flashlight_off' : 'flashlight_on'} /></button>}
@@ -100,9 +103,15 @@ export default function ScanView() {
           <Registro log={log} />
         </div>
           : !p ? <div className="flex flex-col gap-4">
-            <div className="flex items-center gap-3 bg-error-container/60 rounded-xl p-4"><Icon n="help" className="text-error ico-32" /><div><div className="font-semibold">“{hit.code}” no está en el catálogo</div><div className="text-body-sm text-secondary">Puedes darlo de alta ahora con este código.</div></div></div>
-            <button onClick={() => { const c = hit.code.replace(/^BUF:/i, '').split('|')[0]; setHit(null); abrirAltaCamara({ codigo: c }); }} className={`${BTN_P} h-14`}><Icon n="add_a_photo" className="ico-fill" />Crear con la cámara</button>
-            <button onClick={() => { const c = hit.code.replace(/^BUF:/i, '').split('|')[0]; if (E.rol !== 'admin') abrirBorrador(c, () => setHit(null)); else abrirFormProducto(undefined, /^\d{8,14}$/.test(c) ? { ean: c } : { sku: c.toUpperCase() }, () => { setHit(null); }); }} className={`${BTN_S} h-14`}><Icon n="add_circle" className="ico-20" />Crear a mano</button>
+            <div className="flex items-center gap-3 bg-error-container/60 rounded-xl p-4"><Icon n="help" className="text-error ico-32" /><div><div className="font-semibold break-all">“{hit.code}” no está en el catálogo</div><div className="text-body-sm text-secondary">{esUrl(hit.code) ? 'Es el QR de una web (del fabricante), no un código del almacén. ' : ''}Si es un artículo que ya tienes, enséñaselo una vez y el siguiente escaneo lo abrirá.</div></div></div>
+            {/* E-020: el EAN de la caja no es el SKU (código del proveedor): se guarda como código alternativo del artículo */}
+            <button onClick={() => { const h = hit; abrirAsociarCodigo(h.code, h.formato, sku => setHit({ ...h, sku })); }} className={`${BTN_P} h-14`}><Icon n="link" className="ico-20" />Es un artículo que ya tengo</button>
+            <button onClick={() => { const c = hit.code.replace(/^BUF:/i, '').split('|')[0]; setHit(null); abrirAltaCamara({ codigo: c, formato: hit.formato }); }} className={`${BTN_S} h-14`}><Icon n="add_a_photo" className="ico-20" />Crear con la cámara</button>
+            <button onClick={() => {
+              const c = hit.code.replace(/^BUF:/i, '').split('|')[0], f = hit.formato;
+              const alCrear = (sku: string) => { const p = S().products.find(x => x.sku === sku); if (p && guardarComoAlternativo(c, p)) asociarCodigo(c, sku, f, false); setHit(null); };
+              if (E.rol !== 'admin') abrirBorrador(c, alCrear); else abrirFormProducto(undefined, /^\d{8,14}$/.test(c) ? { ean: c } : { sku: skuPropuesto(S(), c) }, alCrear);
+            }} className={`${BTN_S} h-14`}><Icon n="add_circle" className="ico-20" />Crear a mano</button>
             <button onClick={siguiente} className={`${BTN_T} h-14 text-body-lg`}><Icon n="skip_next" />Escanear siguiente</button>
             <Manual valor={manual} setValor={setManual} onEnviar={c => alLeer(c, 'teclado')} />
           </div>

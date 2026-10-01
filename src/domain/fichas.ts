@@ -37,6 +37,7 @@ export function fusionarLocal(S: Estado, origen: string, destino: string, motivo
   }
   if (!b.foto && a.foto) Object.assign(b, { foto: a.foto, fotoMini: a.fotoMini, fotoOrigen: a.fotoOrigen });
   a.fusionadoEn = b.sku;
+  (S.codigos || []).forEach(c => { if (c.sku === a.sku) c.sku = b.sku; });   // E-020: los códigos alternativos pasan al destino
   S.products = S.products.filter(p => p.sku !== a.sku);
   S.archivados = [...(S.archivados || []), a];
   S.avisos.forEach(v => { if (v.sku === a.sku && v.estado !== 'cerrado') v.estado = 'cerrado'; });

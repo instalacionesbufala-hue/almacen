@@ -13,20 +13,22 @@ import { closeModal, openModal, SheetFoot, SheetHead } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 import { BTN_P, BTN_S, Campo, Icon, INP, LBL, Tile } from '../../ui/base';
 import { useCamara } from '../escaner/camara';
+import { asociarCodigo } from '../inventario/codigos';
+import { guardarComoAlternativo, skuInternoDe } from '../../domain/codigos';
 import { comprimir } from '../fotos/imagen';
 import { guardarFoto } from '../fotos/servicio';
 import { AVISO_GEMINI, iaArticulo, leerArticuloConIA } from '../albaranes/lector';
 import { abrirFicha, abrirMovimiento } from '../inventario/hojas';
 
 type Origen = 'inventario' | 'dotacion';
-export const abrirAltaCamara = (o: { codigo?: string; origen?: Origen } = {}) => openModal(<AltaCamara codigo0={o.codigo || ''} origen={o.origen || 'inventario'} />, { ancha: true });
+export const abrirAltaCamara = (o: { codigo?: string; origen?: Origen; formato?: string } = {}) => openModal(<AltaCamara codigo0={o.codigo || ''} origen={o.origen || 'inventario'} formato0={o.formato} />, { ancha: true });
 
 const TIPOS: { t: TipoAlta; label: string; icon: string }[] = [
   { t: 'material', label: 'Material', icon: 'inventory_2' }, { t: 'ropa', label: 'Ropa', icon: 'checkroom' },
   { t: 'epi', label: 'EPI', icon: 'health_and_safety' }, { t: 'herramienta', label: 'Herramienta', icon: 'construction' },
 ];
 
-function AltaCamara({ codigo0, origen }: { codigo0: string; origen: Origen }) {
+function AltaCamara({ codigo0, origen, formato0 }: { codigo0: string; origen: Origen; formato0?: string }) {
   const E = useAlmacen(), admin = E.rol === 'admin';
   const tipoInicial: TipoAlta = origen === 'dotacion' ? (admin ? 'herramienta' : 'ropa') : 'material';
   const [paso, setPaso] = useState<'codigo' | 'foto' | 'ficha'>(codigo0 ? 'foto' : 'codigo');
@@ -45,9 +47,10 @@ function AltaCamara({ codigo0, origen }: { codigo0: string; origen: Origen }) {
   useEffect(() => { const on = () => setEnLinea(true), off = () => setEnLinea(false); addEventListener('online', on); addEventListener('offline', off); return () => { removeEventListener('online', on); removeEventListener('offline', off); }; }, []);
   useEffect(() => () => { if (fotoUrl) URL.revokeObjectURL(fotoUrl); }, [fotoUrl]);
 
-  const leido = (c: string) => {
+  const [formato, setFormato] = useState(formato0 || '');
+  const leido = (c: string, fmt?: string) => {
     const code = c.trim(); if (!code) return;
-    setCodigo(code);
+    setCodigo(code); setFormato(fmt || '');
     const ex = buscarExistente(E, code);
     if (ex) { setExiste(ex); navigator.vibrate?.(60); } else { setExiste(null); setPaso('foto'); }
   };
@@ -59,10 +62,10 @@ function AltaCamara({ codigo0, origen }: { codigo0: string; origen: Origen }) {
     try {
       const c = await comprimir(blob);
       const prop: PropuestaIA = await leerArticuloConIA(c.grande, codigo);
-      setF(formularioInicial({ codigo, propuesta: prop, tipo: origen === 'dotacion' && prop.tipo === 'material' ? tipoInicial : prop.tipo, propietario: propietario0 }));
+      setF(formularioInicial({ codigo, skuInterno: skuInternoDe(E), propuesta: prop, tipo: origen === 'dotacion' && prop.tipo === 'material' ? tipoInicial : prop.tipo, propietario: propietario0 }));
       setNota(`Propuesta de la IA${prop.confianza < 0.6 ? ' (poco segura: revísala bien)' : ''}${prop.nota ? ` · ${prop.nota}` : ''}. Corrige lo que haga falta.`);
     } catch (e) {
-      setF(cur => cur ?? formularioInicial({ codigo, tipo: tipoInicial, propietario: propietario0 }));
+      setF(cur => cur ?? formularioInicial({ codigo, skuInterno: skuInternoDe(E), tipo: tipoInicial, propietario: propietario0 }));
       setNota(`La IA no ha podido leerla (${(e as Error).message}). Rellena la ficha a mano: la foto ya está puesta.`);
     } finally { setLeyendo(false); setPaso('ficha'); }
   };
@@ -71,12 +74,12 @@ function AltaCamara({ codigo0, origen }: { codigo0: string; origen: Origen }) {
     setFoto(blob); setFotoUrl(URL.createObjectURL(blob));
     if (puedeIA && navigator.onLine) void leerIA(blob);
     else {
-      setF(formularioInicial({ codigo, tipo: tipoInicial, propietario: propietario0 }));
+      setF(formularioInicial({ codigo, skuInterno: skuInternoDe(E), tipo: tipoInicial, propietario: propietario0 }));
       setNota(!puedeIA ? 'La lectura con IA no está disponible aquí: rellena la ficha a mano (la foto ya está puesta).' : 'Sin conexión: rellena la ficha a mano. Cuando vuelva la cobertura puedes pulsar "Leer con IA", y la foto se sube sola.');
       setPaso('ficha');
     }
   };
-  const aMano = () => { setF(formularioInicial({ codigo, tipo: tipoInicial, propietario: propietario0 })); setNota(''); setPaso('ficha'); };
+  const aMano = () => { setF(formularioInicial({ codigo, skuInterno: skuInternoDe(E), tipo: tipoInicial, propietario: propietario0 })); setNota(''); setPaso('ficha'); };
   const reiniciar = () => { setPaso('codigo'); setCodigo(''); setEscrito(''); setExiste(null); setFoto(null); setFotoUrl(''); setF(null); setNota(''); };
 
   const guardar = async (otro: boolean) => {
@@ -86,6 +89,8 @@ function AltaCamara({ codigo0, origen }: { codigo0: string; origen: Origen }) {
     catch (e) { return toast((e as Error).message, 'err'); }
     if (!ejecutar(op)) return;
     const sku = op.op === 'altaDotacion' ? '' : op.args.producto.sku.toUpperCase();
+    // E-020: el código leído (EAN, QR del fabricante…) queda como código alternativo: el siguiente escaneo abre el artículo
+    if (sku && op.op !== 'altaDotacion' && guardarComoAlternativo(codigo, op.args.producto)) asociarCodigo(codigo, sku, formato, false);
     let fotoOk = true;
     if (foto && sku) { try { fotoOk = await guardarFoto(sku, foto, 'propia'); } catch { fotoOk = false; } }
     const que = op.op === 'altaDotacion' ? `Ficha de ${f.name.trim()} creada` : op.op === 'borradorArticulo' ? `Borrador ${sku} creado: el administrador lo aprobará y entonces entrará el stock` : `${sku} dado de alta`;

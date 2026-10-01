@@ -542,7 +542,7 @@ El diálogo de movimientos solo ofrece Entrada, Salida, A vehículo, Devolución
 - Hay pruebas de: todas las referencias visibles sin paginación, filtros y orden aplicados sobre la lista completa, y CSV con la lista filtrada completa.
 - En el móvil se recorren las 40 referencias desplazando, sin tocar ningún botón de página.
 
-### E-020 · Firma sin bloqueos y escáner de códigos de barras en iPhone · PENDIENTE (urgente, antes que E-019 si no se ha terminado)
+### E-020 · Firma sin bloqueos y escáner de códigos de barras en iPhone · HECHO
 **Qué ha visto el chat con capturas del usuario en su iPhone (01/10).**
 
 **1. Pantalla de firma: solo la firma es obligatoria.** **Ya aplicado por el chat** directamente en `Hojas.tsx` y `App.tsx` (commits del 01/10; 301 pruebas en verde, `tsc` y build correctos). Code solo tiene que revisarlo. Lo que se cambió:
@@ -1613,3 +1613,54 @@ En "Para el día a día" se explican el ajuste y el aviso.
 **Probado en el navegador (demostración):**
 - Administrador: cable 3G16, **−20** → "Almacén: de 305 m a 285 m" → confirmado, y queda como Ajuste.
 - Rol almacén: bridas, "Proponer ajuste" **−2** → el stock no cambia → como administrador, en la bandeja → Aprobar → de 14 a 12 bolsas.
+
+### 01/10/2026 · E-020 · HECHO
+**1. Firma:** he revisado los cambios del chat en `Hojas.tsx` y `App.tsx` y están bien; no los he tocado.
+- La operación de firmar no lleva ni teléfono ni correo.
+- Hay una prueba de firma sin ellos en `codigos.test.ts`.
+
+**2. Escáner multiformato también en iPhone**
+- **Lector:** `src/features/escaner/lector.ts` usa `zxing-wasm` (ZXing en WebAssembly) en **todos** los navegadores.
+  - No uso el `BarcodeDetector` nativo, para que iPhone y Android se comporten igual y las pruebas usen el mismo código.
+  - Se quita `jsqr`.
+- **Formatos:** EAN-13/8, UPC-A/E, Code 128, Code 39, ITF, Codabar, QR y DataMatrix.
+- **Sin CDN:** el `.wasm` (953 kB, 414 kB comprimido) va empaquetado con la app (`?url` de Vite, en `dist/assets`). El service worker lo guarda tras el primer uso, así que funciona sin cobertura.
+- **Cámara** (`camara.ts`):
+  - pide 1920×1080, enfoque continuo si el móvil lo admite, y linterna;
+  - analiza el fotograma completo, reducido como mucho a 1280 px;
+  - prueba también girado (`tryRotate`) e invertido;
+  - lee unas 7 veces por segundo.
+- **Prioridad** (`elegirCodigo` en `src/domain/codigos.ts`):
+  1. un QR `BUF:` siempre gana;
+  2. después, un código de barras;
+  3. después, un QR que no sea una URL.
+  - Si solo se lee una URL ajena, aparece sobre la cámara "QR del fabricante, no es un código del almacén…" y sigue escaneando. A los 4 s la entrega como código desconocido.
+
+**3. Códigos alternativos** (migración `20261011000100_e020_codigos_articulo.sql`, **aplicada**)
+- **Tabla `codigos_articulo`:** código único, sku, tipo (EAN, UPC, Code 128, QR u otro), quién y cuándo.
+- **`asociar_codigo`** la pueden usar el administrador y el almacén, y queda en la auditoría. Rechaza:
+  - un código que ya tiene otro artículo, diciendo cuál;
+  - un código que es el SKU, el EAN o la referencia de otro artículo;
+  - asociar a un archivado.
+- **`quitar_codigo`:** solo el administrador.
+- **Fusión:** un disparador pasa los códigos al artículo de destino. Como cambiar el código fusiona en la ficha nueva, también se conservan.
+- **Dónde se buscan:** escáner y cesta de entregas (`resolveCode`), buscador, emparejado de albaranes en la app y en `leer-albaran` (**desplegada**).
+- **"Código desconocido":**
+  - nuevo botón principal **"Es un artículo que ya tengo"**, que abre un buscador con fotos;
+  - "Crear con la cámara" y "Crear a mano" guardan el código leído como alternativo del artículo nuevo, si no es ya su SKU ni su EAN.
+- **Ficha:** sección **"Códigos alternativos"** con la lista, **Añadir** (escaneando o escribiéndolo) y **Quitar** (administrador).
+- "Borrar datos de ejemplo" también vacía la tabla.
+
+**Pruebas:** 321 en verde.
+- `src/features/escaner/lector.test.ts` (4): fixtures PNG generadas con ZXing y leídas con el mismo módulo que la cámara:
+  - EAN-13, Code 128 y QR;
+  - EAN girado 90°;
+  - QR del fabricante y EAN en el mismo fotograma (gana el EAN);
+  - solo la URL ajena.
+- `src/domain/codigos.test.ts`: prioridad, tipos, asociación (alta, duplicado rechazado, quitar, paso al fusionar, escáner, buscador y albaranes) y firma sin teléfono ni correo.
+- `supabase/tests/e020.test.ts` (4): lo mismo en el servidor.
+
+**En el navegador (demostración):**
+- el lector lee las fixtures cargando el `.wasm` desde la propia app;
+- escribo el código 3439510575536 → "Es un artículo que ya tengo" → manguera 5G6 → al volver a leerlo sale **IDENTIFICADO**.
+- **Pendiente:** probar en el iPhone del usuario con las cajas reales. El navegador de pruebas no tiene cámara.

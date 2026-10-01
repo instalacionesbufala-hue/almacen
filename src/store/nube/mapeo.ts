@@ -1,5 +1,5 @@
 /* Filas de Supabase → estado de la app (src/data/tipos.ts) */
-import type { ActaCustodia, AvisoReposicion, ConfigAvisos, EnvioAviso, MinimoHerramienta, Pendiente, PerfilUsuario, Rol, Albaran, CatId, ClaseDotacion, Entrega, Equipo, EstadoEquipo, EstadoHerramienta, Estado, Herramienta, Movimiento, Producto, Tecnico, TipoIncidencia, TipoMov, Unidad, Vehiculo, Asignacion, StockVehiculo, CopiaEntrega, EnlacePortal, ArticuloRegla, CierreApp, Equivalencia, Integracion, LineaCierre, Categoria, PropuestaFicha } from '../../data/tipos';
+import type { ActaCustodia, AvisoReposicion, ConfigAvisos, EnvioAviso, MinimoHerramienta, Pendiente, PerfilUsuario, Rol, Albaran, CatId, ClaseDotacion, Entrega, Equipo, EstadoEquipo, EstadoHerramienta, Estado, Herramienta, Movimiento, Producto, Tecnico, TipoIncidencia, TipoMov, Unidad, Vehiculo, Asignacion, StockVehiculo, CopiaEntrega, EnlacePortal, ArticuloRegla, CierreApp, Equivalencia, Integracion, LineaCierre, Categoria, PropuestaFicha, CodigoArticulo } from '../../data/tipos';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Fila = Record<string, any>;
@@ -7,7 +7,7 @@ export interface Tablas {
   productos: Fila[]; equipos: Fila[]; tecnicos: Fila[]; movimientos: Fila[];
   albaranes: Fila[]; entregas: Fila[]; entrega_lineas: Fila[]; dotacion: Fila[];
   dotacion_historial: Fila[]; avisos_reposicion: Fila[]; propietarios: Fila[];
-  vehiculos: Fila[]; asignaciones_tecnico: Fila[]; asignaciones_vehiculo: Fila[]; stock_vehiculo: Fila[]; config_app: Fila[]; portal_enlaces: Fila[]; copias_entrega: Fila[]; categorias: Fila[]; propuestas_ficha: Fila[]; cierres: Fila[]; cierre_lineas: Fila[]; equivalencias_cierre: Fila[]; kits_fijacion: Fila[]; integraciones: Fila[];
+  vehiculos: Fila[]; asignaciones_tecnico: Fila[]; asignaciones_vehiculo: Fila[]; stock_vehiculo: Fila[]; config_app: Fila[]; portal_enlaces: Fila[]; copias_entrega: Fila[]; categorias: Fila[]; propuestas_ficha: Fila[]; cierres: Fila[]; cierre_lineas: Fila[]; equivalencias_cierre: Fila[]; kits_fijacion: Fila[]; integraciones: Fila[]; codigos_articulo: Fila[];
   minimos_herramienta: Fila[]; config_avisos: Fila[]; envios_aviso: Fila[]; actas_custodia: Fila[];
   tallas_tecnico: Fila[];
   perfiles: Fila[]; pendientes: Fila[]; valores_pendientes?: Fila[];
@@ -16,7 +16,7 @@ export interface Tablas {
 export const TABLAS: (keyof Tablas)[] = ['productos', 'equipos', 'tecnicos', 'movimientos', 'albaranes', 'entregas',
   'entrega_lineas', 'dotacion', 'dotacion_historial', 'avisos_reposicion', 'propietarios', 'perfiles', 'pendientes',
   'minimos_herramienta', 'config_avisos', 'envios_aviso', 'actas_custodia', 'tallas_tecnico',
-  'vehiculos', 'asignaciones_tecnico', 'asignaciones_vehiculo', 'stock_vehiculo', 'config_app', 'categorias', 'propuestas_ficha', 'portal_enlaces', 'copias_entrega', 'cierres', 'cierre_lineas', 'equivalencias_cierre', 'kits_fijacion', 'integraciones'];
+  'vehiculos', 'asignaciones_tecnico', 'asignaciones_vehiculo', 'stock_vehiculo', 'config_app', 'categorias', 'propuestas_ficha', 'portal_enlaces', 'copias_entrega', 'cierres', 'cierre_lineas', 'equivalencias_cierre', 'kits_fijacion', 'integraciones', 'codigos_articulo'];
 /** Columnas legibles por cada rol (en pendientes el importe se lee aparte, solo el administrador) */
 export const COLUMNAS: Partial<Record<keyof Tablas, string>> = {
   portal_enlaces: 'tecnico_id, entrega_id, creado, creado_por, revocado',
@@ -41,6 +41,7 @@ export function aEstado(t: Tablas, base: Pick<Estado, 'cesta' | 'seq'>, operador
   // E-016: los archivados (fusionados en otro) no salen en las listas, pero el historial los sigue encontrando
   const products: Producto[] = todos.filter(p => !p.archivado), archivados: Producto[] = todos.filter(p => p.archivado);
   const categorias: Categoria[] = (t.categorias || []).map(c => ({ id: c.id, nombre: c.nombre, icono: c.icono, color: c.color, orden: c.orden, activa: !!c.activa })).sort((a, b) => a.orden - b.orden);
+  const codigos: CodigoArticulo[] = (t.codigos_articulo || []).map(x => ({ codigo: x.codigo, sku: x.sku, tipo: x.tipo, ts: ms(x.creado), operator: x.operario }));
   const propuestas: PropuestaFicha[] = (t.propuestas_ficha || []).map(x => ({ id: x.id, sku: x.sku, cambios: x.cambios || {}, ts: ms(x.ts), operator: x.operario, estado: x.estado }));
   const activos = t.equipos.filter(e => e.activo);
   const vehiculosActivos = t.vehiculos.filter(v => v.activo);
@@ -102,5 +103,5 @@ export function aEstado(t: Tablas, base: Pick<Estado, 'cesta' | 'seq'>, operador
   const pendientes: Pendiente[] = t.pendientes.map(p => ({ id: p.id, ts: ms(p.ts), tipo: p.tipo, sku: p.sku, qty: n(p.cantidad), reason: p.motivo, ref: p.referencia || '',
     serials: p.series || [], operator: p.operario, estado: p.estado, resueltoPor: p.resuelto_por ?? undefined, nota: p.nota_resolucion ?? undefined, ...(p.vehiculo_id ? { vehiculo: p.vehiculo_id } : {}) })).sort((a, b) => b.ts - a.ts);
   const perfiles: PerfilUsuario[] = t.perfiles.map(p => ({ id: p.id, nombre: p.nombre, email: p.email ?? null, rol: p.rol, activo: !!p.activo }));
-  return { v: 3, products, movements, albaranes, equipos, tecnicos, entregas, herramientas, propietarios, pendientes, perfiles, rol, avisos, minimosHerramienta, configAvisos, envios, actas, vehiculos, asignaciones, aBordo, configApp, categorias, archivados, propuestas, portalEnlaces, copias, cierres, lineasCierre, equivalencias, kits, integraciones, operator: operador, pedidos, cesta: base.cesta, seq: base.seq };
+  return { v: 3, products, movements, albaranes, equipos, tecnicos, entregas, herramientas, propietarios, pendientes, perfiles, rol, avisos, minimosHerramienta, configAvisos, envios, actas, vehiculos, asignaciones, aBordo, configApp, categorias, archivados, codigos, propuestas, portalEnlaces, copias, cierres, lineasCierre, equivalencias, kits, integraciones, operator: operador, pedidos, cesta: base.cesta, seq: base.seq };
 }

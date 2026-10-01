@@ -139,14 +139,14 @@ export function searchProducts(S: Estado, q: string, f: { cat?: string; est?: st
     if (ubi === 'almacen' && !(p.stock > 0)) return false;
     if (ubi !== 'all' && ubi !== 'almacen' && !(unidadesABordo(S, ubi, p.sku) !== 0)) return false;
     if (!toks.length) return true;
-    const hay = norm([p.name, p.sku, p.ean, p.supplierRef, catDe(p.cat).label, p.supplier, p.modelo, p.talla ? 'talla ' + p.talla : ''].join(' '));
+    const hay = norm([p.name, p.sku, p.ean, p.supplierRef, ...(S.codigos || []).filter(c => c.sku === p.sku).map(c => c.codigo), catDe(p.cat).label, p.supplier, p.modelo, p.talla ? 'talla ' + p.talla : ''].join(' '));
     return toks.every(t => hay.includes(t) || (t.endsWith('s') && hay.includes(t.slice(0, -1))));
   }).sort((a, b) => ORD[status(a)] - ORD[status(b)] || a.name.localeCompare(b.name));
 }
 
 /** Emparejado de una línea de albarán (cualquier proveedor). La lógica vive en el módulo compartido con el servidor (E-003). */
 export const catalogoParaEmparejar = (S: Estado): ItemCatalogo[] =>
-  S.products.map(p => ({ sku: p.sku, ref: p.supplierRef, ean: p.ean, nombre: p.name, unidad: contenidoTxt(p) || UNIT[p.unit], proveedor: p.supplier, custodia: p.propiedad === 'custodia' }));
+  S.products.map(p => ({ sku: p.sku, ref: p.supplierRef, ean: p.ean, codigos: (S.codigos || []).filter(c => c.sku === p.sku).map(c => c.codigo), nombre: p.name, unidad: contenidoTxt(p) || UNIT[p.unit], proveedor: p.supplier, custodia: p.propiedad === 'custodia' }));
 export function matchLine(S: Estado, code: string | undefined, desc: string | undefined): { sku: string | null; how: string | null } {
   return emparejar(catalogoParaEmparejar(S), code, desc);
 }
@@ -161,6 +161,9 @@ export function resolveCode(S: Estado, raw: string): { p: Producto } | null {
   const qr = /^BUF:([^|]+)/i.exec(t), code = qr ? qr[1].trim() : t;
   const p = S.products.find(x => [x.sku, x.ean, x.supplierRef].some(v => v && u(v) === u(code)));
   if (p) return { p };
+  // E-020: código alternativo (EAN del fabricante…) asociado a un artículo
+  const alt = S.codigos?.find(x => u(x.codigo) === u(code)), pa = alt && S.products.find(x => x.sku === alt.sku);
+  if (pa) return { p: pa };
   // E-016: el código de un artículo fusionado (o de un código cambiado) lleva al que lo sustituye
   const viejo = S.archivados?.find(x => [x.sku, x.supplierRef].some(v => v && u(v) === u(code)));
   const nuevo = viejo?.fusionadoEn ? S.products.find(x => x.sku === viejo.fusionadoEn) : undefined;

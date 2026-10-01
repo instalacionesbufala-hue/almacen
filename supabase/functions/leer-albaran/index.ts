@@ -32,9 +32,12 @@ Deno.serve(conCors(async (req) => {
   const mime = archivo.type || 'application/octet-stream';
   if (!/^image\/(jpeg|png|webp|heic|heif)$/.test(mime) && mime !== 'application/pdf') return json({ error: 'Formato no admitido: sube una foto (JPG, PNG) o un PDF' }, 415);
 
-  const { data: prods, error } = await db.from('productos').select('sku, ref_proveedor, ean, nombre, unidad, contenido, proveedor, propiedad').eq('borrador', false);
+  const { data: prods, error } = await db.from('productos').select('sku, ref_proveedor, ean, nombre, unidad, contenido, proveedor, propiedad').eq('borrador', false).eq('archivado', false);
   if (error) return json({ error: error.message }, 500);
-  const catalogo: ItemCatalogo[] = (prods || []).map(p => ({ sku: p.sku, ref: p.ref_proveedor ?? undefined, ean: p.ean ?? undefined, nombre: p.nombre, unidad: p.unidad, contenido: Number(p.contenido) || 1, proveedor: p.proveedor, custodia: p.propiedad === 'custodia' }));
+  // E-020: también los códigos alternativos (EAN del fabricante…)
+  const { data: alts } = await db.from('codigos_articulo').select('codigo, sku');
+  const codigosDe = (sku: string) => (alts || []).filter(a => a.sku === sku).map(a => a.codigo as string);
+  const catalogo: ItemCatalogo[] = (prods || []).map(p => ({ sku: p.sku, ref: p.ref_proveedor ?? undefined, ean: p.ean ?? undefined, codigos: codigosDe(p.sku), nombre: p.nombre, unidad: p.unidad, contenido: Number(p.contenido) || 1, proveedor: p.proveedor, custodia: p.propiedad === 'custodia' }));
 
   const r = await llamarGemini({
     clave: CLAVE, modelo: MODELO, reserva: RESERVA, funcion: 'leer-albaran', esquema: ESQUEMA_RESPUESTA,

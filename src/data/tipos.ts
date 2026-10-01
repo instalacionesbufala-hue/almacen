@@ -113,6 +113,9 @@ export interface Movimiento {
   corrige?: string;
 }
 
+/** E-020: código alternativo de un artículo (un código, un solo artículo) */
+export interface CodigoArticulo { codigo: string; sku: string; tipo: 'EAN' | 'UPC' | 'Code 128' | 'QR' | 'otro'; ts: number; operator: string }
+
 export interface Albaran {
   /** E-016: id (para ver sus líneas y reasignarlas) y delegación del proveedor */
   id?: string;
@@ -296,6 +299,8 @@ export interface Estado {
   /** E-016: categorías configurables, artículos archivados (fusionados en otro) y propuestas de cambio de ficha del almacén */
   categorias: Categoria[];
   archivados?: Producto[];
+  /** E-020: códigos alternativos (EAN del fabricante…) que llevan a un artículo */
+  codigos: CodigoArticulo[];
   propuestas: PropuestaFicha[];
   lineasCierre: LineaCierre[];
   equivalencias: Equivalencia[];

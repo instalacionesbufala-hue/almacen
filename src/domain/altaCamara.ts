@@ -4,6 +4,7 @@ import type { CatId, ClaseDotacion, Estado, Herramienta, Producto, Rol, Unidad }
 import type { Op } from '../store/ops';
 import { norm } from './formato';
 import { resolveCode } from './reglas';
+import { esUrl, motivoSkuNoValido, skuValido } from './codigos';
 
 /** Lo que devuelve la función de servidor "leer-articulo" (supabase/functions/_compartido/articulo.ts) */
 export interface PropuestaIA {
@@ -41,13 +42,15 @@ export function parecidos(S: Pick<Estado, 'products'>, nombre: string, max = 3):
 const aleatorio = () => Math.random().toString(36).slice(2, 7).toUpperCase();
 
 /** Formulario precargado: con la propuesta de la IA, o vacío (alta a mano) con el código leído */
-export function formularioInicial(o: { codigo?: string; propuesta?: PropuestaIA | null; tipo?: TipoAlta; propietario?: string; id?: string }): FormAlta {
+export function formularioInicial(o: { codigo?: string; propuesta?: PropuestaIA | null; tipo?: TipoAlta; propietario?: string; id?: string; skuInterno?: string }): FormAlta {
   const p = o.propuesta, codigo = (o.codigo || '').trim();
   const esEan = EAN.test(codigo);
   const tipo: TipoAlta = o.tipo ?? p?.tipo ?? 'material';
   const cat: CatId = p?.categoria ?? (tipo === 'ropa' ? 'ropa' : tipo === 'epi' ? 'epis' : 'fijaciones');
-  const ref = !esEan && codigo ? codigo : p?.referencia || '';
-  const sku = (ref || (esEan ? codigo : '') || p?.ean || `ART-${o.id || aleatorio()}`).toUpperCase().replace(/\s/g, '');
+  // E-021: un código que no sirve como SKU (la URL del QR del fabricante…) no se usa ni como SKU ni como referencia: SKU interno
+  const usable = !!codigo && !esUrl(codigo) && skuValido(codigo.toUpperCase().replace(/\s/g, ''));
+  const ref = !esEan && usable ? codigo : p?.referencia || '';
+  const sku = (ref || (esEan ? codigo : '') || p?.ean || o.skuInterno || `ART-${o.id || aleatorio()}`).toUpperCase().replace(/\s/g, '');
   return {
     tipo, sku, ean: esEan ? codigo : p?.ean || '', supplierRef: ref, name: p?.nombre || '', cat, unit: p?.unidad || (cat === 'cables' || cat === 'tubos' ? 'm' : 'ud'),
     contenido: String(p?.contenido || 1), stock: '0', min: '', supplier: '', marca: p?.marca || '', modelo: p?.modelo || '', talla: p?.talla || '', serie: '',
@@ -71,6 +74,7 @@ export function opDeAlta(rol: Rol, f: FormAlta, id: string, operador = ''): OpAl
   }
   const sku = may(f.sku);
   if (!sku) throw new Error('Falta el código del artículo');
+  const malo = motivoSkuNoValido(sku); if (malo) throw new Error(malo);
   const conContenido = f.unit !== 'm' && f.unit !== 'ud';
   const contenido = conContenido ? num(f.contenido) : 1, stock = num(f.stock) || 0;
   if (!(contenido > 0)) throw new Error('Indica cuántas unidades trae cada formato (bote de 1000 → 1000)');

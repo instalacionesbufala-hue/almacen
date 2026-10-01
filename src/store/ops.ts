@@ -12,6 +12,7 @@ import { normalizarTelefono } from '../domain/whatsapp';
 import { EQUIVALENCIAS_PROPUESTA, KITS_PROPUESTA, registrarCierreLocal, sincronizarCierreLocal, type Cierre, type LineaTraducida } from '../domain/cierres';
 import { cambiarCodigoLocal, fusionarLocal, reasignarLineaLocal } from '../domain/fichas';
 import { ajustarLocal, previsionAjuste } from '../domain/ajuste';
+import { asociarLocal, quitarCodigoLocal, type TipoCodigo } from '../domain/codigos';
 import { uid } from '../domain/formato';
 
 export interface OpMovimiento { id: string; sku: string; tipo: TipoMov; qty: number; motivo: string; ref: string; series: string[]; equipo?: string; vehiculo?: string }
@@ -23,6 +24,8 @@ export interface OpIncidencia { id: string; dotacion: string; tipo: TipoIncidenc
 
 export type Op =
   | { op: 'movimiento'; args: OpMovimiento }
+  | { op: 'asociarCodigo'; args: { codigo: string; sku: string; tipo: TipoCodigo } }
+  | { op: 'quitarCodigo'; args: { codigo: string } }
   | { op: 'ajuste'; args: { id: string; sku: string; qty: number; motivo: string; vehiculo?: string } }
   | { op: 'proponerAjuste'; args: { id: string; sku: string; qty: number; motivo: string; vehiculo?: string } }
   | { op: 'albaran'; args: OpAlbaran }
@@ -106,6 +109,17 @@ export const OPS: Defs = {
     },
     rpc: a => ['registrar_movimiento', { p_id: a.id, p_sku: a.sku, p_tipo: a.tipo, p_cantidad: a.qty, p_motivo: a.motivo, p_referencia: a.ref, p_series: [], p_equipo: a.equipo ?? null, p_corrige: null, p_vehiculo: a.vehiculo ?? null }],
     desc: (S, a) => `${a.tipo} de ${a.qty} · ${nombreProd(S, a.sku)}`,
+  },
+  // E-020: códigos alternativos (EAN del fabricante…)
+  asociarCodigo: {
+    local: (S, a) => { asociarLocal(S, a); },
+    rpc: a => ['asociar_codigo', { p_codigo: a.codigo.trim(), p_sku: a.sku, p_tipo: a.tipo }],
+    desc: (S, a) => `Código ${a.codigo} → ${nombreProd(S, a.sku)}`,
+  },
+  quitarCodigo: {
+    local: (S, a) => quitarCodigoLocal(S, a.codigo),
+    rpc: a => ['quitar_codigo', { p_codigo: a.codigo }],
+    desc: (_S, a) => `Quitar el código ${a.codigo}`,
   },
   // E-018: ajuste de inventario del administrador (con signo y motivo); el almacén lo propone a la bandeja
   ajuste: {

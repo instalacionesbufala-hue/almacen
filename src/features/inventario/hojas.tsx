@@ -18,6 +18,8 @@ import { nuevoId } from '../../store/ops';
 import type { CatId } from '../../data/tipos';
 import { comprobarFusion, diferencias } from '../../domain/fichas';
 import { avisoStockInicial, previsionAjuste } from '../../domain/ajuste';
+import { skuPropuesto } from '../../domain/codigos';
+import { CodigosFicha } from './codigos';
 
 /* ---------- Fila de movimiento ---------- */
 export function MovRow({ m }: { m: Movimiento }) {
@@ -81,6 +83,7 @@ function Ficha({ sku }: { sku: string }) {
         <div className="text-body-sm text-secondary">Etiqueta QR (<span className="font-mono">{qrContenido(p.sku)}</span>): el escáner la reconoce al instante.<br />
           <button onClick={() => imprimirEtiqueta(p)} className="text-primary font-semibold mt-1 h-10">Imprimir etiqueta</button></div>
       </div>
+      {!p.borrador && <CodigosFicha sku={sku} />}
       <div><div className={`${LBL} mb-1`}>Últimos movimientos</div>{movs.length ? movs.map(m => <MovRow key={m.id} m={m} />) : <p className="text-secondary text-body-sm">Sin movimientos todavía.</p>}</div>
     </div>
     <SheetFoot className={`grid gap-2 ${perm.editarCatalogo || !p.borrador ? 'grid-cols-2 sm:grid-cols-3' : 'grid-cols-2'}`}>
@@ -323,7 +326,7 @@ function FormProducto({ sku, preset, onCreado, modo, propuesta }: { sku?: string
 export const abrirBorrador = (codigo = '', onCreado?: (sku: string) => void) => openModal(<Borrador codigo={codigo} onCreado={onCreado} />);
 function Borrador({ codigo, onCreado }: { codigo: string; onCreado?: (sku: string) => void }) {
   const esEan = /^\d{8,14}$/.test(codigo);
-  const [f, setF] = useState({ sku: esEan ? '' : codigo.toUpperCase(), ean: esEan ? codigo : '', nombre: '', cat: 'aparamenta' as CatId });
+  const [f, setF] = useState({ sku: esEan || !codigo ? '' : skuPropuesto(S(), codigo), ean: esEan ? codigo : '', nombre: '', cat: 'aparamenta' as CatId });
   const crear = () => {
     if (!ejecutar({ op: 'borrador', args: f })) return;
     const sku = (f.sku || 'BORR-' + f.ean).toUpperCase();

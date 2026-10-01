@@ -1,27 +1,38 @@
-/* Cámara con lectura de códigos (BarcodeDetector nativo o jsQR). La usan el escáner y la cesta de entrega (lectura seguida). */
+/* Cámara con lectura de códigos. La usan el escáner, el alta con cámara y la cesta de entrega (lectura seguida).
+   E-020: lector ZXing (WebAssembly, empaquetado con la app) en todos los navegadores, también en iPhone, donde no hay BarcodeDetector.
+   Lee EAN, UPC, Code 128/39, ITF, Codabar, QR y DataMatrix, también girados. Si en el fotograma solo hay el QR de una web ajena
+   (el del fabricante), avisa y sigue escaneando; pasados unos segundos lo entrega como código desconocido. */
 import { useCallback, useEffect, useRef, useState } from 'react';
+import wasmUrl from 'zxing-wasm/reader/zxing_reader.wasm?url';
 import { hayModal } from '../../ui/modal';
+import { elegirCodigo } from '../../domain/codigos';
+import { leerCodigos, prepararLector } from './lector';
 
-interface BarcodeDetectorLike { detect(src: CanvasImageSource): Promise<{ rawValue: string }[]> }
-declare global { interface Window { BarcodeDetector?: new (o: { formats: string[] }) => BarcodeDetectorLike } }
+let preparado = false;
+const LADO_MAX = 1280;          // se analiza el fotograma completo, reducido como mucho a 1280 px
+const CADA_MS = 140;            // unas 7 lecturas por segundo
+const AJENA_MS = 4000;          // tiempo con solo un QR ajeno antes de darlo por desconocido
+export const AVISO_AJENA = 'QR del fabricante, no es un código del almacén. Enfoca el código de barras o la etiqueta del almacén.';
 
 /** pausarConModal: en el escáner se pausa mientras hay una hoja abierta encima; en la cesta sigue leyendo.
     repetirMs: tiempo mínimo para aceptar otra vez el mismo código (evita sumar dos veces la misma pasada). */
-export function useCamara(activa: boolean, onCode: (c: string) => void, o: { pausarConModal?: boolean; repetirMs?: number } = {}) {
+export function useCamara(activa: boolean, onCode: (c: string, formato?: string) => void, o: { pausarConModal?: boolean; repetirMs?: number } = {}) {
   const pausar = o.pausarConModal ?? true, repetir = o.repetirMs ?? 2500;
   const video = useRef<HTMLVideoElement>(null), stream = useRef<MediaStream | null>(null);
-  const [estado, setEstado] = useState<{ on: boolean; msg: string; torch: boolean; puedeTorch: boolean; lector: string }>({ on: false, msg: '', torch: false, puedeTorch: false, lector: '' });
+  const [estado, setEstado] = useState<{ on: boolean; msg: string; torch: boolean; puedeTorch: boolean; lector: string; aviso: string }>({ on: false, msg: '', torch: false, puedeTorch: false, lector: '', aviso: '' });
   const cb = useRef(onCode); cb.current = onCode;
-  const parar = useCallback(() => { stream.current?.getTracks().forEach(t => t.stop()); stream.current = null; if (video.current) video.current.srcObject = null; setEstado(e => ({ ...e, on: false, torch: false })); }, []);
+  const parar = useCallback(() => { stream.current?.getTracks().forEach(t => t.stop()); stream.current = null; if (video.current) video.current.srcObject = null; setEstado(e => ({ ...e, on: false, torch: false, aviso: '' })); }, []);
   const arrancar = useCallback(async () => {
     if (stream.current) return;
     if (!navigator.mediaDevices?.getUserMedia) return setEstado(e => ({ ...e, msg: 'Este navegador no permite usar la cámara aquí (hace falta https). Escribe el código o usa los de prueba.' }));
     try {
-      const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 } }, audio: false });
+      const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
       stream.current = s;
+      const track = s.getVideoTracks()[0] as MediaStreamTrack & { getCapabilities?: () => { torch?: boolean; focusMode?: string[] } };
+      const cap = (track.getCapabilities?.() ?? {}) as { torch?: boolean; focusMode?: string[] };
+      if (cap.focusMode?.includes('continuous')) track.applyConstraints({ advanced: [{ focusMode: 'continuous' } as MediaTrackConstraintSet] }).catch(() => undefined);
       if (video.current) { video.current.srcObject = s; await video.current.play().catch(() => undefined); }
-      const track = s.getVideoTracks()[0] as unknown as { getCapabilities?: () => { torch?: boolean } };
-      setEstado({ on: true, msg: '', torch: false, puedeTorch: !!track.getCapabilities?.().torch, lector: window.BarcodeDetector ? 'QR · EAN · CODE128' : 'LECTOR QR' });
+      setEstado({ on: true, msg: '', torch: false, puedeTorch: !!cap.torch, lector: 'EAN · CODE128 · QR', aviso: '' });
     } catch (e) {
       setEstado(x => ({ ...x, on: false, msg: (e as Error).name === 'NotAllowedError' ? 'Permiso de cámara denegado. Actívalo en los ajustes del navegador o escribe el código a mano.' : 'No se ha podido abrir la cámara. Escribe el código o usa los de prueba.' }));
     }
@@ -29,26 +40,27 @@ export function useCamara(activa: boolean, onCode: (c: string) => void, o: { pau
   useEffect(() => { if (activa) arrancar(); return parar; }, [activa, arrancar, parar]);
   useEffect(() => { // bucle de lectura
     if (!estado.on) return;
-    let det: BarcodeDetectorLike | null = null, ocupado = false, ultimo = { c: '', t: 0 };
-    let jsQR: typeof import('jsqr').default | null = null;
-    try { if (window.BarcodeDetector) det = new window.BarcodeDetector({ formats: ['qr_code', 'ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'data_matrix'] }); } catch { det = null; }
-    if (!det) import('jsqr').then(m => { jsQR = m.default; }); // solo si el navegador no lee códigos por sí mismo
+    if (!preparado) { prepararLector({ wasmUrl }); preparado = true; }
+    let ocupado = false, ultimo = { c: '', t: 0 }, ajenaDesde = 0;
     const cv = document.createElement('canvas');
     const id = setInterval(async () => {
-      const v = video.current; if (ocupado || !v || v.readyState < 2 || (pausar && hayModal())) return;
+      const v = video.current; if (ocupado || !v || v.readyState < 2 || !v.videoWidth || (pausar && hayModal())) return;
       ocupado = true;
       try {
-        let code: string | null = null;
-        if (det) { const r = await det.detect(v); if (r.length) code = r[0].rawValue; }
-        else if (jsQR) {
-          const w = 480, h = Math.round(w * v.videoHeight / v.videoWidth) || 360; cv.width = w; cv.height = h;
-          const ctx = cv.getContext('2d', { willReadFrequently: true })!; ctx.drawImage(v, 0, 0, w, h);
-          const r = jsQR(ctx.getImageData(0, 0, w, h).data, w, h, { inversionAttempts: 'dontInvert' }); if (r) code = r.data;
+        const k = Math.min(1, LADO_MAX / Math.max(v.videoWidth, v.videoHeight)), w = Math.round(v.videoWidth * k), h = Math.round(v.videoHeight * k);
+        cv.width = w; cv.height = h;
+        const ctx = cv.getContext('2d', { willReadFrequently: true })!; ctx.drawImage(v, 0, 0, w, h);
+        const e = elegirCodigo(await leerCodigos(ctx.getImageData(0, 0, w, h)));
+        let code: string | null = null, formato: string | undefined;
+        if (e?.tipo === 'codigo') { code = e.codigo; formato = e.formato; ajenaDesde = 0; setEstado(x => x.aviso ? { ...x, aviso: '' } : x); }
+        else if (e?.tipo === 'ajena') {
+          if (!ajenaDesde) { ajenaDesde = Date.now(); setEstado(x => ({ ...x, aviso: AVISO_AJENA })); }
+          else if (Date.now() - ajenaDesde > AJENA_MS) { code = e.url; formato = 'QRCode'; ajenaDesde = 0; setEstado(x => ({ ...x, aviso: '' })); }
         }
-        if (code && !(code === ultimo.c && Date.now() - ultimo.t < repetir)) { ultimo = { c: code, t: Date.now() }; cb.current(code); }
+        if (code && !(code === ultimo.c && Date.now() - ultimo.t < repetir)) { ultimo = { c: code, t: Date.now() }; cb.current(code, formato); }
       } catch { /* fotograma no legible */ }
       ocupado = false;
-    }, 280);
+    }, CADA_MS);
     return () => clearInterval(id);
   }, [estado.on, pausar, repetir]);
   const linterna = () => { const t = stream.current?.getVideoTracks()[0]; if (!t) return; const on = !estado.torch; t.applyConstraints({ advanced: [{ torch: on } as MediaTrackConstraintSet] }).catch(() => undefined); setEstado(e => ({ ...e, torch: on })); };
