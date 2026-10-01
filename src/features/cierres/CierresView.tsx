@@ -12,6 +12,7 @@ import { usePermisos } from '../../store/permisos';
 import { closeModal, openModal, SheetFoot, SheetHead } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 import { BTN_P, BTN_S, CARD, Icon, INP, LBL, Tag, Vacio } from '../../ui/base';
+import { CargarMas, useMas } from '../../ui/lista';
 
 const ESTADO: Record<EstadoCierre, { t: string; c: string }> = {
   aplicado: { t: 'Aplicado', c: 'bg-tertiary-fixed/40 text-tertiary' }, parcial: { t: 'Parcial', c: 'bg-amber-100 text-amber-800' },
@@ -29,6 +30,7 @@ export default function CierresView() {
   const lista = useMemo(() => E.cierres.filter(c => (f.equipo === 'all' || c.equipoWizard === f.equipo) && (f.estado === 'all' || c.estado === f.estado)
     && c.fecha >= Date.parse(f.desde) && c.fecha < Date.parse(f.hasta) + 864e5), [E.cierres, f]);
   const consumo = useMemo(() => consumoPorArticulo(E, lista), [E, lista]);
+  const [n, mas] = useMas(100, JSON.stringify(f));
   const disc = discrepancias(E);
   const pendientes = E.lineasCierre.filter(l => l.estado === 'pendiente' || l.estado === 'sin_equivalencia').length;
   const exportar = () => descargarCsv(`consumos-cierres-${f.desde}-${f.hasta}.csv`, [['SKU', 'Artículo', 'Unidades', 'Formatos', 'Unidad', 'Estimado'],
@@ -45,7 +47,8 @@ export default function CierresView() {
     </section>
     <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
       <section className="xl:col-span-2 flex flex-col gap-2">
-        {lista.length ? lista.map(c => <FilaCierre key={c.id} c={c} abierto={abierto === c.id} alternar={() => setAbierto(abierto === c.id ? null : c.id)} puede={validar} />) : <Vacio>No hay cierres con estos filtros.</Vacio>}
+        {lista.length ? lista.slice(0, n).map(c => <FilaCierre key={c.id} c={c} abierto={abierto === c.id} alternar={() => setAbierto(abierto === c.id ? null : c.id)} puede={validar} />) : <Vacio>No hay cierres con estos filtros.</Vacio>}
+        <CargarMas visibles={n} total={lista.length} mas={mas} que="cierres" />
       </section>
       <aside className="flex flex-col gap-4">
         <section className={`${CARD} p-4 flex flex-col gap-2`}>

@@ -1,6 +1,7 @@
 /* Estado de interfaz compartido entre pantallas (navegación, filtros del inventario) */
 import { useEffect, useState } from 'react';
 import { crearStore } from './crear';
+import { ORDEN_DEFECTO, type Orden } from '../domain/listaInventario';
 
 export type Vista = 'stock' | 'albaranes' | 'equipos' | 'entregas' | 'dotacion' | 'custodia' | 'scan' | 'movimientos' | 'config';
 export const VISTAS: Record<Vista, { label: string; mob: string; icon: string }> = {
@@ -22,8 +23,10 @@ export interface UI {
   /** 'central' o id de una furgoneta */
   almacen: string;
   eqTab: 'equipos' | 'vehiculos' | 'tecnicos' | 'historial' | 'cierres';
+  /** E-019: orden de la lista de inventario y agrupada por categoría */
+  orden: Orden; agrupar: boolean;
 }
-export const ui = crearStore<UI>({ q: '', est: 'all', ubi: 'all', cat: 'all', prop: 'all', page: 1, catTab: 'cargadores', filtros: false, almacen: 'central', eqTab: 'equipos' });
+export const ui = crearStore<UI>({ q: '', est: 'all', ubi: 'all', cat: 'all', prop: 'all', page: 1, catTab: 'cargadores', filtros: false, almacen: 'central', eqTab: 'equipos', orden: ORDEN_DEFECTO, agrupar: false });
 export const useUI = ui.use;
 export function setUI(p: Partial<UI>) { Object.assign(ui.get(), p); ui.emit(); }
 

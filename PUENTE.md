@@ -521,7 +521,7 @@ El diálogo de movimientos solo ofrece Entrada, Salida, A vehículo, Devolución
 **Hecho cuando**
 - Hay pruebas de: ajuste negativo y positivo del administrador, rechazo para el rol almacén, motivo obligatorio, sin efecto en mermas ni consumos, y el aviso de código ya ingresado por albarán.
 
-### E-019 · Inventario completo en una sola lista, sin páginas · PENDIENTE
+### E-019 · Inventario completo en una sola lista, sin páginas · HECHO
 **Petición del usuario:** ver la **lista de materiales completa**, no por páginas. Hoy el inventario (Stock General) muestra unas 8 referencias por página ("Página 1 de 5").
 
 **Qué hacer**
@@ -1768,3 +1768,35 @@ En "Para el día a día" se explican el ajuste y el aviso.
 - "Borrar o archivar…" en un artículo con rastro muestra el texto y por qué no se puede archivar con stock.
 
 **Migración** `20261013000100_e022_archivar_borrar.sql` **aplicada**. Guía: "Para el día a día" amplía E-020 a E-022.
+
+### 01/10/2026 · E-019 · HECHO
+**1. Inventario de escritorio** (`StockView.tsx`)
+- **Una sola lista:** fuera la paginación de 8 en 8. Se ven todas las referencias que cumplen los filtros.
+- **Contador:** "Mostrando N de M referencias".
+- **Cabecera fija:** la tabla va en una caja con desplazamiento propio (78 % de la altura de la pantalla) y la cabecera es `sticky`.
+  - **Decisión:** así la cabecera queda fija aunque la tabla tenga desplazamiento horizontal. Con el desplazamiento de toda la página no se puede.
+- **Orden por columna:** un toque en la cabecera ordena por código, descripción, stock o estado; otro toque invierte el sentido, con flecha y `aria-sort`. Por defecto, primero lo crítico.
+- **Filtros, buscador y orden:** se aplican sobre la lista completa.
+- **"Agrupar por categoría":** interruptor que separa la lista por categorías, con su número de referencias.
+- **"Exportar CSV":** junto a la lista (administrador). Exporta la **lista filtrada completa**, tal como se ve, con una columna por vehículo. Quito el botón de la cabecera, que exportaba siempre todo. El CSV completo sigue en Configuración.
+- **"Imprimir lista":** vista limpia en otra ventana con código, descripción, categoría, almacén, una columna por cada vehículo que lleva algo, y mínimo. Indica los filtros aplicados y **no lleva fotos**.
+
+**2. Móvil:** ya era una lista continua en tarjetas.
+- Se añaden el contador, un selector de orden (lo crítico, A-Z, código, menos y más stock) y "Agrupar".
+- Botón flotante **"Subir"** cuando se ha bajado mucho, por encima de la barra inferior y del área segura del iPhone.
+- Los botones de cada tarjeta siguen en 56 px.
+
+**3. Rendimiento:** con 40 referencias se pinta todo de una vez y las miniaturas ya usan `loading="lazy"`.
+- Si la lista pasa de **300**, `useProgresivo` (`src/ui/lista.tsx`) pinta por tandas de 200 al acercarse al final, sin cambiar el aspecto.
+- **Decisión:** es carga progresiva y no virtualización estricta. Basta para miles de filas y no rompe la cabecera fija ni la agrupación.
+
+**4. Otras listas largas:** "Cargar más" de 100 en 100 (`useMas` y `CargarMas`), que vuelve al principio al cambiar los filtros, en:
+- **Movimientos**, que antes cortaba sin avisar en 200 (escritorio) y 120 (móvil);
+- **Auditoría de entregas** (Equipos → Historial);
+- **Cierres**.
+
+**Pruebas:** 346 en verde (`src/domain/listaInventario.test.ts`, 5): con 45 referencias, todas visibles sin paginación; filtros y orden por cada columna sobre la lista completa, y el segundo toque invierte; agrupado; CSV con la lista filtrada completa y la columna de cada vehículo; impresión con las columnas pedidas y sin `<img>`.
+
+**En el navegador (demostración):**
+- **Escritorio:** 36 de 36 referencias en una tabla y sin "Página x de y". Al desplazar, la cabecera queda fija. Ordenar por "Almacén" da 1, 1, 1, 1, 2… y el segundo toque 915, 800, 600… "Agrupar por categoría" muestra 8 grupos con su número.
+- **Móvil (375 px):** las 36 tarjetas seguidas bajando y el botón "Subir" al final.

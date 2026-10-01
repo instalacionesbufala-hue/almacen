@@ -14,12 +14,33 @@ import { abrirBorrador, abrirConteo, abrirFicha, abrirFormProducto, abrirMovimie
 import { anadirACesta } from '../entregas/cesta';
 import { iaEtiqueta } from '../albaranes/lector';
 import { abrirAltaCamara } from '../altaCamara/AltaCamara';
+import { agruparPorCategoria, filasCsvInventario, htmlImprimirInventario, ordenarInventario, siguienteOrden, type ColOrden } from '../../domain/listaInventario';
+import { BotonSubir, useProgresivo } from '../../ui/lista';
+import { Fragment } from 'react';
 
 export function exportarStockCsv(E: Estado = S()) {
   descargarCsv(`stock-${hoyISO()}.csv`, [['SKU', 'Nombre', 'Categoría', 'Propiedad', 'Almacén', 'En vehículos', 'Total', 'Unidad', 'Contenido', 'Mínimo almacén', 'Estado', 'Proveedor', 'Código proveedor', 'EAN'],
     ...E.products.map(p => { const t = stockTotal(E, p); return [p.sku, p.name, catDe(p.cat).label, esCustodia(p) ? `Custodia ${E.propietarios.find(o => o.id === p.propietario)?.nombre || ''}` : 'Propio',
       p.stock, redondea(t - p.stock), t, UNIT[p.unit], p.contenido || 1, p.minimoDefinido === false ? '' : p.min, ST[status(p)].t, p.supplier, p.supplierRef || '', p.ean || '']; })]);
 }
+/** E-019: la lista filtrada completa, tal como se ve (con una columna por vehículo) */
+export function exportarListaCsv(E: Estado, lista: Producto[]) { descargarCsv(`inventario-${hoyISO()}.csv`, filasCsvInventario(E, lista)); }
+function textoFiltros(E: Estado, u: ReturnType<typeof useUI>) {
+  return [u.q && `"${u.q}"`, u.cat !== 'all' && catDe(u.cat).label, u.est !== 'all' && ST[u.est as 'red'].t, u.prop !== 'all' && (u.prop === 'custodia' ? 'En custodia' : 'Material propio'),
+    u.ubi !== 'all' && (u.ubi === 'almacen' ? 'En el almacén' : nombreVehiculo(E, u.ubi))].filter(Boolean).join(' · ') || 'Todas las referencias';
+}
+/** Vista limpia para imprimir (sin fotos) en una ventana aparte */
+export function imprimirLista(E: Estado, lista: Producto[], filtros: string) {
+  const w = open('', '_blank'); if (!w) return toast('El navegador ha bloqueado la ventana de impresión: permite las ventanas emergentes.', 'warn');
+  w.document.write(htmlImprimirInventario(E, lista, `Inventario · ${MARCA.nave}`, filtros)); w.document.close(); w.focus(); setTimeout(() => w.print(), 300);
+}
+/** Lista del inventario: filtrada, ordenada y (si se pide) agrupada; completa, sin páginas */
+function useListaInventario() {
+  const E = useAlmacen(), u = useUI();
+  const lista = ordenarInventario(searchProducts(E, u.q, u), u.orden);
+  return { E, u, lista, grupos: u.agrupar ? agruparPorCategoria(lista) : null, clave: [u.q, u.cat, u.est, u.prop, u.ubi, u.orden.col, u.orden.dir, u.agrupar].join('|') };
+}
+
 export function exportarMovimientosCsv(E: Estado = S()) {
   descargarCsv(`movimientos-${hoyISO()}.csv`, [['Fecha', 'Tipo', 'SKU', 'Material', 'Cantidad', 'Unidad', 'Motivo', 'Referencia', 'Vehículo', 'Operario'],
     ...E.movements.map(m => { const p = find(E, m.sku); return [fechaHora(m.ts), m.type, m.sku, p ? p.name : '', m.qty, p ? UNIT[p.unit] : '', m.reason, m.ref, m.vehiculo ? nombreVehiculo(E, m.vehiculo) : '', m.operator]; })]);
@@ -55,8 +76,9 @@ function Kpis() {
 
 function StockDesk() {
   const E = useAlmacen(), u = useUI(), perm = usePermisos();
-  const lista = searchProducts(E, u.q, u), PER = 8, pages = Math.max(1, Math.ceil(lista.length / PER)), page = Math.min(u.page, pages);
-  const pag = lista.slice((page - 1) * PER, page * PER);
+  const { lista, grupos, clave } = useListaInventario();
+  const { visibles, centinela } = useProgresivo(lista, clave);
+  const enVista = new Set(visibles.map(p => p.sku));
   const catProds = E.products.filter(p => p.cat === u.catTab).sort((a, b) => ORD[status(a)] - ORD[status(b)] || a.name.localeCompare(b.name)).slice(0, 3);
   const ultAlb = E.albaranes[0], ultEnt = [...E.entregas].sort((a, b) => b.ts - a.ts)[0];
   // recuento cíclico semanal: una categoría cada semana (ya no hay pasillos)
@@ -74,7 +96,6 @@ function StockDesk() {
         </div>
         <div className="flex items-center gap-space-sm flex-wrap">
           <button onClick={() => ir('scan')} className={`${BTN_S} px-space-md py-2.5`}><Icon n="barcode_scanner" className="text-secondary ico-20" />Escanear</button>
-          {perm.configurar && <button onClick={() => exportarStockCsv()} className={`${BTN_S} px-space-md py-2.5`}><Icon n="file_download" className="text-secondary ico-20" />Exportar CSV</button>}
           <button onClick={() => abrirAltaCamara()} className={`${BTN_P} px-space-md h-14`}><Icon n="add_a_photo" className="ico-20" />Nuevo con la cámara</button>
           <button onClick={() => perm.editarCatalogo ? abrirFormProducto() : abrirBorrador()} className={`${BTN_S} px-space-md py-2.5`}><Icon n="add_circle" className="ico-20" />{perm.editarCatalogo ? 'Añadir referencia' : 'Nueva referencia (borrador)'}</button>
         </div>
@@ -111,21 +132,20 @@ function StockDesk() {
               <select value={u.est} onChange={e => setUI({ est: e.target.value, page: 1 })} className={`${INP} ${sel}`} aria-label="Estado"><option value="all">Estado: todos</option>{(['red', 'amber', 'green'] as const).map(s => <option key={s} value={s}>{ST[s].t}</option>)}</select>
               <select value={u.prop} onChange={e => setUI({ prop: e.target.value, page: 1 })} className={`${INP} ${sel}`} aria-label="Propiedad"><option value="all">Propiedad: todo</option><option value="propia">Material propio</option><option value="custodia">En custodia</option></select>
               <select value={u.ubi} onChange={e => setUI({ ubi: e.target.value, page: 1 })} className={`${INP} ${sel}`} aria-label="Ubicación"><option value="all">Ubicación: todas</option><option value="almacen">Almacén</option>{E.vehiculos.map(v => <option key={v.id} value={v.id}>{nombreVehiculo(E, v.id)}</option>)}</select>
-              <span className="font-mono text-label-sm text-secondary ml-auto">Mostrando {pag.length} de {lista.length} referencias</span>
             </div>
-            <div className="overflow-x-auto"><table className="tabla w-full min-w-[860px]">
-              <thead className="bg-surface-container-low"><tr><th>Referencia / SKU</th><th>Descripción</th><th>Dónde está</th><th>Almacén</th><th>Estado</th><th className="text-right">Acciones</th></tr></thead>
-              <tbody>{pag.length ? pag.map(p => <FilaStock key={p.sku} p={p} pedido={!!E.pedidos[p.sku]} />)
-                : <tr><td colSpan={6} className="text-center text-secondary py-10">No hay referencias con esos filtros. <button onClick={limpiarFiltros} className="text-primary font-semibold">Quitar filtros</button></td></tr>}</tbody>
-            </table></div>
-            <div className="p-space-md flex items-center justify-between border-t border-surface-container">
-              <span className="font-mono text-label-sm text-secondary">Página {page} de {pages}</span>
-              <div className="flex items-center gap-1">
-                <button onClick={() => setUI({ page: page - 1 })} disabled={page <= 1} className="px-3 py-1 rounded font-mono text-label-sm bg-surface-container-low disabled:opacity-40">Anterior</button>
-                {Array.from({ length: pages }, (_, i) => <button key={i} onClick={() => setUI({ page: i + 1 })} className={`w-8 h-7 rounded font-mono text-label-sm ${page === i + 1 ? 'bg-primary text-white' : 'bg-surface-container-low'}`}>{i + 1}</button>)}
-                <button onClick={() => setUI({ page: page + 1 })} disabled={page >= pages} className="px-3 py-1 rounded font-mono text-label-sm bg-surface-container-low disabled:opacity-40">Siguiente</button>
-              </div>
+            <div className="px-space-md pb-space-sm flex flex-wrap items-center gap-space-sm">
+              <span className="font-mono text-label-sm text-secondary">Mostrando {lista.length} de {E.products.length} referencias</span>
+              <label className="inline-flex items-center gap-2 text-body-sm ml-auto cursor-pointer"><input type="checkbox" checked={u.agrupar} onChange={e => setUI({ agrupar: e.target.checked })} className="w-5 h-5 accent-primary" />Agrupar por categoría</label>
+              {perm.configurar && <button onClick={() => exportarListaCsv(E, lista)} className={`${BTN_S} h-10 px-3`}><Icon n="file_download" className="ico-20" />Exportar CSV</button>}
+              <button onClick={() => imprimirLista(E, lista, textoFiltros(E, u))} className={`${BTN_S} h-10 px-3`}><Icon n="print" className="ico-20" />Imprimir lista</button>
             </div>
+            <div className="overflow-auto max-h-[78vh] border-t border-surface-container"><table className="tabla w-full min-w-[860px]">
+              <thead className="bg-surface-container-low sticky top-0 z-10 shadow-[0_1px_0_rgba(0,0,0,.06)]"><tr><Th col="sku" u={u}>Referencia / SKU</Th><Th col="nombre" u={u}>Descripción</Th><th>Dónde está</th><Th col="stock" u={u}>Almacén</Th><Th col="estado" u={u}>Estado</Th><th className="text-right">Acciones</th></tr></thead>
+              <tbody>{!lista.length ? <tr><td colSpan={6} className="text-center text-secondary py-10">No hay referencias con esos filtros. <button onClick={limpiarFiltros} className="text-primary font-semibold">Quitar filtros</button></td></tr>
+                : grupos ? grupos.map(g => <Fragment key={g.cat}><tr className="bg-surface-container-lowest"><td colSpan={6} className="!py-2 font-semibold text-primary">{g.label} <span className="font-mono text-label-sm text-secondary">· {g.items.length} ref.</span></td></tr>
+                  {g.items.filter(p => enVista.has(p.sku)).map(p => <FilaStock key={p.sku} p={p} pedido={!!E.pedidos[p.sku]} />)}</Fragment>)
+                  : visibles.map(p => <FilaStock key={p.sku} p={p} pedido={!!E.pedidos[p.sku]} />)}</tbody>
+            </table><div ref={centinela} /></div>
           </section>
         </div>
 
@@ -158,6 +178,11 @@ function StockDesk() {
 }
 
 const limpiarFiltros = () => setUI({ q: '', est: 'all', ubi: 'all', cat: 'all', prop: 'all', page: 1 });
+/** Cabecera que ordena con un toque (otro toque invierte el sentido) */
+function Th({ col, u, children }: { col: ColOrden; u: ReturnType<typeof useUI>; children: React.ReactNode }) {
+  const activo = u.orden.col === col;
+  return <th aria-sort={activo ? (u.orden.dir === 1 ? 'ascending' : 'descending') : 'none'}><button onClick={() => setUI({ orden: siguienteOrden(u.orden, col) })} className={`inline-flex items-center gap-1 uppercase ${activo ? 'text-primary' : ''}`}>{children}<Icon n={activo ? (u.orden.dir === 1 ? 'arrow_upward' : 'arrow_downward') : 'unfold_more'} className="ico-16" /></button></th>;
+}
 
 function FilaStock({ p, pedido }: { p: Producto; pedido: boolean }) {
   const r = status(p) === 'red';
@@ -196,8 +221,9 @@ function Barras({ E }: { E: Estado }) {
 }
 
 function StockMob() {
-  const E = useAlmacen(), u = useUI();
-  const lista = searchProducts(E, u.q, u), nCrit = critical(E).length;
+  const { E, u, lista, grupos, clave } = useListaInventario(), nCrit = critical(E).length;
+  const { visibles, centinela } = useProgresivo(lista, clave);
+  const enVista = new Set(visibles.map(p => p.sku));
   const chip = (k: string, lbl: string, n: number) =>
     <button key={k} onClick={() => setUI({ cat: u.cat === k ? 'all' : k })} className={`shrink-0 inline-flex items-center gap-2 px-4 h-11 rounded-full font-mono text-label-md uppercase ${u.cat === k ? 'bg-primary text-white' : 'bg-surface-container-lowest text-on-surface shadow-sm'}`}>{lbl}<span className={`px-1.5 rounded ${u.cat === k ? 'bg-white/20' : 'bg-surface-container-high'}`}>{n}</span></button>;
   const hayFiltro = u.est !== 'all' || u.ubi !== 'all' || u.prop !== 'all';
@@ -222,9 +248,17 @@ function StockMob() {
         <button onClick={limpiarFiltros} className={`col-span-2 ${BTN_T} h-11`}>Quitar filtros</button>
       </div>}
       <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-4 px-4 pb-1">{chip('all', 'Todos', E.products.length)}{categoriasActivas().map(([k, c]) => chip(k, c.label, E.products.filter(p => p.cat === k).length))}</div>
-      {(hayFiltro || u.q) && <div className="flex items-center justify-between font-mono text-label-sm text-secondary"><span>{lista.length} resultado{lista.length === 1 ? '' : 's'}{u.est !== 'all' && ` · ${ST[u.est as 'red'].t}`}{u.ubi !== 'all' && ` · ${u.ubi === 'almacen' ? 'Almacén' : nombreVehiculo(E, u.ubi)}`}</span><button onClick={limpiarFiltros} className="text-primary">Limpiar</button></div>}
-      <div className="flex flex-col gap-4">{lista.length ? lista.map(p => <CardMob key={p.sku} p={p} pedido={!!E.pedidos[p.sku]} />)
+      <div className="flex flex-wrap items-center gap-2 font-mono text-label-sm text-secondary"><span>Mostrando {lista.length} de {E.products.length} referencias</span>
+        {(hayFiltro || u.q) && <button onClick={limpiarFiltros} className="text-primary h-10">Limpiar</button>}
+        <select value={`${u.orden.col}:${u.orden.dir}`} onChange={e => { const [col, dir] = e.target.value.split(':'); setUI({ orden: { col: col as ColOrden, dir: Number(dir) as 1 | -1 } }); }} className="ml-auto h-10 rounded-lg bg-surface-container-lowest shadow-sm px-2 text-body-sm" aria-label="Ordenar">
+          <option value="estado:1">Primero lo crítico</option><option value="nombre:1">Descripción A-Z</option><option value="sku:1">Código</option><option value="stock:1">Menos stock</option><option value="stock:-1">Más stock</option></select>
+        <label className="inline-flex items-center gap-1.5 h-10 text-body-sm"><input type="checkbox" checked={u.agrupar} onChange={e => setUI({ agrupar: e.target.checked })} className="w-5 h-5 accent-primary" />Agrupar</label></div>
+      <div className="flex flex-col gap-4">{lista.length ? grupos ? grupos.map(g => <Fragment key={g.cat}><h2 className="font-semibold text-primary mt-2">{g.label} <span className="font-mono text-label-sm text-secondary">· {g.items.length} ref.</span></h2>
+          {g.items.filter(p => enVista.has(p.sku)).map(p => <CardMob key={p.sku} p={p} pedido={!!E.pedidos[p.sku]} />)}</Fragment>)
+        : visibles.map(p => <CardMob key={p.sku} p={p} pedido={!!E.pedidos[p.sku]} />)
         : <div className="text-center text-secondary py-12">Nada coincide con “{u.q}”.<br /><button onClick={limpiarFiltros} className="text-primary font-semibold mt-2">Ver todo</button></div>}</div>
+      <div ref={centinela} className="pb-4" />
+      <BotonSubir />
     </div>
   );
 }

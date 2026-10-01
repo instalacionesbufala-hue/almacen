@@ -21,6 +21,7 @@ import { abrirRecibo, abrirTallas } from '../entregas/Hojas';
 import { enlacePortal, generarToken, hashToken } from '../../domain/portal';
 import { enlaceWhatsApp, normalizarTelefono } from '../../domain/whatsapp';
 import CierresView, { abrirRecuentoVehiculo } from '../cierres/CierresView';
+import { CargarMas, useMas } from '../../ui/lista';
 
 type Pestaña = 'equipos' | 'vehiculos' | 'tecnicos' | 'historial' | 'cierres';
 
@@ -156,6 +157,7 @@ function Historial() {
 export function AuditoriaEntregas() {
   const E = useAlmacen(), desk = useEsEscritorio();
   const es = E.entregas.filter(e => (e.estado ?? 'firmada') === 'firmada').sort((a, b) => b.ts - a.ts);
+  const [n, mas] = useMas(100);
   const resumen = (e: typeof es[0]) => e.lineas.map(l => { const p = find(E, l.sku); return p ? `${qtyTxt(p, l.qty)} ${p.name.split(' ').slice(0, 3).join(' ')}` : `${num(l.qty)} ${l.sku}`; }).join(', ');
   const verificar = async () => {
     let bad: string[] = [], total = E.entregas.length;
@@ -171,18 +173,18 @@ export function AuditoriaEntregas() {
         <div><h2 className="text-headline-md font-semibold">Auditoría de entregas y firmas</h2><p className="font-mono text-label-sm text-secondary">Almacén → vehículo del equipo · huella SHA-256</p></div></div>
         <div className="flex gap-2"><button onClick={verificar} className={`${BTN_S} px-3 h-11 text-body-sm`}><Icon n="fact_check" className="ico-18" />Verificar huellas</button><button onClick={csv} className={`${BTN_S} px-3 h-11 text-body-sm`}><Icon n="download" className="ico-18" />CSV</button></div></div>
       {desk ? <div className="overflow-x-auto"><table className="tabla w-full min-w-[900px]"><thead className="bg-surface-container-low"><tr><th>Referencia / fecha</th><th>Equipo / vehículo</th><th>Receptor</th><th>Resumen de material</th><th>Firma capturada</th><th className="text-right">Doc.</th></tr></thead>
-        <tbody>{es.length ? es.map(e => { const eq = E.equipos.find(x => x.id === e.equipo), r = E.tecnicos.find(t => t.id === e.receptor); return (
+        <tbody>{es.length ? es.slice(0, n).map(e => { const eq = E.equipos.find(x => x.id === e.equipo), r = E.tecnicos.find(t => t.id === e.receptor); return (
           <tr key={e.id}><td><div className="font-mono text-label-md text-primary">#{numEntrega(e)}</div><div className="font-mono text-label-sm text-secondary">{hace(e.ts)}</div></td>
             <td><div className="flex items-center gap-2"><Icon n="local_shipping" className="text-secondary ico-20" /><div><div>{eq ? eq.nombre : e.equipo}</div><div className="font-mono text-label-sm text-secondary">{e.vehiculo ? nombreVehiculo(E, e.vehiculo).split(' · ').pop() : '—'}</div></div></div></td>
             <td><div className="flex items-center gap-2"><Avatar n={r?.nombre || '?'} /><span>{r?.nombre || '—'}</span></div></td>
             <td className="max-w-[320px] text-body-sm">{resumen(e)}</td>
             <td><div className="flex items-center gap-2"><span className="bg-surface-container-low rounded-lg px-1"><FirmaImg f={e.firma} /></span><span className="font-mono text-label-sm text-tertiary">✓ {(e.hash || '').slice(0, 8)}</span></div></td>
             <td className="text-right"><button onClick={() => abrirRecibo(e.id)} className="p-2 rounded-lg text-primary hover:bg-primary-fixed" aria-label="Ver albarán de entrega"><Icon n="picture_as_pdf" /></button></td></tr>); })
-          : <tr><td colSpan={6}><Vacio>Sin entregas registradas.</Vacio></td></tr>}</tbody></table></div>
-        : <div className="px-4 pb-2">{es.length ? es.map(e => { const eq = E.equipos.find(x => x.id === e.equipo), r = E.tecnicos.find(t => t.id === e.receptor); return (
+          : <tr><td colSpan={6}><Vacio>Sin entregas registradas.</Vacio></td></tr>}</tbody></table><CargarMas visibles={n} total={es.length} mas={mas} que="entregas" /></div>
+        : <div className="px-4 pb-2">{es.length ? es.slice(0, n).map(e => { const eq = E.equipos.find(x => x.id === e.equipo), r = E.tecnicos.find(t => t.id === e.receptor); return (
           <button key={e.id} onClick={() => abrirRecibo(e.id)} className="w-full text-left flex items-center gap-3 py-3 border-t border-surface-container"><span className="bg-surface-container-low rounded-lg"><FirmaImg f={e.firma} className="h-10 w-20" /></span>
             <div className="flex-1 min-w-0"><div className="font-mono text-label-md text-primary">#{numEntrega(e)}</div><div className="text-body-sm truncate">{eq?.nombre} · {r?.nombre}</div><div className="text-body-sm text-secondary truncate">{resumen(e)}</div></div>
-            <span className="font-mono text-label-sm text-secondary shrink-0">{hace(e.ts)}</span></button>); }) : <Vacio>Sin entregas.</Vacio>}</div>}
+            <span className="font-mono text-label-sm text-secondary shrink-0">{hace(e.ts)}</span></button>); }) : <Vacio>Sin entregas.</Vacio>}<CargarMas visibles={n} total={es.length} mas={mas} que="entregas" /></div>}
     </section>
   );
 }
