@@ -604,7 +604,7 @@ Los artículos tienen el **código de Saltoki** como SKU, pero las cajas traen e
    - Hay pruebas de: SKU con URL rechazado en el servidor, alta desde un QR ajeno con SKU interno y código alternativo, foto subida para un SKU con `.` y `-`, reparación del artículo existente y reintento de la foto en cola.
    - En el iPhone del usuario se crea un artículo con la cámara y su foto se guarda.
 
-### E-022 · Borrar, fusionar y cambiar el código de una referencia sin quedarse bloqueado · PENDIENTE (urgente)
+### E-022 · Borrar, fusionar y cambiar el código de una referencia sin quedarse bloqueado · HECHO
 **Qué le ha pasado al usuario, que es administrador (01/10).** Con la referencia **TRY32-1-L10-P**, un Trydan 7,4 kW con cable de 10 m en custodia de Esmove:
 1. **La borró**, la app dijo "borrada" y **volvió a aparecer**.
 2. **La fusionó** con otra.
@@ -1711,3 +1711,60 @@ En "Para el día a día" se explican el ajuste y el aviso.
 
 **En el navegador (demostración):** artículo con SKU `HTTP://TAG.YT/ZESA7` → bandeja "Código no válido: cámbialo" → Editar → `3439510575536` → stock 6 en el nuevo, el antiguo archivado y la URL como código alternativo.
 - **Pendiente:** crear un artículo con la cámara en el iPhone y guardar su foto.
+
+### 01/10/2026 · E-022 · HECHO
+**El caso del usuario, en producción (solo lectura):**
+- `8900500020` está **archivado** (fusionado en `TRY32-1-L10-P`, stock 0, sin movimientos). Por eso bloqueaba el código.
+- `TRY32-1-L10-P` está activo con 6 ud y 1 movimiento.
+- **No he tocado datos reales.** Con esta versión, el usuario abre el Trydan, pulsa **Editar**, pone el código `8900500020` y **Guardar**. Queda **un solo artículo activo `8900500020` con las 6 ud**, y `TRY32-1-L10-P` archivado dentro (buscarlo o escanearlo lleva al nuevo).
+- Está probado con los mismos datos en el servidor (`e022.test.ts`), en local y en el navegador.
+
+**1. Borrar: las mismas reglas en la app y en el servidor**
+- El rastro lo calculan `_rastro_producto` en el servidor y `rastro()` en `src/domain/archivo.ts`. Cuenta movimientos, pendientes, líneas de entregas, consumos de cierres, avisos, códigos alternativos, foto, reservas, plantillas, vehículos con material, propuestas y artículos fusionados en ella.
+- Texto que se muestra: "Tiene 1 movimiento y 1 pendiente en tu bandeja".
+- **Borrar definitivamente:** solo sin ningún rastro. Si no, el servidor lo rechaza con ese texto. Antes, en local solo se miraban los movimientos y por eso "se borraba" y volvía a aparecer.
+- **Ficha → "Borrar o archivar…"** (administrador):
+  - sin rastro, ofrece **Borrar definitivamente**;
+  - con rastro, explica qué la retiene y ofrece **Archivar** (`archivar_producto`), que exige stock 0 en el almacén y en los vehículos y que no haya entregas preparadas;
+  - nunca dice "borrada" si no lo está.
+
+**2. Operaciones rechazadas**
+- El rechazo ya hacía que la cola recargara el estado real. Ahora `reaplicarCola` deja claro que **solo se reaplica lo pendiente**, así que lo rechazado se deshace en pantalla (hay prueba).
+- El aviso usa `motivoLegible` (E-021) y dice "El cambio se ha deshecho en pantalla".
+- Nueva sección **"Operaciones rechazadas"** en la bandeja, con **Reintentar** y **Descartar**; también cuenta en el número de la bandeja.
+- Revisión del resto de `ops.ts`: todas pasan por la misma cola, así que el criterio vale para todas.
+  - Las que más rechazaba el servidor por reglas distintas eran borrar, el SKU (E-021) y el código alternativo. Ya tienen las mismas reglas en local.
+
+**3. Los archivados no bloquean su código. Decisión distinta a la del encargo:** no renombro el archivado a `<SKU>~A1`.
+- **Por qué:** su SKU lo referencian 12 tablas, entre ellas el historial inalterable (movimientos, líneas de entrega, pendientes…) y las **huellas de las entregas firmadas**. Renombrarlo obligaría a reescribir el historial o rompería las huellas.
+- **En su lugar:** al **dar de alta**, **importar** o **cambiar el código** a uno archivado, **ese artículo se reactiva** con la ficha nueva (`_reactivar_archivado`, solo con stock 0) y, si hace falta, se fusiona en él. Su historial antiguo sigue con su código, que es el mismo.
+- Hay disparador y auditoría.
+
+**4. Choque con un artículo activo**
+- El formulario muestra cuál es (foto, nombre y stock), con **"Abrir esa ficha"** y **"Fusionar en ella"**, que abre la fusión con el destino ya elegido.
+- Si el código es de un archivado, avisa: "se reactiva con esta ficha".
+- El servidor también nombra el artículo en el mensaje.
+
+**5. Configuración → Archivados** (administrador):
+- de qué se fusionó y en cuál, cuándo y quién (columnas nuevas `archivado_ts` y `archivado_por`; para los existentes, la fecha de su última actualización);
+- **Restaurar** (`restaurar_producto`): vuelve con su código; si estaba fusionado, con stock 0;
+- **Deshacer fusión** (`deshacer_fusion`): revierte los ajustes enlazados de **esa** fusión, si el destino aún tiene lo que recibió; si no, dice cuánto falta;
+- **Borrar** definitivamente: solo sin rastro.
+- **Límite:** al deshacer una fusión, los códigos alternativos que pasaron al destino se quedan allí. Se pueden mover a mano desde las fichas.
+
+**Pruebas:** 341 en verde.
+- `supabase/tests/e022.test.ts` (5):
+  - borrar con y sin rastro, con el texto del motivo;
+  - archivar con stock 0, quién y cuándo, y restaurar;
+  - **el caso del Trydan**;
+  - alta e importación con el código de un archivado, y el mensaje de choque con un activo;
+  - deshacer fusión correcto, y rechazado cuando el destino ya gastó lo recibido.
+- `src/domain/archivo.test.ts` (6): lo mismo en local, más el rechazo del servidor que no se reaplica.
+- Al revisar he encontrado y corregido un fallo mío de escape: `replace(/s/g)` en lugar de `/\s/g` en tres sitios. Uno era de E-018 (códigos del albarán) y solo afectaba a códigos con "s" minúscula.
+
+**En el navegador (demostración, con los datos del caso real):**
+- Configuración → Archivados enseña `8900500020` fusionado en `TRY32-1-L10-P`.
+- Trydan → Editar → `8900500020` muestra el aviso de archivado → Guardar → `8900500020` activo con 6 ud y `TRY32-1-L10-P` archivado.
+- "Borrar o archivar…" en un artículo con rastro muestra el texto y por qué no se puede archivar con stock.
+
+**Migración** `20261013000100_e022_archivar_borrar.sql` **aplicada**. Guía: "Para el día a día" amplía E-020 a E-022.

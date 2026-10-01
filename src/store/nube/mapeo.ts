@@ -36,7 +36,7 @@ export function aEstado(t: Tablas, base: Pick<Estado, 'cesta' | 'seq'>, operador
     propiedad: p.propiedad === 'custodia' ? 'custodia' : 'propia', propietario: p.propietario_id ?? undefined,
     objetivo: p.objetivo == null ? undefined : n(p.objetivo), proveedorHabitual: p.proveedor_habitual ?? undefined, modelo: p.modelo ?? undefined, talla: p.talla ?? undefined,
     foto: p.foto ?? undefined, fotoMini: p.foto_mini ?? undefined, fotoOrigen: p.foto_origen ?? undefined,
-    ...(p.notas ? { notas: p.notas } : {}), ...(p.archivado ? { archivado: true, fusionadoEn: p.fusionado_en ?? undefined } : {}),
+    ...(p.notas ? { notas: p.notas } : {}), ...(p.archivado ? { archivado: true, fusionadoEn: p.fusionado_en ?? undefined, archivadoTs: p.archivado_ts ? ms(p.archivado_ts) : undefined, archivadoPor: p.archivado_por ?? undefined } : {}),
   }));
   // E-016: los archivados (fusionados en otro) no salen en las listas, pero el historial los sigue encontrando
   const products: Producto[] = todos.filter(p => !p.archivado), archivados: Producto[] = todos.filter(p => p.archivado);

@@ -20,6 +20,7 @@ import { comprobarFusion, diferencias } from '../../domain/fichas';
 import { avisoStockInicial, previsionAjuste } from '../../domain/ajuste';
 import { motivoSkuNoValido, skuPropuesto, skuValido } from '../../domain/codigos';
 import { CodigosFicha } from './codigos';
+import { abrirRetirar } from './archivo';
 
 /* ---------- Fila de movimiento ---------- */
 export function MovRow({ m }: { m: Movimiento }) {
@@ -94,15 +95,15 @@ function Ficha({ sku }: { sku: string }) {
     </SheetFoot>
     {!p.borrador && <div className="px-4 pb-2 flex flex-wrap gap-x-5"><button onClick={() => abrirAjuste(sku)} className="text-amber-800 text-body-sm font-semibold h-10">{E.rol === 'admin' ? 'Ajuste de inventario…' : 'Proponer ajuste de inventario…'}</button>
       {perm.editarCatalogo && <button onClick={() => abrirFusionar(sku)} className="text-primary text-body-sm font-semibold h-10">Fusionar en otro artículo (era el mismo)…</button>}</div>}
-    {perm.editarCatalogo && p.stock === 0 && !E.movements.some(m => m.sku === sku) && <div className="px-4 pb-4"><button onClick={() => { if (confirm(`¿Borrar la referencia ${sku}? No tiene stock ni historial.`) && ejecutar({ op: 'borrarProducto', args: { sku } })) { closeModal(); toast('Referencia borrada.', 'ok'); } }} className="text-error text-body-sm font-semibold">Borrar esta referencia</button></div>}
+    {perm.editarCatalogo && <div className="px-4 pb-4"><button onClick={() => abrirRetirar(sku)} className="text-error text-body-sm font-semibold h-10">Borrar o archivar…</button></div>}
   </>);
 }
 
 /* ---------- E-016 · Fusionar A en B (administrador) ---------- */
-export const abrirFusionar = (sku: string) => openModal(<Fusionar sku={sku} />);
-function Fusionar({ sku }: { sku: string }) {
+export const abrirFusionar = (sku: string, destino0 = '') => openModal(<Fusionar sku={sku} destino0={destino0} />);
+function Fusionar({ sku, destino0 }: { sku: string; destino0: string }) {
   const E = useAlmacen(), a = find(E, sku);
-  const [destino, setDestino] = useState(''), [motivo, setMotivo] = useState('');
+  const [destino, setDestino] = useState(destino0), [motivo, setMotivo] = useState('');
   if (!a) return <SheetHead title="Referencia no encontrada" />;
   let vista = '', error = '';
   if (destino) { try { const r = comprobarFusion(E, sku, destino); vista = `${qtyTxt(a, a.stock)} de ${a.name} pasan a ${r.b.name} como ${qtyTxt(r.b, r.qb)}${E.aBordo.some(x => x.sku === sku && x.unidades) ? ', y lo que llevan los vehículos también' : ''}.`; } catch (e) { error = (e as Error).message; } }
@@ -260,12 +261,17 @@ function FormProducto({ sku, preset, onCreado, modo, propuesta }: { sku?: string
     objetivo: base.objetivo != null ? String(base.objetivo) : '', proveedorHabitual: base.proveedorHabitual || '', modelo: base.modelo || '', talla: base.talla || '',
     propiedad: base.propiedad || 'propia', propietario: base.propietario || S().propietarios[0]?.id || '', notas: base.notas || '',
   });
-  const set = (k: keyof FormProd) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setF({ ...f, [k]: e.target.value });
+  const set = (k: keyof FormProd) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => { setF({ ...f, [k]: e.target.value }); if (k === 'sku') setChoque(''); };
+  const [choque, setChoque] = useState('');
+  const pc = choque ? S().products.find(x => x.sku === choque) : undefined;
+  const archivadoCon = !pc && f.sku.trim() && (!p || f.sku.trim().toUpperCase() !== p.sku) ? S().archivados?.find(x => x.sku === f.sku.trim().toUpperCase()) : undefined;
   const conContenido = f.unit !== 'm' && f.unit !== 'ud';
   const guardarProd = () => {
     const E = S(), code = f.sku.trim().toUpperCase(), name = f.name.trim();
     if (!code || !name) return toast('El SKU y el nombre son obligatorios.', 'err');
-    if ((!p || code !== p.sku) && find(E, code)) return toast(`Ya existe una referencia con el SKU ${code}.`, 'err');
+    // E-022: el código de un archivado se puede reutilizar (se reactiva); si es de un activo, se dice cuál y qué hacer
+    const activo = !p || code !== p.sku ? E.products.find(x => x.sku === code) : undefined;
+    if (activo) { setChoque(activo.sku); return; }
     if (!p || code !== p.sku) { const malo = motivoSkuNoValido(code); if (malo) return toast(malo, 'err', 7000); }
     const n = { contenido: conContenido ? toNum(f.contenido) : 1, min: f.min.trim() === '' ? 0 : toNum(f.min), stock: toNum(f.stock) || 0 };
     if (!(n.contenido > 0)) return toast('Indica cuántas unidades trae cada formato (bote de 1000 → 1000).', 'err');
@@ -303,6 +309,11 @@ function FormProducto({ sku, preset, onCreado, modo, propuesta }: { sku?: string
     <SheetHead title={modo === 'propuesta' ? 'Proponer un cambio' : modo === 'revisar' ? 'Revisar el cambio propuesto' : p?.borrador ? 'Completar y aprobar borrador' : p ? 'Editar referencia' : 'Nueva referencia'} sub={p?.borrador ? `${p.sku}${p.propuestoPor ? ` · propuesto por ${p.propuestoPor}` : ''}` : p ? p.sku : 'Alta en el catálogo del almacén'} />
     <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
       {inp('sku', p ? 'SKU / ID * (cambiarlo conserva el historial)' : 'SKU / ID *', p ? { readOnly: modo === 'propuesta' || !!p.borrador } : { autoFocus: true })}
+      {pc && <div className="sm:col-span-2 rounded-xl bg-error-container/40 p-3 flex flex-wrap items-center gap-3"><Tile p={pc} size="w-12 h-12" />
+        <div className="flex-1 min-w-[180px]"><div className="font-semibold">El código {pc.sku} ya es de otro artículo activo</div><div className="text-body-sm">{pc.name} · almacén {qtyTxt(pc, pc.stock)}</div></div>
+        <div className="flex gap-2"><button type="button" onClick={() => { closeModal(); abrirFicha(pc.sku); }} className={`${BTN_S} h-11 px-3`}>Abrir esa ficha</button>
+          {p && !p.borrador && <button type="button" onClick={() => { closeModal(); abrirFusionar(p.sku, pc.sku); }} className={`${BTN_P} h-11 px-3`}>Fusionar en ella</button>}</div></div>}
+      {archivadoCon && <p className="sm:col-span-2 text-body-sm bg-amber-50 rounded-lg p-3">Ese código era de un artículo archivado ({archivadoCon.name}). Al guardar se reactiva con esta ficha; su historial antiguo se conserva.</p>}
       {inp('ean', 'EAN / código de barras', { inputMode: 'numeric' })}
       <div className="sm:col-span-2">{inp('name', 'Nombre *')}</div>
       <Campo label="Categoría"><select value={f.cat} onChange={set('cat')} className={`${INP} h-12`}>{categoriasActivas().map(([k, c]) => <option key={k} value={k}>{c.label}</option>)}</select></Campo>

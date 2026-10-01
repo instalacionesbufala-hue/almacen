@@ -13,6 +13,7 @@ import { EQUIVALENCIAS_PROPUESTA, KITS_PROPUESTA, registrarCierreLocal, sincroni
 import { cambiarCodigoLocal, fusionarLocal, reasignarLineaLocal } from '../domain/fichas';
 import { ajustarLocal, previsionAjuste } from '../domain/ajuste';
 import { asociarLocal, motivoSkuNoValido, quitarCodigoLocal, type TipoCodigo } from '../domain/codigos';
+import { archivarLocal, borrarLocal, deshacerFusionLocal, reactivarArchivado, restaurarLocal } from '../domain/archivo';
 const exigirSku = (sku: string) => { const m = motivoSkuNoValido(sku); if (m) throw new Error(m); };
 import { uid } from '../domain/formato';
 
@@ -61,6 +62,9 @@ export type Op =
   | { op: 'borrador'; args: { sku: string; ean: string; nombre: string; cat: CatId } }
   | { op: 'borradorArticulo'; args: { producto: Producto; stockInicial: number } }
   | { op: 'borrarProducto'; args: { sku: string } }
+  | { op: 'archivarProducto'; args: { sku: string; motivo: string } }
+  | { op: 'restaurarProducto'; args: { sku: string } }
+  | { op: 'deshacerFusion'; args: { sku: string } }
   | { op: 'perfil'; args: { id: string; nombre: string; rol: Rol; activo: boolean } }
   | { op: 'minimos'; args: { cambios: { sku: string; minimo: number; objetivo?: number | null; proveedorHabitual?: string }[] } }
   | { op: 'minimoHerramienta'; args: { modelo: string; minimo: number; objetivo?: number; proveedor: string } }
@@ -145,16 +149,19 @@ export const OPS: Defs = {
       catch (e) { S.products = JSON.parse(copia); throw e; }
       S.albaranes.unshift({ id: a.id, delegacion: a.cabecera.delegacion || undefined, numero: a.cabecera.numero || 's/n', proveedor: a.cabecera.proveedor || 'Proveedor', fecha: a.cabecera.fecha, lineas: a.lineas.length,
         unidades: a.lineas.reduce((s, l) => s + l.cantidad, 0), ts: Date.now(), operator: S.operator, confianza: a.cabecera.confianza, modo: a.cabecera.modo,
-        codigos: [...new Set(a.lineas.map(l => String(l.codigo || '').replace(/s/g, '').toUpperCase()).filter(Boolean))] });
+        codigos: [...new Set(a.lineas.map(l => String(l.codigo || '').replace(/\s/g, '').toUpperCase()).filter(Boolean))] });
     },
     rpc: a => ['aprobar_albaran', { p_id: a.id, p_cabecera: a.cabecera, p_lineas: a.lineas }],
     desc: (_S, a) => `Albarán ${a.cabecera.numero} (${a.lineas.length} líneas)`,
   },
   producto: {
     local: (S, { producto: p, nuevo, stockInicial }) => {
+      // E-022: dar de alta con el código de un archivado lo reactiva y se trata como un alta (su historial se conserva)
+      const reac = nuevo ? reactivarArchivado(S, p.sku) : null;
+      if (reac) S.products = S.products.filter(x => x !== reac);
       const actual = find(S, p.sku);
       if (nuevo && actual) throw new Error(`Ya existe una referencia con el SKU ${p.sku}`);
-      if (!actual) { exigirSku(p.sku); const alt = S.codigos.find(c => c.codigo.replace(/s/g, '').toUpperCase() === p.sku.toUpperCase()); if (alt) throw new Error(`El código ${p.sku} ya está asociado a ${find(S, alt.sku)?.name || alt.sku} (${alt.sku}) como código alternativo`); }                                     // E-021: los antiguos no válidos se pueden editar hasta cambiarles el código
+      if (!actual) { exigirSku(p.sku); const alt = S.codigos.find(c => c.codigo.replace(/\s/g, '').toUpperCase() === p.sku.toUpperCase()); if (alt) throw new Error(`El código ${p.sku} ya está asociado a ${find(S, alt.sku)?.name || alt.sku} (${alt.sku}) como código alternativo`); }                                     // E-021: los antiguos no válidos se pueden editar hasta cambiarles el código
       if (formatoEntero(p) && stockInicial !== Math.trunc(stockInicial)) throw new Error(`El stock inicial de ${p.name} va en ${p.unit} enteros`);
       if (actual) {
         // E-015: completar (aprobar) un borrador mete su stock inicial (la app lo envía precargado con lo que contó el almacén)
@@ -502,6 +509,7 @@ export const OPS: Defs = {
       for (const f of a.filas) {
         const sku = f.sku.trim().toUpperCase(); if (!sku) throw new Error('Hay una fila sin SKU');
         if (!find(S, sku)) exigirSku(sku);
+        const reac = reactivarArchivado(S, sku); if (reac) S.products = S.products.filter(x => x !== reac);   // E-022: el código de un archivado se reutiliza
         const prop = f.propiedad === 'custodia' ? S.propietarios.find(o => o.id.toUpperCase() === f.propietario.trim().toUpperCase() || o.nombre.toLowerCase() === f.propietario.trim().toLowerCase())?.id : undefined;
         if (f.propiedad === 'custodia' && !prop) throw new Error(`Propietario desconocido en ${sku}: ${f.propietario}`);
         const contenido = f.unidad === 'm' || f.unidad === 'ud' ? 1 : f.contenido || 1;
@@ -597,14 +605,28 @@ export const OPS: Defs = {
   },
   borrarProducto: {
     local: (S, a) => {
+      // E-022: mismas reglas que el servidor (sin ningún rastro); si no, se archiva
       if (S.rol !== 'admin') throw new Error('Solo el administrador puede borrar referencias');
-      const p = find(S, a.sku); if (!p) return;
-      if (S.movements.some(m => m.sku === a.sku)) throw new Error('La referencia tiene historial: no se puede borrar (deja el mínimo a 0 si ya no se usa)');
-      if (p.stock !== 0) throw new Error('Solo se puede borrar una referencia sin stock');
-      S.products = S.products.filter(x => x !== p);
+      if (!find(S, a.sku)) return;
+      borrarLocal(S, a.sku);
     },
     rpc: a => ['borrar_producto', { p_sku: a.sku }],
     desc: (_S, a) => `Borrar ${a.sku}`,
+  },
+  archivarProducto: {
+    local: (S, a) => archivarLocal(S, a.sku),
+    rpc: a => ['archivar_producto', { p_sku: a.sku, p_motivo: a.motivo }],
+    desc: (_S, a) => `Archivar ${a.sku}`,
+  },
+  restaurarProducto: {
+    local: (S, a) => restaurarLocal(S, a.sku),
+    rpc: a => ['restaurar_producto', { p_sku: a.sku }],
+    desc: (_S, a) => `Restaurar ${a.sku}`,
+  },
+  deshacerFusion: {
+    local: (S, a) => { deshacerFusionLocal(S, a.sku); },
+    rpc: a => ['deshacer_fusion', { p_sku: a.sku }],
+    desc: (_S, a) => `Deshacer la fusión de ${a.sku}`,
   },
   perfil: {
     local: (S, a) => { const u = S.perfiles.find(x => x.id === a.id); if (u) Object.assign(u, { nombre: a.nombre, rol: a.rol, activo: a.activo }); },

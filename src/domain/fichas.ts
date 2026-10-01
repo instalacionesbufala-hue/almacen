@@ -5,6 +5,7 @@ import type { Estado, Producto } from '../data/tipos';
 import { redondea, uid } from './formato';
 import { applyMovement, contenidoDe, find, formatoEntero, reservado } from './reglas';
 import { motivoSkuNoValido } from './codigos';
+import { reactivarArchivado } from './archivo';
 
 /** Cuánto sería el stock del almacén de A expresado en formatos de B (3 botes de 1000 = 3000 ud) */
 export const convertirFormato = (a: Pick<Producto, 'contenido'>, b: Pick<Producto, 'contenido'>, q: number) => redondea(q * contenidoDe(a) / contenidoDe(b));
@@ -37,7 +38,7 @@ export function fusionarLocal(S: Estado, origen: string, destino: string, motivo
     S.movements[0].corrige = ida;
   }
   if (!b.foto && a.foto) Object.assign(b, { foto: a.foto, fotoMini: a.fotoMini, fotoOrigen: a.fotoOrigen });
-  a.fusionadoEn = b.sku;
+  a.fusionadoEn = b.sku; a.archivado = true; a.archivadoTs = Date.now(); a.archivadoPor = S.operator;
   (S.codigos || []).forEach(c => { if (c.sku === a.sku) c.sku = b.sku; });   // E-020: los códigos alternativos pasan al destino
   S.products = S.products.filter(p => p.sku !== a.sku);
   S.archivados = [...(S.archivados || []), a];
@@ -52,11 +53,15 @@ export function cambiarCodigoLocal(S: Estado, sku: string, nuevo: string) {
   if (!n) throw new Error('Indica el código nuevo');
   const malo = motivoSkuNoValido(n); if (malo) throw new Error(malo);
   // E-020: si el código nuevo era un código alternativo de este mismo artículo, pasa a ser su SKU; si es de otro, no se puede
-  const alt = (S.codigos || []).find(c => c.codigo.replace(/s/g, '').toUpperCase() === n);
+  const alt = (S.codigos || []).find(c => c.codigo.replace(/\s/g, '').toUpperCase() === n);
   if (alt && alt.sku !== a.sku) throw new Error(`El código ${n} ya está asociado a ${find(S, alt.sku)?.name || alt.sku} (${alt.sku}) como código alternativo`);
   if (alt) S.codigos = S.codigos.filter(c => c !== alt);
-  if (find(S, n)) throw new Error(`Ya existe un artículo con el código ${n}`);
-  S.products.push({ ...a, sku: n, stock: 0, fusionadoEn: undefined });
+  const activo = S.products.find(p => p.sku === n);
+  if (activo) throw new Error(`Ya existe un artículo activo con el código ${n}: ${activo.name} (ábrelo o fusiona en él)`);
+  // E-022: si el código es de un archivado, ese artículo se reactiva con esta ficha (su historial sigue con su código)
+  const reactivado = reactivarArchivado(S, n);
+  if (reactivado) Object.assign(reactivado, { ...a, sku: n, stock: 0, fusionadoEn: undefined, archivado: undefined, archivadoTs: undefined, archivadoPor: undefined, foto: a.foto ?? reactivado.foto, fotoMini: a.fotoMini ?? reactivado.fotoMini });
+  else S.products.push({ ...a, sku: n, stock: 0, fusionadoEn: undefined });
   a.ean = undefined;
   fusionarLocal(S, a.sku, n, `Cambio de código ${a.sku} → ${n}`);
 }

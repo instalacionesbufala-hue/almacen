@@ -62,6 +62,13 @@ export async function procesarCola(): Promise<void> {
 
 function marcarConexion(ok: boolean) { const s = sesion.get(); const c = ok ? 'en-linea' : 'sin-conexion'; if (s.conexion !== c) { s.conexion = c; sesion.emit(); } }
 
+/** E-022: sobre el estado real del servidor se reaplica SOLO lo que aún espera en la cola. Lo rechazado no: así el cambio local
+    se deshace en pantalla, y la operación queda en la cola como "rechazada" (bandeja → Operaciones rechazadas) para reintentar o descartar. */
+export function reaplicarCola(nuevo: Estado, items: ItemCola[]): Estado {
+  for (const it of items) if (it.estado === 'pendiente') { try { aplicarLocal(nuevo, it.op); } catch { /* se resolverá al enviarla */ } }
+  return nuevo;
+}
+
 /** Descarga todo lo visible para el usuario y reaplica encima lo que aún está en la cola */
 export async function recargar(): Promise<void> {
   if (!supabase || sesion.get().estado !== 'lista') return;
@@ -76,8 +83,7 @@ export async function recargar(): Promise<void> {
   const rol = sesion.get().perfil?.rol || 'almacen';
   const actual = obtenerEstado();
   const nuevo = aEstado(tablas, { cesta: actual.cesta, seq: actual.seq }, sesion.get().perfil?.nombre || '', rol);
-  for (const it of cola.get()) if (it.estado === 'pendiente') { try { aplicarLocal(nuevo, it.op); } catch { /* se resolverá al enviarla */ } }
-  fijarEstado(nuevo);
+  fijarEstado(reaplicarCola(nuevo, cola.get()));
   sesion.get().ultimaCarga = Date.now(); sesion.emit();
 }
 

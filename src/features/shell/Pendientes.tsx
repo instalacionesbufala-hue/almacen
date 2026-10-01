@@ -7,6 +7,8 @@ import { ejecutar, useAlmacen } from '../../store/almacen';
 import { abrirFormProducto } from '../inventario/hojas';
 import { diferencias } from '../../domain/fichas';
 import { motivoSkuNoValido, skuValido } from '../../domain/codigos';
+import { Rechazadas } from '../inventario/archivo';
+import { cola } from '../../store/nube/sync';
 import { usePermisos } from '../../store/permisos';
 import { openModal, SheetHead } from '../../ui/modal';
 import { toast } from '../../ui/toast';
@@ -16,7 +18,7 @@ export function BotonPendientes() {
   const E = useAlmacen(), { validar } = usePermisos();
   // E-013: también las mermas registradas (aplicadas al momento) que el administrador aún no ha visto
   // E-015: y los artículos en borrador que ha creado el almacén
-  const n = E.pendientes.filter(p => p.estado === 'pendiente' || p.estado === 'aplicada').length + E.products.filter(p => p.borrador).length + E.propuestas.filter(p => p.estado === 'pendiente').length + E.products.filter(p => !skuValido(p.sku)).length;
+  const n = E.pendientes.filter(p => p.estado === 'pendiente' || p.estado === 'aplicada').length + E.products.filter(p => p.borrador).length + E.propuestas.filter(p => p.estado === 'pendiente').length + E.products.filter(p => !skuValido(p.sku)).length + cola.use().filter(i => i.estado === 'rechazada').length;
   if (!validar || !n) return null;
   return <button onClick={abrirPendientes} className="relative p-2 rounded-lg text-amber-800 hover:bg-amber-100" aria-label={`${n} avisos en la bandeja`} title="Mermas y pendientes de validar">
     <Icon n="pending_actions" /><span className="absolute top-1 right-1 min-w-4 h-4 px-1 rounded-full bg-amber-500 text-black font-mono text-[10px] leading-4">{n}</span></button>;
@@ -31,6 +33,7 @@ function Bandeja() {
   return (<>
     <SheetHead title="Bandeja del administrador" sub="Mermas registradas (ya aplicadas: solo para que lo sepas), diferencias de recuento y ajustes de inventario propuestos por el almacén, pendientes de validar." />
     <div className="p-5 flex flex-col gap-3">
+      <Rechazadas />
       {noValidos.length > 0 && <div className="flex flex-col gap-2"><div className="font-mono text-label-sm uppercase tracking-wider text-secondary">Código no válido: cámbialo ({noValidos.length})</div>
         {noValidos.map(p => <div key={p.sku} className="rounded-xl bg-error-container/30 p-3 flex flex-wrap items-center gap-3">
           <div className="flex-1 min-w-[200px]"><div className="font-semibold">{p.name}</div>

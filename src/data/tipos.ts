@@ -33,6 +33,10 @@ export interface Producto {
   /** E-016: notas libres; archivado = fusionado en otro artículo (fusionadoEn) */
   notas?: string;
   fusionadoEn?: string;
+  /** E-022: archivado (fusionado o retirado): quién y cuándo */
+  archivado?: boolean;
+  archivadoTs?: number;
+  archivadoPor?: string;
   /** E-015: stock que contó el almacén al crear el borrador; entra como "Alta de artículo" cuando el administrador lo aprueba */
   stockPropuesto?: number;
   propuestoPor?: string;
