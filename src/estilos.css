@@ -77,3 +77,12 @@ button, input, select, textarea { font: inherit; color: inherit; }
   #impresion, #impresion * { visibility: visible; }
   #impresion { position: absolute; inset: 0; }
 }
+
+/* Chat (E-023) · iPhone: Safari amplía la página al tocar un campo con letra de menos de 16 px y no la devuelve
+   (el usuario tenía que pellizcar para reducir cada poco). En móvil los campos van a 16 px; en escritorio, sin cambios. */
+@media (max-width: 1023px) {
+  input:not([type='checkbox']):not([type='radio']):not([type='range']), select, textarea { font-size: 16px !important; }
+}
+/* Nada puede ensanchar la página por los lados (lo ancho tiene su propio desplazamiento) */
+html, body { overflow-x: hidden; max-width: 100%; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
