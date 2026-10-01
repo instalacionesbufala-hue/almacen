@@ -42,7 +42,7 @@ export function PanelFirma({ lineas, equipo, receptor, obra, onFirmar, enPagina,
   const malo = !!email.trim() && !emailValido(email);
   const telMalo = !!telefono.trim() && !normalizarTelefono(telefono);
   const firmar = async () => {
-    if (!recoge) return toast('Elige qué técnico del equipo recoge y firma.', 'err');
+    if (!recoge) { document.getElementById('quien-recoge')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); return toast('Toca arriba el nombre del técnico que recoge y firma.', 'err'); }
     if (malo) return toast('El correo no es válido: corrígelo o déjalo vacío.', 'err');
     if (telMalo) return toast('El teléfono no es válido: 9 cifras o con el prefijo del país (+34 600 000 000).', 'err');
     setOcupado(true);
@@ -50,7 +50,7 @@ export function PanelFirma({ lineas, equipo, receptor, obra, onFirmar, enPagina,
   };
   return (<>
     <div className="p-4 lg:p-5 flex flex-col gap-4">
-      <div><div className={`${LBL} mb-1`}>Recoge y firma (técnico de {eqF?.nombre || 'el equipo'})</div>
+      <div id="quien-recoge" className={!recoge && firmantes.length > 1 ? 'rounded-xl ring-2 ring-amber-400 p-2 -m-2' : ''}><div className={`${LBL} mb-1`}>Recoge y firma (técnico de {eqF?.nombre || 'el equipo'}){!recoge && firmantes.length > 1 ? ' · toca un nombre' : ''}</div>
         {!firmantes.length ? <p className="text-body-sm text-error">El equipo no tiene técnicos asignados: asígnale alguno en Equipos y técnicos.</p>
           : <div className="flex flex-wrap gap-2">{firmantes.map(x => <button key={x.id} type="button" onClick={() => elegir(x.id)}
             className={`min-h-14 px-4 rounded-xl flex items-center gap-2 font-semibold ${recoge === x.id ? 'bg-primary text-white' : 'bg-surface-container-low hover:bg-surface-container'}`}>
@@ -64,6 +64,7 @@ export function PanelFirma({ lineas, equipo, receptor, obra, onFirmar, enPagina,
             {(h || (p && esPersonal(p))) ? <span className="block text-body-sm text-violet-800">Dotación personal de {t?.nombre || 'quien firme'}</span> : null}</span>
           <b className="text-headline-sm whitespace-nowrap">{h ? '1 ud' : p ? qtyTxt(p, l.qty) : num(l.qty)}</b></li>); })}</ul>
       {obra && <p className="text-body-sm">Obra: <b>{obra}</b></p>}
+      <details className="rounded-xl bg-surface-container-low px-4 py-3"><summary className="cursor-pointer font-semibold text-body-md">Enviar copia por WhatsApp o correo (opcional)</summary><div className="flex flex-col gap-4 mt-3">
       <Campo label={`WhatsApp de ${t?.nombre || 'quien recoge'} (para enviarle la copia y su enlace)`}>
         <input value={telefono} onChange={e => setTelefono(e.target.value)} type="tel" inputMode="tel" autoComplete="off" placeholder="600 000 000"
           className={`${INP} h-14 ${telMalo ? 'ring-2 ring-error' : ''}`} />
@@ -79,11 +80,12 @@ export function PanelFirma({ lineas, equipo, receptor, obra, onFirmar, enPagina,
             : 'Al firmar le llega el PDF de la entrega firmada.'}
         {!!email.trim() && modoNube && sinDominioResend(E.configAvisos.correoRemitente) && <span className="block text-amber-800">Aviso: sin dominio propio verificado en Resend, la copia solo llega al correo del administrador (guía, paso 8). Podrás compartir el PDF por WhatsApp o correo.</span>}</p>
       {firmantes.length > 1 && <label className="flex items-center gap-2 text-body-md"><input type="checkbox" checked={copiaEquipo} onChange={e => setCopiaEquipo(e.target.checked)} className="w-5 h-5 accent-primary" />Enviar la copia por correo también a los demás técnicos del equipo</label>}
+      </div></details>
       <div><div className={`${LBL} mb-1`}>Firma de {t?.nombre || 'quien recoge'}</div><Firma trazos={firma} onChange={setFirma} />
         <button onClick={() => setFirma([])} className="text-body-sm text-secondary mt-1 h-10">Borrar firma</button></div>
       <p className="text-body-sm text-secondary">Al firmar confirmas que recoges para {eqF?.nombre || 'el equipo'} este material revisado y completo.</p>
     </div>
-    {(() => { const b = <><button onClick={() => void firmar()} disabled={!firma.length || ocupado || malo || !recoge} className={`${BTN_P} w-full h-16 text-headline-sm`}><Icon n="check_circle" className="ico-fill" />{ocupado ? 'Firmando…' : 'Firmar y recibir'}</button>{extra}</>;
+    {(() => { const b = <><button onClick={() => void firmar()} disabled={!firma.length || ocupado} className={`${BTN_P} w-full h-16 text-headline-sm`}><Icon n="check_circle" className="ico-fill" />{ocupado ? 'Firmando…' : !firma.length ? 'Firma arriba para continuar' : 'Firmar y recibir'}</button>{extra}</>;
       return enPagina ? <div className="p-4 border-t border-surface-container flex flex-col gap-2">{b}</div> : <SheetFoot className="flex flex-col gap-2">{b}</SheetFoot>; })()}
   </>);
 }
@@ -179,9 +181,9 @@ function Recibo({ id }: { id: string }) {
     {firmada && <HistorialCopias e={e} />}
     <SheetFoot className="flex flex-wrap gap-2">
       <button onClick={closeModal} className={`${BTN_S} h-14 px-5`}>Cerrar</button>
-      <button onClick={() => void compartirJustificante(e).then(ok => { if (ok && firmada) ejecutar({ op: 'copiaEntrega', args: { id: nuevoId(), entrega: e.id, canal: 'compartir', destino: '' } }); })} className={`${BTN_S} h-14 px-4`}><Icon n="share" className="ico-20" />Compartir PDF</button>
+      <button onClick={() => void compartirJustificante(e).then(ok => { if (ok && firmada) ejecutar({ op: 'copiaEntrega', args: { id: nuevoId(), entrega: e.id, canal: 'compartir', destino: '' } }); })} className={`${BTN_P} h-16 w-full sm:w-auto sm:flex-1 text-headline-sm order-first`}><Icon n="share" className="ico-20" />Compartir PDF</button>
       <button onClick={() => void descargarJustificante(e)} className={`${BTN_S} h-14 px-4`}><Icon n="download" className="ico-20" />Descargar PDF</button>
-      <button onClick={() => print()} className={`${BTN_P} h-14 flex-1`}><Icon n="print" className="ico-20" />Imprimir</button>
+      <button onClick={() => print()} className={`${BTN_S} h-14 px-4`}><Icon n="print" className="ico-20" />Imprimir</button>
     </SheetFoot>
   </>);
 }
