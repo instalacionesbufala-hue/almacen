@@ -645,9 +645,55 @@ El administrador tiene que poder hacer estas tres cosas, y que queden reflejadas
 
 **Relación con E-021:** la referencia de los clavos (`HTTP://TAG.YT/ZESA7`, EAN 3439510575536) no admite foto por el SKU con `:` y `/`; lo resuelve E-021. Mientras tanto, el usuario puede cambiarle el SKU, por ejemplo a su EAN, y repetir la foto. Comprobar que ese cambio de código funciona con este artículo y que la foto que se quedó en la cola del móvil con la ruta antigua se descarta o se rehace sola.
 
+### E-023 · Cambiar el código de un artículo con EAN y zoom del iPhone · PENDIENTE (urgente, lo primero)
+**Fallos reales del usuario (01/10), con capturas.**
+
+**Los ficheros ya los ha subido el chat al repositorio** (la migración, la prueba y `src/estilos.css`). Code solo tiene que **aplicar la migración en Supabase** y hacer las revisiones de abajo. Si ves un `PUENTE-chat.md` o un `chat-e023.patch` en la carpeta del proyecto, bórralos: ya no hacen falta.
+
+**1. "duplicate key value violates unique constraint productos_ean_key" al cambiar TRY32-1-L10-P → 8900500020** (el paso que E-022 dejaba listo)
+- **Causa:** `cambiar_codigo_producto` (E-022) copia el EAN a la ficha nueva, reactivada o insertada, y **después** lo quita de la antigua. Como el EAN es `unique`, choca. Las pruebas de E-022 usaban artículos **sin EAN**; el Trydan del usuario **tiene EAN**. El código de E-016 tenía el mismo fallo en la rama de inserción.
+- **Arreglo ya escrito y probado por el chat:**
+  - migración `20261014000100_e023_cambiar_codigo_ean.sql`: mueve el EAN **antes**, y añade el disparador `_ean_unico` con un mensaje en español ("El EAN X ya lo tiene el artículo Y…") en lugar del texto técnico de Postgres;
+  - prueba `supabase/tests/e023.test.ts` con el caso del Trydan **con EAN**, el cambio a un código nuevo y el EAN repetido. **Sin la migración fallaba con el mismo error que vio el usuario; con ella pasa.** Pasan las 349 pruebas.
+- **Code:**
+  - **aplicar la migración en Supabase** (`npx supabase db push`) y confirmar que queda aplicada;
+  - revisar si `guardar_producto`, `importar_catalogo`, `fusionar_productos`, `restaurar_producto` y `deshacer_fusion` mueven el EAN con el mismo orden incorrecto, y corregirlo con prueba si es así;
+  - **revisar en producción, en solo lectura, la bandeja "Operaciones rechazadas" del administrador.** El usuario dice que ahí están los errores. Explicar cada uno en la respuesta, arreglar la causa si es de código y decir cuáles puede reintentar ya el usuario.
+
+**2. iPhone: hay que pellizcar para reducir la pantalla cada poco**
+- **Causa:** Safari en iOS **amplía la página al tocar un campo con letra de menos de 16 px** y no la devuelve. `INP` usa `text-body-md`, que son 14 px.
+- **Arreglo ya hecho por el chat en `src/estilos.css`:**
+  - en pantallas de menos de 1024 px, `input`, `select` y `textarea` van a 16 px;
+  - `overflow-x: hidden` en `html` y `body`;
+  - `text-size-adjust: 100%`.
+- **Code:**
+  - comprobar que no se descuadra nada en el móvil con los campos a 16 px;
+  - **buscar los elementos que ensanchan la página** (en la captura, la ficha del Trydan se salía por la derecha: "EN STOC…", "Cuadr…") y corregirlos con `min-w-0`, `flex-wrap` o `truncate`, para que con 375 px de ancho nada se salga;
+  - **no usar `maximum-scale=1` ni `user-scalable=no`**, para no impedir que el usuario amplíe si quiere.
+
+**3. Hecho cuando**
+- En producción, el usuario cambia TRY32-1-L10-P a 8900500020 desde el móvil y queda un solo artículo activo con sus 6 ud y su EAN.
+- En un iPhone (o en el modo móvil de 375 px) no hay desplazamiento horizontal ni zoom al tocar campos.
+
 ---
 
 ## Revisión del chat
+
+### 01/10/2026 · Revisión de E-019 a E-022 y fallos reales
+Verificado desde el chat sobre `6cc2aa2`:
+- **346 pruebas en verde**, `tsc` sin errores y build correcto.
+- El `.wasm` de ZXing va empaquetado, sin CDN.
+- Las decisiones distintas de E-022 (reactivar en lugar de renombrar) y de E-019 (carga progresiva) están bien razonadas.
+
+**Pendiente menor:** `src/features/escaner/texto.ts` carga **tesseract.js desde jsDelivr**. La lectura de texto de pegatinas no funciona sin cobertura la primera vez. Empaquetarlo como ZXing cuando se pueda (no urgente).
+
+**Fallos reales tras E-022:**
+- cambiar el código del Trydan con EAN;
+- zoom del iPhone.
+
+Van en **E-023**, con el arreglo ya escrito por el chat.
+
+**Orden: E-023.**
 
 ### 01/10/2026 · Chat: borrar, fusionar y cambiar código
 - **Lo que le ha pasado al usuario:** una referencia que reaparece tras borrarla, y un código ocupado por un artículo fusionado (archivado).
