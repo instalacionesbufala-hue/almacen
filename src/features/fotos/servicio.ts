@@ -4,16 +4,18 @@
    Cada foto se guarda primero en IndexedDB; la cola de subidas la envía al bucket cuando hay conexión. */
 import { useEffect, useState } from 'react';
 import type { Estado, OrigenFoto } from '../../data/tipos';
-import { BUCKET_FOTOS, fotoDe, rutasFoto } from '../../domain/fotos';
+import { BUCKET_FOTOS, destinoDeFoto, fotoDe, rutasFoto } from '../../domain/fotos';
 import { find } from '../../domain/reglas';
 import { ejecutar, S } from '../../store/almacen';
 import { crearStore } from '../../store/crear';
 import { supabase } from '../../store/nube/cliente';
-import { sesion } from '../../store/nube/sync';
+import { cola, descartarSinRecargar, sesion } from '../../store/nube/sync';
+import { motivoLegible } from '../../store/motivos';
+import { toast } from '../../ui/toast';
 import { aJpegDataUrl, comprimir } from './imagen';
 
 /* ---------- IndexedDB: archivos y cola de subidas ---------- */
-interface Subida { foto: string; mini: string; sku: string; retirar: string[]; ts: number; error?: string }
+interface Subida { foto: string; mini: string; sku: string; retirar: string[]; ts: number; error?: string; origen?: OrigenFoto }
 let bd: Promise<IDBDatabase> | null = null;
 function abrir(): Promise<IDBDatabase> {
   bd ??= new Promise((ok, ko) => {
@@ -107,7 +109,7 @@ export async function guardarFoto(sku: string, archivo: Blob, origen: OrigenFoto
   }
   if (supabase) {
     const retirar = anterior ? [anterior.foto, anterior.mini] : [];
-    await tx('subidas', 'readwrite', s => s.put({ foto: rutas.foto, mini: rutas.mini, sku, retirar, ts: Date.now() } satisfies Subida));
+    await tx('subidas', 'readwrite', s => s.put({ foto: rutas.foto, mini: rutas.mini, sku, retirar, ts: Date.now(), origen } satisfies Subida));
     await refrescarPendientes();
     void procesarSubidas();
   } else if (anterior) { await borrarArchivo(anterior.foto); await borrarArchivo(anterior.mini); }
@@ -130,7 +132,9 @@ export async function procesarSubidas(): Promise<void> {
   if (!supabase || subiendo || sesion.get().estado !== 'lista' || !navigator.onLine) return;
   subiendo = true;
   try {
-    for (const s of await listarSubidas()) {
+    for (const s0 of await listarSubidas()) {
+      // E-021: si al artículo se le ha cambiado el código (p. ej. tenía caracteres no válidos), la foto se rehace con el código nuevo
+      const s = await rehacerSiCambioDeCodigo(s0); if (!s) continue;
       let error: string | undefined;
       for (const ruta of [s.foto, s.mini]) {
         const b = await leerArchivo(ruta);
@@ -141,7 +145,8 @@ export async function procesarSubidas(): Promise<void> {
       }
       if (error) {
         if (/fetch|network|load failed/i.test(error)) break;                                  // sin cobertura: se reintenta luego
-        await tx('subidas', 'readwrite', st => st.put({ ...s, error }));
+        if (s.error !== motivoLegible(error)) toast(`La foto de ${s.sku} no se ha podido subir. ${motivoLegible(error)}`, 'warn', 9000);
+        await tx('subidas', 'readwrite', st => st.put({ ...s, error: motivoLegible(error) }));
         continue;
       }
       await tx('subidas', 'readwrite', st => st.delete(s.foto));
@@ -149,6 +154,27 @@ export async function procesarSubidas(): Promise<void> {
       if (s.retirar.length) void supabase.storage.from(BUCKET_FOTOS).remove(s.retirar);      // foto sustituida (solo el administrador puede)
     }
   } finally { subiendo = false; await refrescarPendientes(); }
+}
+
+/** Si el artículo de una foto en cola ya no tiene ese código (se cambió o se fusionó), copia la foto a la carpeta del código nuevo,
+    vuelve a registrar la foto con ese código y descarta el registro rechazado del código antiguo. null si el artículo ya no existe. */
+async function rehacerSiCambioDeCodigo(s: Subida): Promise<Subida | null> {
+  const E = S(), destino = destinoDeFoto(E, s.sku), p = destino ? E.products.find(x => x.sku === destino) : undefined;
+  if (!p) {
+    if (E.products.length) { await tx('subidas', 'readwrite', st => st.delete(s.foto)); await borrarArchivo(s.foto); await borrarArchivo(s.mini); }
+    return null;
+  }
+  if (p.sku === s.sku) return s;
+  const g = await leerArchivo(s.foto), m = await leerArchivo(s.mini);
+  if (!g || !m) return s;
+  const r = rutasFoto(p.sku, s.foto.endsWith('.jpg') ? 'jpg' : 'webp');
+  await guardarArchivo(r.foto, g); await guardarArchivo(r.mini, m);
+  const nueva: Subida = { ...s, foto: r.foto, mini: r.mini, sku: p.sku, error: undefined };
+  await tx('subidas', 'readwrite', st => st.put(nueva));
+  await tx('subidas', 'readwrite', st => st.delete(s.foto)); await borrarArchivo(s.foto); await borrarArchivo(s.mini);
+  if (!p.foto) ejecutar({ op: 'foto', args: { sku: p.sku, foto: r.foto, mini: r.mini, origen: s.origen || 'propia' } });
+  cola.get().forEach((it, i) => { if (it.estado === 'rechazada' && it.op.op === 'foto' && it.op.args.sku === s.sku) descartarSinRecargar(i); });
+  return nueva;
 }
 
 let iniciado = false;

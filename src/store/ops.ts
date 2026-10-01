@@ -12,7 +12,8 @@ import { normalizarTelefono } from '../domain/whatsapp';
 import { EQUIVALENCIAS_PROPUESTA, KITS_PROPUESTA, registrarCierreLocal, sincronizarCierreLocal, type Cierre, type LineaTraducida } from '../domain/cierres';
 import { cambiarCodigoLocal, fusionarLocal, reasignarLineaLocal } from '../domain/fichas';
 import { ajustarLocal, previsionAjuste } from '../domain/ajuste';
-import { asociarLocal, quitarCodigoLocal, type TipoCodigo } from '../domain/codigos';
+import { asociarLocal, motivoSkuNoValido, quitarCodigoLocal, type TipoCodigo } from '../domain/codigos';
+const exigirSku = (sku: string) => { const m = motivoSkuNoValido(sku); if (m) throw new Error(m); };
 import { uid } from '../domain/formato';
 
 export interface OpMovimiento { id: string; sku: string; tipo: TipoMov; qty: number; motivo: string; ref: string; series: string[]; equipo?: string; vehiculo?: string }
@@ -153,6 +154,7 @@ export const OPS: Defs = {
     local: (S, { producto: p, nuevo, stockInicial }) => {
       const actual = find(S, p.sku);
       if (nuevo && actual) throw new Error(`Ya existe una referencia con el SKU ${p.sku}`);
+      if (!actual) { exigirSku(p.sku); const alt = S.codigos.find(c => c.codigo.replace(/s/g, '').toUpperCase() === p.sku.toUpperCase()); if (alt) throw new Error(`El código ${p.sku} ya está asociado a ${find(S, alt.sku)?.name || alt.sku} (${alt.sku}) como código alternativo`); }                                     // E-021: los antiguos no válidos se pueden editar hasta cambiarles el código
       if (formatoEntero(p) && stockInicial !== Math.trunc(stockInicial)) throw new Error(`El stock inicial de ${p.name} va en ${p.unit} enteros`);
       if (actual) {
         // E-015: completar (aprobar) un borrador mete su stock inicial (la app lo envía precargado con lo que contó el almacén)
@@ -499,6 +501,7 @@ export const OPS: Defs = {
       if (S.rol !== 'admin') throw new Error('Solo el administrador importa el catálogo');
       for (const f of a.filas) {
         const sku = f.sku.trim().toUpperCase(); if (!sku) throw new Error('Hay una fila sin SKU');
+        if (!find(S, sku)) exigirSku(sku);
         const prop = f.propiedad === 'custodia' ? S.propietarios.find(o => o.id.toUpperCase() === f.propietario.trim().toUpperCase() || o.nombre.toLowerCase() === f.propietario.trim().toLowerCase())?.id : undefined;
         if (f.propiedad === 'custodia' && !prop) throw new Error(`Propietario desconocido en ${sku}: ${f.propietario}`);
         const contenido = f.unidad === 'm' || f.unidad === 'ud' ? 1 : f.contenido || 1;
@@ -570,6 +573,7 @@ export const OPS: Defs = {
       const code = (v?: string) => String(v || '').toUpperCase();
       const otro = S.products.find(x => x.sku === code(p.sku) || (p.ean && x.ean === p.ean) || (p.supplierRef && code(x.supplierRef) === code(p.supplierRef)));
       if (otro) throw new Error(`Ya existe una referencia con ese código: ${otro.sku} (${otro.name})`);
+      exigirSku(code(p.sku));
       if (!p.name.trim()) throw new Error('Indica el nombre del artículo');
       if (formatoEntero(p) && stockInicial !== Math.trunc(stockInicial)) throw new Error(`El stock inicial va en ${p.unit} enteros`);
       S.products.push({ ...p, sku: code(p.sku), stock: 0, min: 0, minimoDefinido: false, borrador: true, stockPropuesto: stockInicial, propuestoPor: S.operator });
@@ -584,6 +588,7 @@ export const OPS: Defs = {
     local: (S, a) => {
       const sku = (a.sku || (a.ean ? 'BORR-' + a.ean : '')).trim().toUpperCase();
       if (!sku) throw new Error('Escanea o escribe el código');
+      exigirSku(sku);
       if (S.products.some(p => p.sku === sku || (a.ean && p.ean === a.ean))) throw new Error('Ya existe una referencia con ese código');
       S.products.push({ sku, ean: a.ean || undefined, name: a.nombre.trim() || `Borrador ${sku}`, cat: a.cat, unit: 'ud', stock: 0, min: 0, minimoDefinido: false, supplier: '', borrador: true });
     },

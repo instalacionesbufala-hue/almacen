@@ -7,6 +7,7 @@ import { crearStore } from '../crear';
 import { aplicarLocal, descripcion, rpcDe, type Op } from '../ops';
 import { aEstado, COLUMNAS, TABLAS, type Tablas } from './mapeo';
 import { supabase } from './cliente';
+import { motivoLegible } from '../motivos';
 
 export interface Perfil { id: string; nombre: string; email: string | null; rol: 'admin' | 'almacen'; activo: boolean }
 export interface Sesion { estado: 'cargando' | 'sin-sesion' | 'lista'; perfil?: Perfil; error?: string; conexion: 'en-linea' | 'sin-conexion'; ultimaCarga?: number }
@@ -31,6 +32,8 @@ export function encolar(op: Op) {
   guardarCola(); void procesarCola();
 }
 export function descartar(i: number) { cola.get().splice(i, 1); guardarCola(); void recargar(); }
+/** Quita de la cola una operación rechazada que ya no hace falta (sin recargar). Marca y limpia para no mover los índices mientras se recorre. */
+export function descartarSinRecargar(i: number) { const it = cola.get()[i]; if (it) (it as ItemCola & { hecho?: boolean }).hecho = true; queueMicrotask(() => { cola.set(cola.get().filter(x => !(x as ItemCola & { hecho?: boolean }).hecho)); guardarCola(); }); }
 export function reintentar(i: number) { const it = cola.get()[i]; if (it) { it.estado = 'pendiente'; it.motivo = undefined; guardarCola(); void procesarCola(); } }
 
 let procesando = false;
@@ -45,8 +48,8 @@ export async function procesarCola(): Promise<void> {
       const { error, status } = await supabase.rpc(fn, args);
       if (error) {
         if (esErrorDeRed(status, error.message)) { marcarConexion(false); break; }
-        it.estado = 'rechazada'; it.motivo = error.message; hubo = true;
-        avisar(`El servidor ha rechazado: ${it.desc}. Motivo: ${error.message}`, 'err');
+        it.estado = 'rechazada'; it.motivo = motivoLegible(error.message); hubo = true;
+        avisar(`No se ha guardado: ${it.desc}. ${it.motivo} El cambio se ha deshecho en pantalla.`, 'err');
       } else { it.estado = 'pendiente'; (it as ItemCola & { hecho?: boolean }).hecho = true; hubo = true; marcarConexion(true); }
       guardarCola();
     }

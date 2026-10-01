@@ -32,9 +32,17 @@ export function permisoFoto(S: Pick<Estado, 'products'>, rol: Rol, p: Producto):
   return { poner: !tiene, sustituir: tiene && admin, quitar: tiene && admin };
 }
 
-/** Rutas nuevas en el bucket: productos/<SKU>/<marca>.webp y su miniatura. La marca evita cachés viejas al sustituir */
+/** E-021: carpeta de las fotos de un SKU. Lo que no sea A-Z0-9._- va como !HH (cada byte UTF-8), igual que _clave_sku() en el servidor.
+    Para un SKU válido es el propio SKU, así que las fotos ya subidas no cambian de ruta. */
+export function claveSku(sku: string): string {
+  let r = '';
+  for (const c of sku.toUpperCase()) r += /^[A-Z0-9._-]$/.test(c) ? c : [...new TextEncoder().encode(c)].map(b => '!' + b.toString(16).toUpperCase().padStart(2, '0')).join('');
+  return r;
+}
+
+/** Rutas nuevas en el bucket: productos/<clave del SKU>/<marca>.webp y su miniatura. La marca evita cachés viejas al sustituir */
 export function rutasFoto(sku: string, ext: 'webp' | 'jpg', marca = Date.now().toString(36)): { foto: string; mini: string } {
-  const base = `productos/${sku.toUpperCase()}/${marca.replace(/[^A-Za-z0-9_]/g, '')}`;
+  const base = `productos/${claveSku(sku)}/${marca.replace(/[^A-Za-z0-9_]/g, '')}`;
   return { foto: `${base}.${ext}`, mini: `${base}-mini.${ext}` };
 }
 
@@ -81,4 +89,17 @@ export function planImportacion(archivos: { name: string; type?: string }[], S: 
 export function medidas(ancho: number, alto: number, max: number): { w: number; h: number } {
   const k = Math.min(1, max / Math.max(ancho, alto, 1));
   return { w: Math.max(1, Math.round(ancho * k)), h: Math.max(1, Math.round(alto * k)) };
+}
+
+/** E-021: artículo al que va una foto que esperaba en la cola: el mismo SKU o, si se le cambió el código o se fusionó, el que lo sustituye.
+    null si ya no existe. */
+export function destinoDeFoto(S: Pick<Estado, 'products' | 'archivados'>, sku: string): string | null {
+  let actual = sku;
+  for (let i = 0; i < 6; i++) {
+    if (S.products.some(p => p.sku === actual)) return actual;
+    const a = S.archivados?.find(p => p.sku === actual);
+    if (!a?.fusionadoEn) return null;
+    actual = a.fusionadoEn;
+  }
+  return null;
 }

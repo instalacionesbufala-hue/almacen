@@ -18,7 +18,7 @@ import { nuevoId } from '../../store/ops';
 import type { CatId } from '../../data/tipos';
 import { comprobarFusion, diferencias } from '../../domain/fichas';
 import { avisoStockInicial, previsionAjuste } from '../../domain/ajuste';
-import { skuPropuesto } from '../../domain/codigos';
+import { motivoSkuNoValido, skuPropuesto, skuValido } from '../../domain/codigos';
 import { CodigosFicha } from './codigos';
 
 /* ---------- Fila de movimiento ---------- */
@@ -266,6 +266,7 @@ function FormProducto({ sku, preset, onCreado, modo, propuesta }: { sku?: string
     const E = S(), code = f.sku.trim().toUpperCase(), name = f.name.trim();
     if (!code || !name) return toast('El SKU y el nombre son obligatorios.', 'err');
     if ((!p || code !== p.sku) && find(E, code)) return toast(`Ya existe una referencia con el SKU ${code}.`, 'err');
+    if (!p || code !== p.sku) { const malo = motivoSkuNoValido(code); if (malo) return toast(malo, 'err', 7000); }
     const n = { contenido: conContenido ? toNum(f.contenido) : 1, min: f.min.trim() === '' ? 0 : toNum(f.min), stock: toNum(f.stock) || 0 };
     if (!(n.contenido > 0)) return toast('Indica cuántas unidades trae cada formato (bote de 1000 → 1000).', 'err');
     if (!(n.min >= 0) || !(n.stock >= 0)) return toast('Revisa los números: no pueden ser negativos.', 'err');
@@ -287,6 +288,8 @@ function FormProducto({ sku, preset, onCreado, modo, propuesta }: { sku?: string
     if (p && code !== p.sku) {
       if (!confirm(`¿Cambiar el código de ${p.sku} a ${code}? El historial y las entregas firmadas conservan el código antiguo; buscarlo llevará al nuevo.`)) return;
       if (!ejecutar({ op: 'cambiarCodigo', args: { sku: p.sku, nuevo: code } })) return;
+      // E-021: si el código antiguo no era válido (la URL de un QR…), queda como código alternativo: escanearlo abre el artículo
+      if (!skuValido(p.sku)) ejecutar({ op: 'asociarCodigo', args: { codigo: p.sku, sku: code, tipo: /^HTTP/i.test(p.sku) ? 'QR' : 'otro' } });
     }
     if (!ejecutar({ op: 'producto', args: { producto: obj, nuevo: !p, stockInicial: p && !p.borrador ? 0 : n.stock } })) return;
     if (modo === 'revisar' && propuesta) ejecutar({ op: 'resolverPropuesta', args: { id: propuesta, aplicada: true } });

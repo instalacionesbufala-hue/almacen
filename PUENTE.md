@@ -576,7 +576,7 @@ Los artículos tienen el **código de Saltoki** como SKU, pero las cajas traen e
 - Asociar un EAN a un artículo hace que el siguiente escaneo lo abra directamente.
 - Hay pruebas de: lector multiformato con fixtures, prioridad BUF y código de barras frente a URL ajena, asociación (alta, duplicado rechazado, borrado), y firma sin teléfono ni correo.
 
-### E-021 · No se puede guardar la foto de un artículo creado desde un código raro · PENDIENTE (urgente, junto a E-020)
+### E-021 · No se puede guardar la foto de un artículo creado desde un código raro · HECHO
 **Qué le ha pasado al usuario (01/10, desde el iPhone):** creó un artículo con la cámara desde un código "desconocido" y al guardar la foto salió **"Ruta de la foto no válida"**.
 
 **Causa:**
@@ -1664,3 +1664,50 @@ En "Para el día a día" se explican el ajuste y el aviso.
 - el lector lee las fixtures cargando el `.wasm` desde la propia app;
 - escribo el código 3439510575536 → "Es un artículo que ya tengo" → manguera 5G6 → al volver a leerlo sale **IDENTIFICADO**.
 - **Pendiente:** probar en el iPhone del usuario con las cajas reales. El navegador de pruebas no tiene cámara.
+
+### 01/10/2026 · E-021 · HECHO
+**1. Formato de SKU:** `A-Z`, `0-9`, `-`, `_` y `.`, de 2 a 40 caracteres.
+- **App** (`motivoSkuNoValido` en `src/domain/codigos.ts`): lo comprueban el alta a mano, el borrador, el alta con cámara, la importación y el cambio de código. El mensaje dice qué caracteres sobran.
+- **Servidor** (migración `20261012000100_e021_sku_valido_fotos.sql`, **aplicada**): disparador en `productos` al insertar o cambiar el SKU, que vale para todas las funciones.
+  - El antiguo no válido se puede seguir editando hasta que se le cambia el código.
+  - **También rechaza** un SKU que ya es el código alternativo (E-020) de otro artículo. Lo encontré probando.
+  - Si es un código alternativo del mismo artículo, pasa a ser su SKU (`cambiar_codigo_producto` lo quita de alternativos).
+
+**2. Crear desde un código que no sirve como SKU** (una URL, por ejemplo):
+- la app propone un **SKU interno correlativo `BF-000001`** (`skuPropuesto` / `siguienteSkuInterno`), que se puede cambiar;
+- el código leído se guarda como **código alternativo**, así que el siguiente escaneo abre el artículo;
+- esto vale en "Crear a mano", en el borrador y en el alta con cámara, donde la URL ya no se usa ni como SKU ni como referencia;
+- un EAN de solo dígitos sí puede ser el SKU.
+
+**3. Carpeta de las fotos:** se usa una clave derivada del SKU. Lo que no es `A-Z0-9._-` va como `!HH` (cada byte en UTF-8, reversible).
+- Está tanto en la app (`claveSku` / `rutasFoto`) como en el servidor (`_clave_sku`).
+- `_sku_de_ruta()` busca el artículo por esa clave, así que `puede_subir_foto` y `poner_foto` no cambian.
+- Para un SKU válido la clave es el propio SKU: **las fotos ya subidas no cambian de ruta**.
+- **Decisión:** `!` está entre los caracteres que admite Storage y nunca aparece en un SKU válido.
+
+**4. Reparar lo que ya existe**
+- En producción, solo lectura, **solo hay uno**: `HTTP://TAG.YT/ZESA7` (los clavos).
+- Sale en la bandeja del administrador en **"Código no válido: cámbialo"** con **Editar** (también cuenta en el número de la bandeja). El servidor ofrece `skus_no_validos()`.
+- Al cambiarle el código, el antiguo queda como **código alternativo**, y escanear el QR del fabricante sigue abriendo el artículo.
+- **No he tocado datos reales.** Ahora el usuario puede cambiarle el código, por ejemplo a su EAN `3439510575536`, desde la bandeja. También podría ponerle la foto sin cambiarlo, porque la carpeta ya es segura.
+
+**5. Mensajes y cola de fotos**
+- `src/store/motivos.ts` traduce los errores técnicos ("Ruta de la foto no válida", RLS de Storage, claves duplicadas, FK, permisos o sesión caducada) a lenguaje normal. Lo usan la cola de operaciones y la de fotos.
+- **Cola de fotos:** si el artículo de una foto en cola ya no tiene ese código (se cambió o se fusionó), `destinoDeFoto`:
+  - copia la foto a la carpeta del código nuevo;
+  - la vuelve a registrar con ese código;
+  - descarta el registro rechazado del código antiguo.
+  Así se reintenta sola.
+
+**Pruebas:** 330 en verde.
+- `supabase/tests/e021.test.ts` (4):
+  - SKU con URL, espacios o corto rechazado en el alta, la importación y el cambio de código;
+  - SKU igual al código alternativo de otro, rechazado;
+  - foto de `SAL.DIF-40`;
+  - artículo antiguo con URL: la ruta antigua falla y la clave segura funciona; aparece en la lista, se repara y el código antiguo queda como alternativo;
+  - cambio al código alternativo propio.
+- `src/domain/sku.test.ts` (5): clave igual que en el servidor, validación en todas las altas, reparación y destino de la foto en cola, y mensajes.
+- `codigos.test.ts`: alta desde la URL con `BF-000001` y código alternativo.
+
+**En el navegador (demostración):** artículo con SKU `HTTP://TAG.YT/ZESA7` → bandeja "Código no válido: cámbialo" → Editar → `3439510575536` → stock 6 en el nuevo, el antiguo archivado y la URL como código alternativo.
+- **Pendiente:** crear un artículo con la cámara en el iPhone y guardar su foto.
