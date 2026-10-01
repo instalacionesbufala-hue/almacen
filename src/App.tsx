@@ -40,7 +40,7 @@ export default function App() {
     <Sidebar vista={vista} />
     <CabeceraEscritorio />
     <CabeceraMovil vista={vista} />
-    <main className="lg:pl-72 lg:pt-16 pb-28 lg:pb-10 min-h-screen"><Pantalla key={vista} /></main>
+    <main className="lg:pl-72 lg:pt-16 pb-[calc(9rem+env(safe-area-inset-bottom))] lg:pb-10 min-h-screen"><Pantalla key={vista} /></main>
     <BarraInferior vista={vista} />
     <ModalHost />
     <VisorHost />
