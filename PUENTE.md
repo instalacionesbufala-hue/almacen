@@ -893,9 +893,45 @@ Una tabla con una fila por apartado y casillas **Ver** y **Modificar**, en lengu
 - Hay pruebas de: solo lectura que intenta registrar un movimiento, una entrega, un ajuste, un recuento o editar un artículo, y el **servidor lo rechaza**; un rol propio con "Ver custodia" sin "Modificar"; quitar "Ver" oculta y bloquea la lectura; no se puede borrar un rol en uso; siempre queda un administrador.
 - El usuario de dirección entra y ve todo sin ningún botón de modificar.
 
+### E-028 · Permisos: denegar por defecto a los roles que no son de almacén · PENDIENTE (pequeño)
+**Revisión del chat de E-027.** Si una función que escribe **no está en `permisos_funcion`**, `perfil_actual()` la deja pasar (`v_perm is null`), también para **Solo lectura** y para los roles propios. La prueba de cobertura lo evita hoy, pero si algún día falta una, ese hueco permitiría escribir a dirección.
+- **Qué hacer:** si `v_perm is null` y el rol **no** es `admin` ni `almacen`, **rechazar**: "Esta acción no tiene permiso asignado: avisa al administrador". `almacen` mantiene su comportamiento actual.
+- **Comprobar** que ninguna lectura por RPC de Solo lectura se rompe; la prueba de cobertura ya exige que estén todas registradas.
+- **Prueba:** una función de prueba sin registrar llamada por Solo lectura se rechaza, y por Almacén pasa.
+
 ---
 
 ## Revisión del chat
+
+### 03/10/2026 · Revisión de E-025, E-026 y E-027
+Verificado desde el chat sobre `643ebd7`:
+- **427 pruebas en verde** (187 de la app y 240 de la base de datos), `tsc -b` sin errores y build correcto.
+
+**E-026: bien.**
+- La clave `inst:<numInst>` con versiones, y guardar por separado lo del wizard y lo de Holded, resuelven los duplicados.
+- "A bordo al procesar" con los dos casos reales.
+- Reglas H1-H6, más `22`, que es un buen añadido.
+
+**Guía del Apps Script:** el aviso de Code era correcto. El chat sube ahora la **versión completa** a `docs/apps-script-almacen.gs`:
+- el modelo del cargador desde "🔗 ESBRAIN";
+- la carga única `cargarHistoricoRegistro` con cabeceras en la fila 2;
+- `origen: 'historico'`;
+- `materialEspecial`.
+
+Es la que tiene el usuario en su Apps Script.
+
+**E-025: bien.**
+
+**E-027: bien.** La comprobación centralizada con `PG_CONTEXT` y la prueba de cobertura son una buena solución. Una mejora pequeña va en **E-028**: denegar por defecto a los roles que no son de almacén.
+
+**Pendiente del usuario:**
+- lanzar `cargarHistoricoRegistro` (una vez);
+- el lunes, el recuento de las 3 furgonetas;
+- pasar el usuario de dirección a Solo lectura.
+
+**Lo siguiente del chat:** la función del Apps Script que envía la prefactura al aprobarla en Holded (E-026 §4).
+
+**Orden: E-028.**
 
 ### 02/10/2026 · Chat: conexión del wizard y siguiente paso
 - **Cierres en directo:** desde hoy, `procesarEnvio_` → `enviarAlAlmacen(datos)`. Los 2 cierres de hoy se procesaron antes de añadir la línea.
