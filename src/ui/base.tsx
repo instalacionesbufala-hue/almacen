@@ -4,6 +4,8 @@ import type { EstadoEquipo, Producto, Semaforo, TipoMov } from '../data/tipos';
 import { status } from '../domain/reglas';
 import { initials } from '../domain/formato';
 import { FotoProducto } from './foto';
+import { useAlmacen } from '../store/almacen';
+import { colorSocio, socioDe } from '../domain/socios';
 
 export const CARD = 'bg-surface-container-lowest rounded-xl shadow-sm';
 const BTN = 'inline-flex items-center justify-center gap-2 rounded-lg font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed';
@@ -51,9 +53,13 @@ export function Pill({ p, short }: { p: Pick<Producto, 'stock' | 'min'>; short?:
 /** Miniatura del artículo: su foto (E-009) o, si no tiene, el icono de la categoría */
 export const Tile = ({ p, size = 'w-12 h-12' }: { p: Producto; size?: string }) => <FotoProducto p={p} size={size} alerta={status(p) === 'red'} />;
 
-/** E-008: etiqueta visible del material que no es nuestro */
-export const TagCustodia = ({ p, nombre = 'Esmove' }: { p: Pick<Producto, 'propiedad'>; nombre?: string }) =>
-  p.propiedad === 'custodia' ? <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded font-mono text-label-sm bg-violet-100 text-violet-800 whitespace-nowrap"><span className="material-symbols-outlined ico-16" aria-hidden="true">handshake</span>Custodia {nombre}</span> : null;
+/** E-008 / E-024: etiqueta visible del material que no es nuestro, con el nombre y el color de su socio */
+export function TagCustodia({ p }: { p: Pick<Producto, 'propiedad' | 'propietario'> }) {
+  const E = useAlmacen();
+  if (p.propiedad !== 'custodia') return null;
+  const o = socioDe(E, p);
+  return <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded font-mono text-label-sm whitespace-nowrap ${colorSocio(o).c}`}><span className="material-symbols-outlined ico-16" aria-hidden="true">handshake</span>Custodia {o?.nombre || p.propietario || 'de otro socio'}</span>;
+}
 
 export const Tag = ({ children, c = 'bg-surface-container-high text-secondary' }: { children: ReactNode; c?: string }) =>
   <span className={`inline-flex items-center px-2 py-0.5 rounded font-mono text-label-sm ${c}`}>{children}</span>;
@@ -66,7 +72,18 @@ export function FirmaImg({ f, className = 'h-10 w-28' }: { f: string; className?
   return <svg viewBox="0 0 128 50" className={className} aria-label="Firma"><path d={f || ''} fill="none" stroke="#0037b0" strokeWidth="2.4" strokeLinecap="round" /></svg>;
 }
 
-export function Kpi(k: { icon: string; iconC: string; badge: ReactNode; badgeC: string; value: ReactNode; valueC?: string; label: string; foot: string; footVal: string; footC?: string; bar: number; barC: string; onClick?: () => void }) {
+/** Recuadro de cifras. Con `pie`, el pie lleva sus propios botones (p. ej. uno por socio de custodia) y el recuadro deja de ser un único botón. */
+export function Kpi(k: { icon: string; iconC: string; badge: ReactNode; badgeC: string; value: ReactNode; valueC?: string; label: string; foot: string; footVal: string; footC?: string; bar: number; barC: string; onClick?: () => void; pie?: ReactNode }) {
+  const barra = <div className="w-full bg-surface-container-high h-1 rounded-full mt-1.5 overflow-hidden"><div className={`${k.barC} h-full rounded-full`} style={{ width: `${Math.max(0, Math.min(100, k.bar))}%` }} /></div>;
+  if (k.pie) return (
+    <div className={`p-space-md ${CARD} hover:shadow-md transition-shadow flex flex-col`}>
+      <button onClick={k.onClick} className="text-left">
+        <div className="flex justify-between items-start mb-space-sm"><div className={`p-2 rounded-lg ${k.iconC}`}><Icon n={k.icon} /></div><span className={`inline-flex items-center gap-1 font-mono text-label-sm px-2 py-0.5 rounded-full ${k.badgeC}`}>{k.badge}</span></div>
+        <div className={`text-headline-xl-mobile xl:text-headline-xl font-bold tracking-tight ${k.valueC || 'text-on-surface'}`}>{k.value}</div>
+        <div className="text-body-md text-secondary font-medium">{k.label}</div>
+      </button>
+      <div className="mt-space-sm">{k.pie}</div>{barra}
+    </div>);
   return (
     <button onClick={k.onClick} className={`text-left p-space-md ${CARD} hover:shadow-md transition-shadow`}>
       <div className="flex justify-between items-start mb-space-sm">

@@ -131,7 +131,7 @@ describe('borrado de la demostración e importación del catálogo', () => {
     for (const t of ['productos', 'movimientos', 'entregas', 'equipos', 'tecnicos', 'vehiculos', 'dotacion', 'stock_vehiculo', 'asignaciones_vehiculo'])
       expect(await valor(db, `select count(*)::int from ${t}`)).toBe(0);
     expect(await valor(db, 'select count(*)::int from perfiles')).toBeGreaterThan(0);          // los usuarios se quedan
-    expect(await valor(db, 'select count(*)::int from propietarios')).toBe(1);                  // Esmove se queda
+    expect(await valor(db, 'select count(*)::int from propietarios')).toBe(2);                  // los socios (Esmove e Instant Box) se quedan
     expect(await valor(db, 'select modo_demo from config_app')).toBe(false);
     expect(await falla(db, 'select limpiar_demostracion()')).toMatch(/ya se borraron/);
   });

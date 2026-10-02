@@ -99,3 +99,48 @@ export function normalizarRespuesta(raw: unknown, cat: ItemCatalogo[]): AlbaranL
   }).filter(l => l.descripcion || l.codigo);
   return { proveedor: String(r?.proveedor ?? ''), cif: String(r?.cif ?? ''), numero: String(r?.numero ?? ''), fecha: String(r?.fecha ?? ''), bultos: r?.bultos ? Number(r.bultos) : undefined, lineas };
 }
+
+/* ---------- E-024 · Albaranes de varias páginas ---------- */
+/** Instrucciones extra cuando se envían varias páginas del mismo albarán en una sola llamada */
+export const PROMPT_PAGINAS = (n: number) => `
+Las ${n} imágenes o páginas que se adjuntan son hojas CONSECUTIVAS de UN SOLO albarán, en orden.
+Devuelve una sola cabecera (proveedor, CIF, número y fecha) y cada línea de material UNA sola vez.
+No copies las líneas de "suma y sigue", "suma anterior", subtotales, totales, cabeceras repetidas ni pies de página.`;
+
+/** Líneas que no son material: arrastres de "suma y sigue", subtotales y totales que repiten importes de otra hoja */
+export function esLineaDeArrastre(l: Pick<LineaLeida, 'codigo' | 'descripcion'>): boolean {
+  const d = norm(l.descripcion).replace(/[.:·]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (/suma y sigue|suma anterior|sigue a la vuelta|viene de la hoja|pasa a la hoja|continua en la hoja|continuacion hoja/.test(d)) return true;
+  return !l.codigo && /^(sub ?total|total|base imponible|importe total|iva\b|total albaran|total pagina)/.test(d);
+}
+
+const claveLinea = (l: LineaLeida) => `${String(l.codigo).replace(/\s/g, '').toUpperCase()}|${norm(l.descripcion).replace(/\s+/g, ' ').trim()}|${l.cantidad}`;
+
+/** Une las lecturas de varios lotes de páginas del mismo albarán: una cabecera (la primera que tenga cada dato),
+    sin arrastres de "suma y sigue" y sin repetir una línea idéntica que salga en dos lotes (la misma hoja fotografiada dos veces). */
+export function unirAlbaranes(partes: AlbaranLeido[]): AlbaranLeido & { avisos: string[] } {
+  const prim = <K extends 'proveedor' | 'cif' | 'numero' | 'fecha'>(k: K) => partes.map(p => String(p[k] || '').trim()).find(Boolean) || '';
+  const avisos: string[] = [];
+  const numeros = [...new Set(partes.map(p => String(p.numero || '').trim()).filter(Boolean))];
+  if (numeros.length > 1) avisos.push(`Las páginas traen números de albarán distintos (${numeros.join(', ')}): comprueba que son del mismo albarán.`);
+  const vistas = new Map<string, number>(), lineas: LineaLeida[] = [];
+  partes.forEach((p, k) => {
+    const deEsta = new Set<string>();
+    for (const l of p.lineas) {
+      if (esLineaDeArrastre(l)) continue;
+      const c = claveLinea(l);
+      const antes = vistas.get(c);
+      if (antes !== undefined && antes !== k && !deEsta.has(c)) {
+        const x = lineas.find(y => claveLinea(y) === c);
+        if (x && !/también en otra hoja/.test(x.nota)) x.nota = [x.nota, 'aparecía también en otra hoja: si eran dos, añádela a mano'].filter(Boolean).join(' · ');
+        continue;
+      }
+      vistas.set(c, k); deEsta.add(c); lineas.push(l);
+    }
+  });
+  const bultos = partes.map(p => p.bultos).find(b => b && b > 0);
+  return { proveedor: prim('proveedor'), cif: prim('cif'), numero: prim('numero'), fecha: prim('fecha'), bultos, lineas, avisos };
+}
+/** Un PDF puede traer varias páginas del mismo albarán */
+export const PROMPT_PDF = `
+Si el documento tiene varias páginas, son hojas consecutivas del mismo albarán: una sola cabecera y cada línea una vez, sin "suma y sigue", subtotales ni totales.`;

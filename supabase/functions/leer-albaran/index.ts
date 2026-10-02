@@ -1,11 +1,11 @@
 // Función de servidor "leer-albaran" (Supabase Edge Function, Deno) · E-003
-// Recibe la foto o el PDF de un albarán, se lo pasa a Gemini (capa gratuita) con el catálogo y devuelve las líneas
+// Recibe la foto o el PDF de un albarán (E-024: o varias páginas: varias fotos y/o PDF en el campo "archivo"), se lo pasa a Gemini (capa gratuita) con el catálogo y devuelve las líneas
 // emparejadas con su SKU y su confianza. La clave GEMINI_API_KEY solo existe aquí (Supabase → Edge Functions → Secrets).
 // Nada entra en stock desde aquí: la app enseña la propuesta y el usuario confirma.
 // Aviso (revisión del chat): en el nivel gratuito, Google puede usar el contenido enviado para mejorar sus productos.
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { conCors, json } from '../_compartido/validar.ts';
-import { construirPrompt, ESQUEMA_RESPUESTA, normalizarRespuesta, type ItemCatalogo } from '../_compartido/albaran.ts';
+import { construirPrompt, ESQUEMA_RESPUESTA, normalizarRespuesta, PROMPT_PAGINAS, PROMPT_PDF, unirAlbaranes, type ItemCatalogo } from '../_compartido/albaran.ts';
 import { base64, llamarGemini } from '../_compartido/gemini.ts';
 
 const URL = Deno.env.get('SUPABASE_URL')!;
@@ -15,6 +15,9 @@ const CLAVE = Deno.env.get('GEMINI_API_KEY') || '';
 const MODELO = Deno.env.get('GEMINI_MODELO') || 'gemini-flash-latest';
 const RESERVA = Deno.env.get('GEMINI_MODELO_RESERVA') || 'gemini-3.5-flash-lite';  // más ligero, para cuando el principal está saturado
 const MAX_BYTES = 10 * 1024 * 1024;
+// E-024: varias páginas en una llamada (la app las comprime a ~1600 px y, si son muchas, las manda en lotes)
+const MAX_PAGINAS = 10, MAX_TOTAL = 18 * 1024 * 1024;
+const MIME_OK = (m: string) => /^image\/(jpeg|png|webp|heic|heif)$/.test(m) || m === 'application/pdf';
 
 Deno.serve(conCors(async (req) => {
   if (req.method !== 'POST') return json({ error: 'Método no permitido' }, 405);
@@ -25,12 +28,13 @@ Deno.serve(conCors(async (req) => {
   const { data: activo } = await db.rpc('es_usuario_activo');
   if (activo !== true) return json({ error: 'Inicia sesión para leer albaranes' }, 401);
 
-  let archivo: File | null = null;
-  try { const fd = await req.formData(); const f = fd.get('archivo'); archivo = f instanceof File ? f : null; } catch { /* no es multipart */ }
-  if (!archivo) return json({ error: 'Falta el archivo del albarán' }, 400);
-  if (archivo.size > MAX_BYTES) return json({ error: 'El archivo supera 10 MB: haz una foto más ligera' }, 413);
-  const mime = archivo.type || 'application/octet-stream';
-  if (!/^image\/(jpeg|png|webp|heic|heif)$/.test(mime) && mime !== 'application/pdf') return json({ error: 'Formato no admitido: sube una foto (JPG, PNG) o un PDF' }, 415);
+  let archivos: File[] = [];
+  try { const fd = await req.formData(); archivos = fd.getAll('archivo').filter((f): f is File => f instanceof File); } catch { /* no es multipart */ }
+  if (!archivos.length) return json({ error: 'Falta el archivo del albarán' }, 400);
+  if (archivos.length > MAX_PAGINAS) return json({ error: `Como mucho ${MAX_PAGINAS} páginas por envío` }, 413);
+  if (archivos.some(a => a.size > MAX_BYTES)) return json({ error: 'Un archivo supera 10 MB: haz una foto más ligera' }, 413);
+  if (archivos.reduce((s, a) => s + a.size, 0) > MAX_TOTAL) return json({ error: 'Las páginas pesan demasiado juntas: envíalas en dos veces' }, 413);
+  if (archivos.some(a => !MIME_OK(a.type || ''))) return json({ error: 'Formato no admitido: sube fotos (JPG, PNG) o un PDF' }, 415);
 
   const { data: prods, error } = await db.from('productos').select('sku, ref_proveedor, ean, nombre, unidad, contenido, proveedor, propiedad').eq('borrador', false).eq('archivado', false);
   if (error) return json({ error: error.message }, 500);
@@ -41,12 +45,14 @@ Deno.serve(conCors(async (req) => {
 
   const r = await llamarGemini({
     clave: CLAVE, modelo: MODELO, reserva: RESERVA, funcion: 'leer-albaran', esquema: ESQUEMA_RESPUESTA,
-    partes: [{ inline_data: { mime_type: mime, data: base64(await archivo.arrayBuffer()) } }, { text: construirPrompt(catalogo) }],
+    partes: [...await Promise.all(archivos.map(async a => ({ inline_data: { mime_type: a.type, data: base64(await a.arrayBuffer()) } }))),
+      { text: construirPrompt(catalogo) + (archivos.length > 1 ? PROMPT_PAGINAS(archivos.length) : archivos[0].type === 'application/pdf' ? PROMPT_PDF : '') }],
   });
   if (!r.ok) return json({ error: r.error.replace('vuelve a intentarlo', 'vuelve a subir el albarán') }, r.status);
   const texto = r.texto, usado = r.modelo;
   try {
-    return json({ ...normalizarRespuesta(texto, catalogo), modelo: usado });
+    // sin arrastres de "suma y sigue" ni subtotales aunque el modelo los copie
+    return json({ ...unirAlbaranes([normalizarRespuesta(texto, catalogo)]), paginas: archivos.length, modelo: usado });
   } catch {
     return json({ error: 'No se ha podido interpretar la respuesta de la IA' }, 502);
   }

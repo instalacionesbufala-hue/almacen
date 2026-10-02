@@ -368,6 +368,19 @@ La primera carga se hizo leyendo los albaranes con la IA y dejó algunas fichas 
 - **El personal de almacén** no edita fichas: **Proponer un cambio**; te llega a la bandeja para aplicarlo o descartarlo.
 - **Equivalencias:** se editan en la app (condiciones, artículos con buscador y foto, fórmula, kits). **Probar** enseña qué descontaría un cierre sin aplicar nada, y **Recalcular cierres desde…** vuelve a aplicar las reglas actuales a los cierres ya recibidos (solo la diferencia).
 
+- **Escanear un albarán** (E-024): Albaranes → **Escanear albarán con la cámara** (o Menú → *Escanear albarán*).
+  - Encuadra la hoja: el contorno sale en azul y, en **Automático**, la foto se hace sola cuando la hoja está quieta. También hay botón manual y linterna.
+  - Tras cada foto puedes **arrastrar las esquinas**, elegir **Color, Contraste o Blanco y negro** y **girar**. Luego **Otra página** o **Listo**.
+  - Todas las páginas forman **un solo albarán** y sale una sola revisión. En la lista de páginas se reordenan, se borran o se ajustan.
+  - Desde la galería: elige **varias fotos** a la vez o un **PDF** de varias páginas.
+  - **Sin cobertura**, el albarán queda en *Albaranes escaneados en este dispositivo* como **pendiente de leer** y se lee solo al volver la conexión; luego aparece *Revisar*.
+  - Al confirmar, las páginas se guardan con el albarán (en privado) y se ven en su detalle.
+- **Socios de custodia** (E-024): Configuración → **Socios de custodia**. Crear (nombre, contacto, correos y color), editar y desactivar; uno con artículos no se desactiva.
+  - Al dar de alta material en custodia, **elige el socio** (si solo hay uno activo, sale ya puesto).
+  - Custodia tiene una pestaña por socio, con su solicitud de reposición, su informe sin importes y su acta.
+- **Recuadros del inventario** (E-024): al pulsar uno (*N por completar*, *En custodia* o un socio, *Bajo mínimo*) se quitan los demás filtros, se aplica el suyo y la vista baja a la lista. Arriba de la lista sale un chip con el filtro (p. ej. *Sin mínimo ×*) para quitarlo.
+- **Desplegables de artículos** (E-024): todos tienen buscador (nombre, SKU, EAN y códigos alternativos) y van **A-Z**. **Por referencia** los ordena por código; la app lo recuerda.
+
 ---
 
 ## Si algo falla
@@ -388,5 +401,7 @@ La primera carga se hizo leyendo los albaranes con la IA y dejó algunas fichas 
 | Supabase dice *Project paused* | Pulsa **Restore project**. Para que no vuelva a pasar, haz el paso 10. |
 | Las fotos no se ven en otro móvil | La foto se sube en cuanto el móvil que la hizo tiene cobertura y la app abierta; mientras tanto, en su ficha pone *Pendiente de subir*. |
 | No llegan las push en iPhone | Hay que abrir la app desde el icono de la pantalla de inicio (paso 8.8). |
+| El escáner de albaranes no abre la cámara | Permite la cámara para la web en los ajustes del navegador (en iPhone: Ajustes → Safari → Cámara). Mientras tanto, usa **Galería** dentro del escáner. |
+| Un albarán escaneado sigue *pendiente de leer* | Se lee solo al volver la cobertura con la app abierta; también puedes pulsar **Leer ahora**. Las páginas están guardadas en ese móvil. |
 
 Si te atascas, copia el mensaje de error exacto y pásaselo a Claude Code.

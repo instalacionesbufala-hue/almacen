@@ -102,7 +102,7 @@ export function traducirCierre(c: Cierre, reglas: Regla[], kits: Kits, kitDefect
     if (v > 0 && !cubiertos.has(k)) out.push({ campo: k, formula: 'directa', valor: v, sku: null, cantidad: v, estimada: false,
       estado: k === 'metrosUtp' ? 'pendiente' : 'sin_equivalencia', regla: null, nota: k === 'metrosUtp' ? `cable de datos con "${c.hardware || 'sin modelo'}": elige el artículo` : 'sin equivalencia' });
   }
-  // el cargador de Esmove: 1 ud del modelo; si no se reconoce, a "Pendientes"
+  // el cargador (de cualquier socio de custodia, según el propietario del artículo): 1 ud del modelo; si no se reconoce, a "Pendientes"
   if (c.hardware && !activas.some(r => r.campo === 'hardware' && cumple(c, r.condiciones)))
     out.push({ campo: 'hardware', formula: 'unidad', valor: 1, sku: null, cantidad: 1, estimada: false, estado: 'pendiente', regla: null, nota: `modelo de cargador no reconocido: "${c.hardware}"` });
   return out;

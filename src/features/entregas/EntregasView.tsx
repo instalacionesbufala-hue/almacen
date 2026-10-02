@@ -3,7 +3,8 @@
    Nada predeterminado: el almacén elige los artículos. Se puede guardar como preparada (stock reservado) para firmar más tarde. */
 import { useEffect, useMemo, useState } from 'react';
 import { UNIT, categoriasActivas } from '../../data/catalogo';
-import { contenidoTxt, disponibleReal, find, formatoEntero, nombreVehiculo, numEntrega, qtyTxt, searchProducts, status, vehiculoDeEquipo } from '../../domain/reglas';
+import type { Producto } from '../../data/tipos';
+import { contenidoTxt, disponibleReal, find, formatoEntero, nombreVehiculo, numEntrega, qtyTxt, status, vehiculoDeEquipo } from '../../domain/reglas';
 import { fechaHora, num } from '../../domain/formato';
 import { aLineas, esPersonal, esPrenda, problemas, variantes } from '../../domain/entregas';
 import { avisoEstado, ejecutar, guardar, S, useAlmacen } from '../../store/almacen';
@@ -11,6 +12,7 @@ import { nuevoId } from '../../store/ops';
 import { modoNube } from '../../store/nube/cliente';
 import { toast } from '../../ui/toast';
 import { BTN_P, BTN_S, CARD, Icon, INP, LBL, TagCustodia, Tile } from '../../ui/base';
+import { OrdenArticulos, useListaArticulos } from '../../ui/selectorArticulo';
 import { useCamara } from '../escaner/camara';
 import { anadirACesta, cambiarTalla, cesta, disponible, escanearEnCesta, fijarCantidad, fijarObra, irAPaso, paraEquipo, quitarDeCesta, sumarUno, vaciarCesta } from './cesta';
 import { abrirInformeEntregas, abrirRecibo, confirmarFirma, EtiquetaCopia, PanelFirma, Preparadas, type DatosFirma } from './Hojas';
@@ -78,7 +80,8 @@ function PasoMaterial() {
   const [q, setQ] = useState(''), [cat, setCat] = useState('all'), [escaneando, setEscaneando] = useState(false), [manual, setManual] = useState('');
   const [lecturas, setLecturas] = useState<Lectura[]>([]);
   const eq = E.equipos.find(e => e.id === c.equipo);
-  const prods = useMemo(() => searchProducts(E, q, { cat: q ? 'all' : cat }).filter(p => !p.borrador).slice(0, 24), [E, q, cat]);
+  const porCat = useMemo(() => (q || cat === 'all' ? undefined : (p: Producto) => p.cat === cat), [q, cat]);
+  const prods = useListaArticulos(q, { filtro: porCat, max: 24 }).lista;           // E-024: A-Z o por referencia
   const leer = (raw: string) => {
     const r = escanearEnCesta(raw), p = r.sku ? find(S(), r.sku) : undefined;
     const l = p ? S().cesta.lineas.find(x => x.sku === p.sku) : undefined;
@@ -108,6 +111,7 @@ function PasoMaterial() {
         {escaneando && <Escaner onLeer={leer} lecturas={lecturas} manual={manual} setManual={setManual} />}
         {!q && <div className="flex gap-1 overflow-x-auto no-scrollbar -mx-1 px-1">{[['all', 'Todo'] as const, ...categoriasActivas().map(([k, v]) => [k, v.label] as const)].map(([k, l]) =>
           <button key={k} onClick={() => setCat(k)} className={`shrink-0 px-3 h-11 rounded-full text-body-sm font-semibold ${cat === k ? 'bg-primary text-white' : 'bg-surface-container-low text-on-surface-variant'}`}>{l}</button>)}</div>}
+        <OrdenArticulos agrupar={false} />
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">{prods.length ? prods.map(p => { const d = disponible(p.sku); return (
           <button key={p.sku} onClick={() => anadirACesta(p.sku)} disabled={d <= 0} className="text-left bg-surface-container-low hover:bg-surface-container rounded-xl p-2.5 flex items-center gap-3 disabled:opacity-40 min-h-16">
             <Tile p={p} size="w-14 h-14" />

@@ -54,7 +54,8 @@ export interface Producto {
   fotoMini?: string;
   fotoOrigen?: OrigenFoto;
 }
-export type OrigenFoto = 'Saltoki' | 'Esmove' | 'fabricante' | 'propia';
+/** E-024: además, el id de cualquier socio de custodia ('Esmove' queda como valor antiguo) */
+export type OrigenFoto = 'Saltoki' | 'Esmove' | 'fabricante' | 'propia' | (string & {});
 
 export type Rol = 'admin' | 'almacen';
 export interface PerfilUsuario { id: string; nombre: string; email: string | null; rol: Rol; activo: boolean }
@@ -90,7 +91,9 @@ export interface EnvioAviso { id: string; ts: number; canal: 'correo' | 'push' |
   entrega?: string; destinatarios?: string[]; reintentos?: number }
 export interface ActaCustodia { id: string; numero?: string; ts: number; propietario: string; representante: string; firma: string; lineas: { sku: string; sistema: number; contado: number }[]; hash?: string; operator: string }
 
-export interface Propietario { id: string; nombre: string; contacto: string; correosReposicion: string[]; correosInformes: string[] }
+export interface Propietario { id: string; nombre: string; contacto: string; correosReposicion: string[]; correosInformes: string[];
+  /** E-024: socio desactivado (sin artículos); se conserva para el historial */ activo?: boolean;
+  /** E-024: color de su etiqueta (clave de COLORES_SOCIO) */ color?: string }
 
 export interface Movimiento {
   id: string;
@@ -135,6 +138,8 @@ export interface Albaran {
   modo: 'ia' | 'sim';
   /** E-018: códigos impresos en sus líneas (aunque se emparejaran con otro artículo) */
   codigos?: string[];
+  /** E-024: páginas escaneadas guardadas con el albarán ("1.jpg", "2.jpg"…, en el bucket privado albaranes-paginas/<id>/) */
+  paginas?: string[];
 }
 
 export type TipoTalla = 'camiseta' | 'pantalon' | 'calzado' | 'guantes';

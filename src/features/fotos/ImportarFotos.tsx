@@ -3,7 +3,7 @@
    (p. ej. 6040615306.webp). Antes de confirmar se ve la vista previa, con las que no casan y las que sustituirían una foto. */
 import { useEffect, useMemo, useState } from 'react';
 import type { OrigenFoto } from '../../data/tipos';
-import { ORIGENES_FOTO, planImportacion, type Asignacion } from '../../domain/fotos';
+import { origenesFoto, planImportacion, type Asignacion } from '../../domain/fotos';
 import { find } from '../../domain/reglas';
 import { useAlmacen } from '../../store/almacen';
 import { BTN_P, BTN_S, Icon, LBL, Tag } from '../../ui/base';
@@ -72,7 +72,7 @@ function ImportarFotos() {
         </div>
         <div className="flex flex-wrap gap-4">
           <label className="flex items-center gap-2 text-body-sm">Origen de las fotos
-            <select value={origen} onChange={e => setOrigen(e.target.value as OrigenFoto)} className="bg-surface-container-low rounded-lg px-2 py-1.5">{ORIGENES_FOTO.map(o => <option key={o} value={o}>{o === 'propia' ? 'Foto propia' : o === 'fabricante' ? 'Fabricante' : o}</option>)}</select></label>
+            <select value={origen} onChange={e => setOrigen(e.target.value as OrigenFoto)} className="bg-surface-container-low rounded-lg px-2 py-1.5">{origenesFoto(E).map(o => <option key={o.v} value={o.v}>{o.t}</option>)}</select></label>
           {cuenta('sustituye') > 0 && <label className="flex items-center gap-2 text-body-sm"><input type="checkbox" checked={sustituir} onChange={e => setSustituir(e.target.checked)} className="w-5 h-5 accent-primary" />Sustituir también las fotos existentes ({cuenta('sustituye')})</label>}
         </div>
         <div className="flex flex-col max-h-[50vh] overflow-y-auto">

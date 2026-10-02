@@ -1,11 +1,12 @@
 /* E-020 · Códigos alternativos: "Es un artículo que ya tengo" (buscador con fotos) y la sección "Códigos" de la ficha */
 import { useState } from 'react';
 import { codigosDe, tipoCodigo } from '../../domain/codigos';
-import { qtyTxt, searchProducts } from '../../domain/reglas';
+import { qtyTxt } from '../../domain/reglas';
 import { ejecutar, useAlmacen } from '../../store/almacen';
 import { closeModal, openModal, SheetHead } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 import { BTN_S, Icon, INP, LBL, Pill, Tile, Vacio } from '../../ui/base';
+import { OrdenArticulos, useListaArticulos } from '../../ui/selectorArticulo';
 import { useCamara } from '../escaner/camara';
 
 /** Asocia un código ya leído a un artículo existente (o lo intenta y avisa) */
@@ -18,13 +19,14 @@ export function asociarCodigo(codigo: string, sku: string, formato = '', aviso =
 /** "Es un artículo que ya tengo": buscador con fotos; al elegir, el código leído queda como código alternativo */
 export const abrirAsociarCodigo = (codigo: string, formato = '', onHecho?: (sku: string) => void) => openModal(<AsociarCodigo codigo={codigo} formato={formato} onHecho={onHecho} />);
 function AsociarCodigo({ codigo, formato, onHecho }: { codigo: string; formato: string; onHecho?: (sku: string) => void }) {
-  const E = useAlmacen(); const [q, setQ] = useState('');
-  const lista = searchProducts(E, q).slice(0, 40);
+  const [q, setQ] = useState('');
+  const { lista } = useListaArticulos(q, { borradores: true, max: 60 });          // E-024: A-Z o por referencia
   const elegir = (sku: string) => { if (asociarCodigo(codigo, sku, formato)) { closeModal(); onHecho?.(sku); } };
   return (<>
     <SheetHead title="¿Qué artículo es?" sub={`El código ${codigo} quedará guardado en el artículo que elijas.`} />
     <div className="p-5 flex flex-col gap-3">
       <input autoFocus value={q} onChange={e => setQ(e.target.value)} type="search" className={`${INP} h-12`} placeholder="Busca por nombre o código" />
+      <OrdenArticulos agrupar={false} />
       <div className="flex flex-col">{lista.length ? lista.map(p =>
         <button key={p.sku} onClick={() => elegir(p.sku)} className="flex items-center gap-3 py-2.5 border-b border-surface-container text-left min-h-14"><Tile p={p} size="w-14 h-14" />
           <div className="flex-1 min-w-0"><div className="font-medium">{p.name}</div><div className="font-mono text-label-sm text-secondary">{p.sku} · almacén {qtyTxt(p, p.stock)}</div></div><Pill p={p} short /></button>) : <Vacio>Sin resultados.</Vacio>}</div>

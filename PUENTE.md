@@ -675,7 +675,7 @@ El administrador tiene que poder hacer estas tres cosas, y que queden reflejadas
 - En producción, el usuario cambia TRY32-1-L10-P a 8900500020 desde el móvil y queda un solo artículo activo con sus 6 ud y su EAN.
 - En un iPhone (o en el modo móvil de 375 px) no hay desplazamiento horizontal ni zoom al tocar campos.
 
-### E-024 · Albarán con la cámara (modo documento), desplegables ordenados, socios de custodia y recuadros que filtran · PENDIENTE
+### E-024 · Albarán con la cámara (modo documento), desplegables ordenados, socios de custodia y recuadros que filtran · HECHO
 **Peticiones del usuario (02/10).**
 
 **1. Leer un albarán con la cámara del móvil, como "Escanear documentos" del iPhone**
@@ -1975,3 +1975,85 @@ En "Para el día a día" se explican el ajuste y el aviso.
 - `e023.test.ts`: 3 del chat y 2 mías (la fusión del caso actual con EAN, y el EAN como código alternativo cuando el destino ya tiene uno).
 - `archivo.test.ts` (+2).
 - `tsc -b` sin errores y build correcto.
+
+### 02/10/2026 · E-024 · HECHO
+**Migraciones aplicadas** en Supabase: `20261015000100_e024_socios_custodia.sql` y `20261015000200_e024_albaranes_paginas.sql`. **`leer-albaran` desplegada.** Comprobado en producción (solo lectura): Instant Box creado (0 artículos), Esmove con sus 14, y el bucket `albaranes-paginas` privado.
+
+**1. Escanear albarán (modo documento)**
+- **Botón grande "Escanear albarán con la cámara"** en Albaranes, en el menú del móvil (Menú → *Escanear albarán*) y junto a "Leer un albarán" en el panel de stock.
+- **Cámara a pantalla completa** (`EscanerAlbaran.tsx`): contorno de la hoja dibujado en vivo, **disparo automático** cuando la hoja lleva ~0,9 s quieta (conmutable a manual), botón de disparo y linterna si el móvil la tiene.
+- **Tras cada foto:** recorte con **corrección de perspectiva** y las 4 esquinas **arrastrables con el dedo**; mejora **Color / Contraste / Blanco y negro** (por defecto, contraste); giro de 90°.
+- **Varias páginas:** "Otra página", miniaturas para **reordenar, borrar o volver a ajustar**, y "Listo".
+- **Galería:** varias fotos a la vez o PDF de varias páginas, en Albaranes y también dentro del escáner (botón *Galería*, útil si la cámara no tiene permiso). Las fotos pasan por el mismo recorte automático; los PDF van tal cual.
+- **Un solo albarán:** `leer-albaran` acepta **varios archivos** en el campo `archivo` (hasta 10 y 18 MB por llamada) con instrucciones de "hojas consecutivas, una cabecera, cada línea una vez, sin suma y sigue".
+  - La app comprime cada página (JPEG, **1600 px** de lado largo) y, si son muchas, las envía en **lotes de 6 páginas / 8 MB** y las une.
+  - `unirAlbaranes` (módulo compartido): una cabecera (la primera con cada dato), sin líneas de **"suma y sigue", "suma anterior", subtotales ni totales**, y sin repetir una línea idéntica que salga en dos lotes (misma hoja fotografiada dos veces; la que queda lleva una nota). Dos líneas iguales en la **misma** hoja se conservan. Si las hojas traen números de albarán distintos, la revisión lo avisa.
+- **Sin cobertura:** las páginas se guardan en el móvil (IndexedDB) y el albarán sale en **"Albaranes escaneados en este dispositivo"** como *pendiente de leer*. Se lee solo al volver la conexión (y al abrir la app); queda *Leído: falta revisarlo* con **Revisar**. Un error de la IA queda con **Leer ahora** y **Descartar**.
+- **Páginas guardadas con el albarán:** columna `albaranes.paginas` (se fija al aprobarlo; el albarán no cambia después) y bucket **privado** `albaranes-paginas/<id>/<n>.jpg`.
+  - Solo se puede subir una página que el albarán declara y si es de los últimos 30 días; sustituir o borrar, solo el administrador.
+  - Se suben cuando el albarán ya está en el servidor (si se aprobó sin cobertura, se reintenta).
+  - Se ven en el detalle del albarán (URL firmadas).
+- **Decisión de Code: detección de bordes propia en lugar de jscanify/OpenCV.js.** OpenCV.js pesa ~9 MB. La detección propia (`src/domain/documento.ts`) son unos cientos de líneas, va empaquetada y funciona sin cobertura:
+  - umbral de Otsu, zona clara más grande y sus 4 esquinas;
+  - homografía con interpolación bilineal para el recorte;
+  - binarizado local (Bradley) para el blanco y negro.
+  - **Límite:** necesita que el papel sea más claro que el fondo (lo normal sobre una mesa o el suelo). Si no acierta, se ajustan las esquinas con el dedo.
+- **Las páginas de un ejemplo simulado no se guardan** (solo las leídas con IA).
+
+**2. Desplegables de artículos ordenados**
+- **`SelectorArticulo`** (`src/ui/selectorArticulo.tsx`): se abre **en línea**, sin flotar, para que no se corte dentro de las hojas ni en el móvil.
+  - Buscador por nombre, SKU, EAN, código del proveedor y **códigos alternativos**; foto en miniatura.
+  - **A-Z** por defecto, conmutador **"Por referencia"** y **"Por categoría"**; la app lo recuerda (`localStorage`).
+  - Orden natural: "3G6" va antes que "3G10".
+- **Sustituye** a los 4 desplegables (revisión de albaranes, reasignar línea, fusionar y cierres) y al buscador de **equivalencias y kits de fijación**.
+- **Las listas con buscador** también llevan el conmutador A-Z / Por referencia: elegir material de un movimiento, "Es un artículo que ya tengo" (códigos alternativos) y la cesta de **entregas**.
+  - El **ajuste de inventario** se abre desde la ficha, sin desplegable.
+
+**3. Socios de custodia**
+- **Configuración → Socios de custodia** (administrador): crear, editar y desactivar, con nombre, contacto, correos de reposición e informes y **color** de la etiqueta.
+  - Validaciones iguales en la app y en el servidor: nombre obligatorio y no repetido, correos válidos.
+  - **Solo se desactiva un socio sin artículos.** Desactivado, no admite material nuevo (disparador `_socio_activo`). Se conserva para el historial.
+  - Queda en la auditoría.
+- **Instant Box dado de alta** por la migración (también en la demo).
+- **Por socio:**
+  - la etiqueta del artículo dice **su** socio con su color ("Custodia Instant Box");
+  - la vista Custodia tiene **una pestaña por socio**;
+  - solicitud de reposición, informe sin importes y acta, ya por socio;
+  - el origen de la foto lista los **socios activos**: se guarda su id, y "Esmove" sigue valiendo para las fotos antiguas;
+  - en el inventario, filtro **Propiedad → Custodia &lt;socio&gt;**.
+- **KPI "En custodia":** total (almacén + vehículos) y **un botón por socio** con sus unidades ("Esmove 25 · Instant Box 0" en la demo); al pulsar uno, filtra por él.
+- **Alta o edición de material en custodia:** el socio **se elige**, sin valor oculto por defecto. Si solo hay uno activo, sale preseleccionado; si no se elige, el mensaje es "Elige de qué socio es el material en custodia".
+- **Textos fijos con "Esmove"** cambiados: menú ("Custodia de socios"), avisos, borrado de la demostración, nota de salida y pendientes.
+- **Cierres (E-012):** la regla del cargador instalado ya era genérica: traduce el modelo a su SKU y el socio sale del propietario del artículo. Solo he corregido el comentario que decía "de Esmove".
+
+**4. Recuadros que llevan a lo que dicen**
+- Nuevo estado **"Sin mínimo"** en el filtro Estado (escritorio y móvil). La propiedad admite `custodia:<socio>`.
+- **Al pulsar un recuadro** se limpian los demás filtros (categoría, texto, ubicación y propiedad), se aplica el suyo y la vista **baja a la lista**:
+  - "N por completar" → *Sin mínimo*; si no hay ninguno, el recuadro quita todos los filtros;
+  - custodia: total o un socio;
+  - *Bajo mínimo*;
+  - las barras de "Referencias por categoría".
+- **Encima de la lista, un chip por filtro activo** ("Sin mínimo ×", "Custodia Instant Box ×"…) y "Quitar todos".
+- **En el móvil:** el aviso rojo de críticos aplica igual, y hay un aviso ámbar **"N sin mínimo"** al lado.
+- Las pestañas de "Categorías estratégicas" usan su propio estado y no afectan a la lista.
+- Comprobado en el navegador: con *Cargadores VE* puesto, pulsar *Bajo mínimo* quita la categoría, deja solo *Stock crítico* y la lista queda bajo la cabecera.
+
+**Fallo encontrado y corregido al probar:** en una hoja casi sin tinta, "Contraste" estiraba demasiado los niveles y la teñía de naranja. Ahora hay un rango mínimo, con su prueba.
+
+**Pruebas: 393 en verde** (+40):
+- `documento.test.ts` (8): recorte de perspectiva con un fixture sintético de hoja en trapecio con marcas, blanco y negro, contraste, giro y disparo automático;
+- `albaran-paginas.test.ts` (6): unión de 2 hojas con suma y sigue, hoja repetida y números distintos;
+- `lecturaAlbaran.test.ts` (7): lotes y **cola sin conexión**;
+- `e024.test.ts` local (11): recuadros (el caso pedido de *Cargadores VE* y *N por completar*), socios, informe por socio y selectores;
+- `e024.test.ts` de base de datos (8): Instant Box, dos socios con stock, desactivar, validaciones, origen de foto y páginas del albarán.
+- Ajustadas 3 pruebas antiguas que contaban un solo propietario.
+- `tsc -b`, `deno check` y build correctos.
+
+**Probado en el navegador (modo demostración):**
+- recuadros y chips en escritorio y en 375 px;
+- alta de un socio;
+- escáner desde la galería (detección, reordenar, arrastrar esquinas, blanco y negro);
+- revisión con 2 páginas y el selector nuevo.
+- **La cámara en vivo no se puede probar desde aquí** (el navegador de Code la bloquea).
+
+**Pendiente del usuario:** escanear en su iPhone un **albarán Saltoki de 2 hojas** y comprobar que sale una sola revisión con todas sus líneas.

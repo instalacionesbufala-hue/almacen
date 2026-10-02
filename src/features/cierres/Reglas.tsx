@@ -1,46 +1,29 @@
 /* E-016 · Editor de equivalencias en la app: condiciones por filas (campo, operador, valor), artículos con buscador y foto,
    fórmula, kits de fijación, "Probar" (qué descontaría, sin aplicar nada) y "Recalcular cierres desde…". */
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import type { ArticuloRegla, Equivalencia, Unidad } from '../../data/tipos';
 import { CAMPOS_MATERIAL, normalizarCierre, reglasVigentes, traducirCierre, type LineaTraducida } from '../../domain/cierres';
-import { fechaHora, hoyISO, norm, num, redondea, toNum } from '../../domain/formato';
+import { fechaHora, hoyISO, num, redondea, toNum } from '../../domain/formato';
 import { contenidoDe, find, unidadTxt } from '../../domain/reglas';
 import { ejecutar, S, useAlmacen } from '../../store/almacen';
 import { modoNube, supabase } from '../../store/nube/cliente';
 import { closeModal, openModal, SheetFoot, SheetHead } from '../../ui/modal';
 import { toast } from '../../ui/toast';
-import { BTN_P, BTN_S, Campo, Icon, INP, LBL, Tag, Tile } from '../../ui/base';
+import { BTN_P, BTN_S, Campo, Icon, INP, LBL, Tag } from '../../ui/base';
+import { SelectorArticulo } from '../../ui/selectorArticulo';
 
 export const FORMULAS: Record<Equivalencia['formula'], string> = { directa: 'Directa (valor × factor)', manguitos: 'Manguitos floor(m/3)+1', fijaciones: 'Fijaciones ceil(m/0,5) × kit', unidad: '1 ud (cargador)' };
 /** Campos del cierre que suelen usarse en las condiciones (se puede escribir cualquier otro) */
 const CAMPOS_COND = ['hardware', 'tipoLinea', 'fase', 'seccion', 'cableDatos', 'equipo', 'tipoInst'];
 const VALORES: Record<string, string[]> = { tipoLinea: ['tubo', 'manguera'], fase: ['mono', 'trif'], seccion: ['6', '10', '16', '25'], cableDatos: ['UTP', 'FTP'] };
 
-/* ---------- Buscador de artículos con foto ---------- */
-export function ArticuloPicker({ valor, onChange }: { valor: string | null; onChange: (sku: string) => void }) {
-  const E = useAlmacen();
-  const [q, setQ] = useState(''), [abierto, setAbierto] = useState(false);
-  const p = valor ? find(E, valor) : undefined;
-  const lista = useMemo(() => { const t = norm(q); return E.products.filter(x => !x.borrador && (!t || norm(`${x.sku} ${x.name} ${x.supplierRef || ''}`).includes(t))).slice(0, 8); }, [E.products, q]);
-  return (<div className="relative flex-1 min-w-0">
-    {!abierto ? <button type="button" onClick={() => setAbierto(true)} className={`${INP} h-12 flex items-center gap-2 text-left`}>
-        {p ? <><Tile p={p} size="w-8 h-8" /><span className="truncate">{p.name}</span></> : valor ? <span className="text-error truncate">{valor}: no está en el catálogo</span> : <span className="text-secondary">Elige el artículo…</span>}</button>
-      : <input autoFocus value={q} onChange={e => setQ(e.target.value)} onBlur={() => setTimeout(() => setAbierto(false), 150)} placeholder="Busca por nombre o código" className={`${INP} h-12`} />}
-    {abierto && <div className="absolute z-10 left-0 right-0 mt-1 bg-surface-container-lowest rounded-xl shadow-lg ring-1 ring-surface-container-high max-h-72 overflow-auto">
-      {lista.map(x => <button type="button" key={x.sku} onMouseDown={() => { onChange(x.sku); setAbierto(false); setQ(''); }} className="w-full flex items-center gap-2 p-2 text-left hover:bg-surface-container-low">
-        <Tile p={x} size="w-9 h-9" /><span className="min-w-0"><span className="block truncate">{x.name}</span><span className="font-mono text-label-sm text-secondary">{x.sku}</span></span></button>)}
-      {!lista.length && <p className="p-3 text-body-sm text-secondary">Nada con ese texto.</p>}
-    </div>}
-  </div>);
-}
-
 /* ---------- Lista de artículos de una regla o de un kit ---------- */
 export function ArticulosEditor({ valor, onChange, etiquetaFactor = 'Cantidad' }: { valor: ArticuloRegla[]; onChange: (v: ArticuloRegla[]) => void; etiquetaFactor?: string }) {
   const set = (i: number, x: Partial<ArticuloRegla>) => onChange(valor.map((a, k) => (k === i ? { ...a, ...x } : a)));
   return (<div className="flex flex-col gap-2">
-    {valor.map((a, i) => <div key={i} className="flex gap-2 items-center">
+    {valor.map((a, i) => <div key={i} className="flex gap-2 items-start">
       {a.sku === null ? <input value={a.nombre || ''} onChange={e => set(i, { nombre: e.target.value })} placeholder="Artículo aún sin dar de alta (p. ej. clavo)" className={`${INP} h-12 flex-1`} />
-        : <ArticuloPicker valor={a.sku || null} onChange={sku => set(i, { sku })} />}
+        : <SelectorArticulo valor={a.sku || null} onChange={sku => set(i, { sku: sku || '' })} className="flex-1" />}
       <input value={String(a.factor)} onChange={e => set(i, { factor: toNum(e.target.value) || 0 })} inputMode="decimal" aria-label={etiquetaFactor} title={etiquetaFactor} className={`${INP} h-12 !w-20 text-right`} />
       <button type="button" onClick={() => onChange(valor.filter((_, k) => k !== i))} className="w-10 h-10 grid place-items-center text-secondary" aria-label="Quitar"><Icon n="close" className="ico-20" /></button>
     </div>)}

@@ -14,11 +14,12 @@ import { cambiarCodigoLocal, fusionarLocal, reasignarLineaLocal } from '../domai
 import { ajustarLocal, previsionAjuste } from '../domain/ajuste';
 import { asociarLocal, motivoSkuNoValido, quitarCodigoLocal, type TipoCodigo } from '../domain/codigos';
 import { archivarLocal, borrarLocal, deshacerFusionLocal, reactivarArchivado, restaurarLocal } from '../domain/archivo';
+import { exigirSocioActivo, validarSocio } from '../domain/socios';
 const exigirSku = (sku: string) => { const m = motivoSkuNoValido(sku); if (m) throw new Error(m); };
 import { uid } from '../domain/formato';
 
 export interface OpMovimiento { id: string; sku: string; tipo: TipoMov; qty: number; motivo: string; ref: string; series: string[]; equipo?: string; vehiculo?: string }
-export interface OpAlbaran { id: string; cabecera: { numero: string; proveedor: string; delegacion?: string; cif: string; fecha: string; confianza: number; modo: 'ia' | 'sim' }; lineas: { sku: string; cantidad: number; series: string[]; codigo?: string }[] }
+export interface OpAlbaran { id: string; cabecera: { numero: string; proveedor: string; delegacion?: string; cif: string; fecha: string; confianza: number; modo: 'ia' | 'sim'; /** E-024 */ paginas?: string[] }; lineas: { sku: string; cantidad: number; series: string[]; codigo?: string }[] }
 export interface OpProducto { producto: Producto; nuevo: boolean; stockInicial: number }
 /** Fila del CSV del catálogo (E-013), ya interpretada */
 export interface FilaCatalogo { sku: string; ref_proveedor: string; nombre: string; categoria: CatId; propiedad: 'propia' | 'custodia'; propietario: string; proveedor: string; unidad: Producto['unit']; contenido: number; stock_inicial: number; minimo: number | null; albaranes: string }
@@ -149,7 +150,7 @@ export const OPS: Defs = {
       catch (e) { S.products = JSON.parse(copia); throw e; }
       S.albaranes.unshift({ id: a.id, delegacion: a.cabecera.delegacion || undefined, numero: a.cabecera.numero || 's/n', proveedor: a.cabecera.proveedor || 'Proveedor', fecha: a.cabecera.fecha, lineas: a.lineas.length,
         unidades: a.lineas.reduce((s, l) => s + l.cantidad, 0), ts: Date.now(), operator: S.operator, confianza: a.cabecera.confianza, modo: a.cabecera.modo,
-        codigos: [...new Set(a.lineas.map(l => String(l.codigo || '').replace(/\s/g, '').toUpperCase()).filter(Boolean))] });
+        codigos: [...new Set(a.lineas.map(l => String(l.codigo || '').replace(/\s/g, '').toUpperCase()).filter(Boolean))], paginas: a.cabecera.paginas || [] });
     },
     rpc: a => ['aprobar_albaran', { p_id: a.id, p_cabecera: a.cabecera, p_lineas: a.lineas }],
     desc: (_S, a) => `Albarán ${a.cabecera.numero} (${a.lineas.length} líneas)`,
@@ -163,6 +164,7 @@ export const OPS: Defs = {
       if (nuevo && actual) throw new Error(`Ya existe una referencia con el SKU ${p.sku}`);
       if (!actual) { exigirSku(p.sku); const alt = S.codigos.find(c => c.codigo.replace(/\s/g, '').toUpperCase() === p.sku.toUpperCase()); if (alt) throw new Error(`El código ${p.sku} ya está asociado a ${find(S, alt.sku)?.name || alt.sku} (${alt.sku}) como código alternativo`); }                                     // E-021: los antiguos no válidos se pueden editar hasta cambiarles el código
       if (formatoEntero(p) && stockInicial !== Math.trunc(stockInicial)) throw new Error(`El stock inicial de ${p.name} va en ${p.unit} enteros`);
+      exigirSocioActivo(S, p, actual);                                       // E-024
       // E-023: el EAN es único (misma regla y mensaje que el servidor)
       const conEan = p.ean ? [...S.products, ...(S.archivados || [])].find(x => x.sku !== p.sku && x.ean === p.ean) : undefined;
       if (conEan) throw new Error(`El EAN ${p.ean} ya lo tiene el artículo ${conEan.sku} (${conEan.name})${conEan.archivado ? ' que está archivado: restáuralo o quítale el EAN en Configuración → Archivados' : ': quítaselo allí o fusiona los dos artículos'}`);
@@ -587,6 +589,7 @@ export const OPS: Defs = {
       exigirSku(code(p.sku));
       if (!p.name.trim()) throw new Error('Indica el nombre del artículo');
       if (formatoEntero(p) && stockInicial !== Math.trunc(stockInicial)) throw new Error(`El stock inicial va en ${p.unit} enteros`);
+      exigirSocioActivo(S, p);                                               // E-024
       S.products.push({ ...p, sku: code(p.sku), stock: 0, min: 0, minimoDefinido: false, borrador: true, stockPropuesto: stockInicial, propuestoPor: S.operator });
     },
     rpc: ({ producto: p, stockInicial }) => ['crear_borrador_articulo', { p: {
@@ -671,15 +674,21 @@ export const OPS: Defs = {
     desc: () => 'Configuración de avisos',
   },
   propietario: {
-    local: (S, a) => { if (S.rol !== 'admin') throw new Error('Solo el administrador puede editar el propietario'); const o = S.propietarios.find(x => x.id === a.id); if (o) Object.assign(o, a); else S.propietarios.push({ ...a }); },
-    rpc: a => ['guardar_propietario', { p: { id: a.id, nombre: a.nombre, contacto: a.contacto, correos_reposicion: a.correosReposicion, correos_informes: a.correosInformes } }],
-    desc: (_S, a) => `Propietario ${a.nombre}`,
+    local: (S, a) => {
+      if (S.rol !== 'admin') throw new Error('Solo el administrador puede editar los socios de custodia');
+      const x = { ...a, nombre: a.nombre.trim(), correosReposicion: a.correosReposicion.map(c => c.trim()).filter(Boolean), correosInformes: a.correosInformes.map(c => c.trim()).filter(Boolean) };
+      validarSocio(S, x);
+      const o = S.propietarios.find(y => y.id === x.id); if (o) Object.assign(o, x); else S.propietarios.push(x);
+    },
+    rpc: a => ['guardar_propietario', { p: { id: a.id, nombre: a.nombre, contacto: a.contacto, correos_reposicion: a.correosReposicion, correos_informes: a.correosInformes, activo: a.activo !== false, color: a.color || 'violeta' } }],
+    desc: (_S, a) => `Socio de custodia ${a.nombre}`,
   },
   cambiarPropiedad: {
     local: (S, a) => {
       if (S.rol !== 'admin') throw new Error('Solo el administrador puede cambiar la propiedad');
       const p = find(S, a.sku); if (!p) throw new Error('Producto no encontrado');
       if (a.propiedad === 'custodia' && !a.propietario) throw new Error('Indica de quién es el material');
+      exigirSocioActivo(S, a, p);                                            // E-024
       p.propiedad = a.propiedad; p.propietario = a.propiedad === 'custodia' ? a.propietario : undefined;
     },
     rpc: a => ['cambiar_propiedad', { p_sku: a.sku, p_propiedad: a.propiedad, p_propietario: a.propietario ?? null }],

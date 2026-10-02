@@ -71,7 +71,7 @@ export function aEstado(t: Tablas, base: Pick<Estado, 'cesta' | 'seq'>, operador
     ref: m.referencia || '', operator: m.operario, serials: [], equipo: m.equipo_id ?? undefined, entrega: m.entrega_id ?? undefined, ...(m.albaran_id ? { albaran: m.albaran_id } : {}), ...(m.corrige ? { corrige: m.corrige } : {}),
     vehiculo: m.vehiculo_id ?? undefined, unidades: m.unidades == null ? undefined : n(m.unidades), ...(m.cierre_id ? { cierre: m.cierre_id } : {}) })).sort((a, b) => b.ts - a.ts);
   const albaranes: Albaran[] = t.albaranes.map(a => ({ id: a.id, delegacion: a.delegacion || undefined, numero: a.numero, proveedor: a.proveedor, fecha: a.fecha, lineas: a.lineas, unidades: n(a.unidades),
-    ts: ms(a.ts), operator: a.operario, confianza: a.confianza == null ? .95 : n(a.confianza), modo: a.modo, codigos: a.codigos || [] })).sort((a, b) => b.ts - a.ts);
+    ts: ms(a.ts), operator: a.operario, confianza: a.confianza == null ? .95 : n(a.confianza), modo: a.modo, codigos: a.codigos || [], paginas: a.paginas || [] })).sort((a, b) => b.ts - a.ts);
   const lineas = new Map<string, Fila[]>();
   for (const l of t.entrega_lineas) lineas.set(l.entrega_id, [...(lineas.get(l.entrega_id) || []), l]);
   const entregas: Entrega[] = t.entregas.map(e => ({ id: e.id, numero: e.numero, ts: ms(e.firmada_ts || e.ts), equipo: e.equipo_id, receptor: e.receptor_id, dni: e.dni, firma: e.firma || '', hash: e.hash ?? undefined, operator: e.operario,
@@ -99,7 +99,7 @@ export function aEstado(t: Tablas, base: Pick<Estado, 'cesta' | 'seq'>, operador
     entrega: e.entrega_id ?? undefined, destinatarios: e.destinatarios || [], reintentos: n(e.reintentos) })).sort((a, b) => b.ts - a.ts);
   const actas: ActaCustodia[] = t.actas_custodia.map(a => ({ id: a.id, numero: a.numero, ts: ms(a.ts), propietario: a.propietario_id, representante: a.representante, firma: a.firma,
     lineas: (a.lineas || []).map((l: Fila) => ({ sku: l.sku, sistema: n(l.sistema), contado: n(l.contado) })), hash: a.hash, operator: a.operario })).sort((a, b) => b.ts - a.ts);
-  const propietarios = t.propietarios.filter(o => o.activo).map(o => ({ id: o.id, nombre: o.nombre, contacto: o.contacto || '', correosReposicion: o.correos_reposicion || [], correosInformes: o.correos_informes || [] }));
+  const propietarios = t.propietarios.map(o => ({ id: o.id, nombre: o.nombre, contacto: o.contacto || '', correosReposicion: o.correos_reposicion || [], correosInformes: o.correos_informes || [], activo: o.activo !== false, color: o.color || 'violeta' })).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
   const pendientes: Pendiente[] = t.pendientes.map(p => ({ id: p.id, ts: ms(p.ts), tipo: p.tipo, sku: p.sku, qty: n(p.cantidad), reason: p.motivo, ref: p.referencia || '',
     serials: p.series || [], operator: p.operario, estado: p.estado, resueltoPor: p.resuelto_por ?? undefined, nota: p.nota_resolucion ?? undefined, ...(p.vehiculo_id ? { vehiculo: p.vehiculo_id } : {}) })).sort((a, b) => b.ts - a.ts);
   const perfiles: PerfilUsuario[] = t.perfiles.map(p => ({ id: p.id, nombre: p.nombre, email: p.email ?? null, rol: p.rol, activo: !!p.activo }));

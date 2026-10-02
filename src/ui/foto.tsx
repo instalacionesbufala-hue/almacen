@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { CatId, Herramienta, OrigenFoto, Producto } from '../data/tipos';
 import { catDe } from '../data/catalogo';
-import { fotoDe, fotoDeHerramienta, ORIGENES_FOTO, permisoFoto } from '../domain/fotos';
+import { fotoDe, fotoDeHerramienta, origenesFoto, origenInicial, permisoFoto, textoOrigen } from '../domain/fotos';
 import { useAlmacen } from '../store/almacen';
 import { crearStore } from '../store/crear';
 import { guardarFoto, quitarFoto, subidasPendientes, useFotoUrl } from '../features/fotos/servicio';
@@ -77,13 +77,12 @@ export function FotoGrande({ p, className = 'h-56', children }: { p: Producto; c
 }
 
 /* ---------- Editor de la ficha ---------- */
-const ORIGEN_TXT: Record<OrigenFoto, string> = { propia: 'Foto propia', Saltoki: 'Saltoki', Esmove: 'Esmove', fabricante: 'Fabricante' };
 const BTN_FOTO = 'inline-flex items-center justify-center gap-2 rounded-lg font-semibold h-14 px-3 bg-surface-container-low hover:bg-surface-container-high text-primary disabled:opacity-40';
 
 export function EditorFoto({ p }: { p: Producto }) {
   const E = useAlmacen(), pend = subidasPendientes.use(), f = fotoDe(E, p);
   const perm = permisoFoto(E, E.rol, p), puede = perm.poner || perm.sustituir;
-  const [origen, setOrigen] = useState<OrigenFoto>(p.propiedad === 'custodia' ? 'Esmove' : 'propia');
+  const [origen, setOrigen] = useState<OrigenFoto>(origenInicial(p));
   const [ocupado, setOcupado] = useState(false);
   const camara = useRef<HTMLInputElement>(null), archivo = useRef<HTMLInputElement>(null);
 
@@ -118,7 +117,7 @@ export function EditorFoto({ p }: { p: Producto }) {
     <div className="flex flex-col gap-2">
       <FotoGrande p={p}>
         {f && pend.has(f.foto) && <span className="absolute top-2 left-2 rounded-md bg-amber-100 text-amber-800 text-label-sm font-semibold px-2 py-1 flex items-center gap-1"><Ico n="cloud_upload" className="ico-16" />Pendiente de subir</span>}
-        {f && p.fotoOrigen && <span className="absolute bottom-2 left-2 rounded-md bg-black/45 text-white text-label-sm px-2 py-1">{ORIGEN_TXT[p.fotoOrigen]}</span>}
+        {f && p.fotoOrigen && <span className="absolute bottom-2 left-2 rounded-md bg-black/45 text-white text-label-sm px-2 py-1">{textoOrigen(E, p.fotoOrigen)}</span>}
         {ocupado && <span className="absolute inset-0 bg-white/70 grid place-items-center text-primary font-semibold">Guardando foto…</span>}
       </FotoGrande>
       {puede && <>
@@ -129,7 +128,7 @@ export function EditorFoto({ p }: { p: Producto }) {
         </div>
         <label className="flex items-center gap-2 text-body-sm text-secondary">Origen de la foto
           <select value={origen} onChange={e => setOrigen(e.target.value as OrigenFoto)} className="bg-surface-container-low rounded-lg px-2 py-1.5 text-on-surface">
-            {ORIGENES_FOTO.map(o => <option key={o} value={o}>{ORIGEN_TXT[o]}</option>)}
+            {origenesFoto(E).map(o => <option key={o.v} value={o.v}>{o.t}</option>)}
           </select>
         </label>
         <input ref={camara} type="file" accept="image/*" capture="environment" className="hidden" onChange={e => { void subir(e.target.files?.[0]); e.target.value = ''; }} />

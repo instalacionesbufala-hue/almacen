@@ -6,6 +6,7 @@ import { fechaHora, hace, num } from '../../domain/formato';
 import { ejecutar, useAlmacen } from '../../store/almacen';
 import { abrirFormProducto } from '../inventario/hojas';
 import { diferencias } from '../../domain/fichas';
+import { nombreSocio } from '../../domain/socios';
 import { motivoSkuNoValido, skuValido } from '../../domain/codigos';
 import { Rechazadas } from '../inventario/archivo';
 import { cola } from '../../store/nube/sync';
@@ -76,7 +77,7 @@ function Fila({ id, puede }: { id: string; puede: boolean }) {
         <div className="min-w-0"><div className="font-semibold">{p.tipo === 'merma' ? 'Merma' : p.tipo === 'ajuste' ? 'Ajuste de inventario propuesto' : 'Diferencia de recuento'} · {pr?.name || p.sku}</div>
           <div className="text-body-sm text-secondary">{p.reason}{p.ref ? ` · ${p.ref}` : ''}{p.tipo === 'ajuste' ? ` · ${p.vehiculo ? nombreVehiculo(E, p.vehiculo) : 'almacén'}` : ''} · {p.operator} · <span title={fechaHora(p.ts)}>{hace(p.ts)}</span></div></div>
         <div className="text-right"><div className={`text-headline-sm font-bold ${p.qty < 0 || p.tipo === 'merma' ? 'text-error' : 'text-tertiary'}`}>{p.tipo === 'merma' ? '−' : p.qty > 0 ? '+' : '−'}{num(Math.abs(p.qty))} {pr ? UNIT[pr.unit] : ''}</div>
-          <div className="font-mono text-label-sm text-secondary">{pr?.propiedad === 'custodia' ? 'Custodia Esmove' : ''}</div></div>
+          <div className="font-mono text-label-sm text-secondary">{pr?.propiedad === 'custodia' ? `Custodia ${nombreSocio(E, pr.propietario)}` : ''}</div></div>
       </div>
       {p.provisional && <p className="text-body-sm text-amber-800">Aún no ha llegado al servidor.</p>}
       {puede && !p.provisional && <div className="flex flex-col sm:flex-row gap-2">

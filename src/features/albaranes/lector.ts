@@ -17,9 +17,11 @@ export const AVISO_GEMINI = 'Lectura con Gemini (nivel gratuito): según las con
 export const catalogoParaIA = (S: Estado) =>
   S.products.map(p => ({ sku: p.sku, ref: p.supplierRef || '', ean: p.ean || '', nombre: p.name, unidad: UNIT[p.unit], proveedor: p.supplier }));
 
-export async function leerConIA(file: File, _S: Estado): Promise<AlbaranIA> {
+/** Lee una foto o un PDF, o (E-024) varias páginas del mismo albarán en una sola llamada */
+export async function leerConIA(archivos: Blob | Blob[]): Promise<AlbaranIA & { avisos?: string[]; paginas?: number }> {
   const fd = new FormData();
-  fd.append('archivo', file);
+  (Array.isArray(archivos) ? archivos : [archivos]).forEach((b, i) =>
+    fd.append('archivo', b, b instanceof File ? b.name : `pagina-${i + 1}.${b.type === 'application/pdf' ? 'pdf' : 'jpg'}`));
   // la función de servidor comprueba la sesión y lee el catálogo con los permisos del usuario
   const token = supabase ? (await supabase.auth.getSession()).data.session?.access_token : undefined;
   const r = await fetch(URL_IA, { method: 'POST', body: fd, headers: token ? { Authorization: 'Bearer ' + token, apikey: claveAnon } : {} });

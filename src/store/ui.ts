@@ -10,7 +10,7 @@ export const VISTAS: Record<Vista, { label: string; mob: string; icon: string }>
   equipos: { label: 'Equipos & Técnicos', mob: 'Cuadrillas', icon: 'badge' },
   entregas: { label: 'Entregas & Firmas', mob: 'Entrega', icon: 'draw' },
   dotacion: { label: 'Herramientas, EPIs & Ropa', mob: 'Dotación', icon: 'construction' },
-  custodia: { label: 'Custodia Esmove', mob: 'Custodia', icon: 'handshake' },
+  custodia: { label: 'Custodia de socios', mob: 'Custodia', icon: 'handshake' },
   scan: { label: 'Escanear', mob: 'Escanear', icon: 'qr_code_scanner' },
   movimientos: { label: 'Movimientos', mob: 'Movimientos', icon: 'swap_vert' },
   config: { label: 'Configuración & Auditoría', mob: 'Configuración', icon: 'admin_panel_settings' },

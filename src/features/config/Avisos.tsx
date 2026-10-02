@@ -61,7 +61,7 @@ export function ConfigAvisosPanel() {
         </div>); })}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
         <Campo label="Reenviar si un pedido no llega en (días)"><input type="number" min={1} max={90} value={c.diasRecordatorio} onChange={e => setC({ ...c, diasRecordatorio: Number(e.target.value) || 7 })} className={`${INP} h-10`} /></Campo>
-        <Campo label="Solicitudes a Esmove"><select value={c.custodiaEnvio} onChange={e => setC({ ...c, custodiaEnvio: e.target.value as ConfigAvisos['custodiaEnvio'] })} className={`${INP} h-10`}><option value="manual">Las reviso y envío con un toque</option><option value="automatico">Automático al correo de Esmove</option></select></Campo>
+        <Campo label="Solicitudes a los socios de custodia"><select value={c.custodiaEnvio} onChange={e => setC({ ...c, custodiaEnvio: e.target.value as ConfigAvisos['custodiaEnvio'] })} className={`${INP} h-10`}><option value="manual">Las reviso y envío con un toque</option><option value="automatico">Automático al correo de cada socio</option></select></Campo>
         <Campo label="Informe de custodia"><select value={c.informeCustodia} onChange={e => setC({ ...c, informeCustodia: e.target.value as ConfigAvisos['informeCustodia'] })} className={`${INP} h-10`}><option value="mensual">Mensual (día 1)</option><option value="semanal">Semanal (lunes)</option><option value="ninguno">Solo a mano</option></select></Campo>
       </div>
       <button onClick={guardar} disabled={!cambiado} className={`${BTN_P} h-12`}><Icon n="save" className="ico-20" />Guardar configuración de avisos</button>

@@ -134,8 +134,9 @@ export function searchProducts(S: Estado, q: string, f: { cat?: string; est?: st
   const toks = norm(q).split(/\s+/).filter(Boolean);
   return S.products.filter(p => {
     if (cat !== 'all' && p.cat !== cat) return false;
-    if (est !== 'all' && status(p) !== est) return false;
-    if (prop !== 'all' && (p.propiedad || 'propia') !== prop) return false;
+    // E-024: 'sinmin' = sin mínimo definido; 'custodia:<socio>' = en custodia de ese socio
+    if (est === 'sinmin') { if (p.minimoDefinido !== false) return false; } else if (est !== 'all' && status(p) !== est) return false;
+    if (prop.startsWith('custodia:')) { if (p.propiedad !== 'custodia' || p.propietario !== prop.slice(9)) return false; } else if (prop !== 'all' && (p.propiedad || 'propia') !== prop) return false;
     if (ubi === 'almacen' && !(p.stock > 0)) return false;
     if (ubi !== 'all' && ubi !== 'almacen' && !(unidadesABordo(S, ubi, p.sku) !== 0)) return false;
     if (!toks.length) return true;

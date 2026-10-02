@@ -12,6 +12,8 @@ import { modoNube } from '../../store/nube/cliente';
 import { closeModal, openModal, SheetFoot, SheetHead } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 import { BTN_P, BTN_S, Campo, Icon, INP, LBL, Tile } from '../../ui/base';
+import { SelectorSocio } from '../config/Socios';
+import { socioInicial } from '../../domain/socios';
 import { useCamara } from '../escaner/camara';
 import { asociarCodigo } from '../inventario/codigos';
 import { guardarComoAlternativo, skuInternoDe } from '../../domain/codigos';
@@ -42,7 +44,7 @@ function AltaCamara({ codigo0, origen, formato0 }: { codigo0: string; origen: Or
   const [f, setF] = useState<FormAlta | null>(null);
   const [enLinea, setEnLinea] = useState(navigator.onLine);
   const archivo = useRef<HTMLInputElement>(null);
-  const propietario0 = E.propietarios[0]?.id || '';
+  const propietario0 = socioInicial(E);                                   // E-024: el único socio activo, o ninguno (se elige)
 
   useEffect(() => { const on = () => setEnLinea(true), off = () => setEnLinea(false); addEventListener('online', on); addEventListener('offline', off); return () => { removeEventListener('online', on); removeEventListener('offline', off); }; }, []);
   useEffect(() => () => { if (fotoUrl) URL.revokeObjectURL(fotoUrl); }, [fotoUrl]);
@@ -177,7 +179,7 @@ function Ficha({ f, setF, admin, fotoUrl, nota, leyendo, releer }: { f: FormAlta
         {admin && inp('min', 'Mínimo (vacío = después)', { inputMode: 'decimal' })}
         {(f.tipo === 'ropa' || f.tipo === 'epi') && <>{inp('modelo', 'Modelo (agrupa las tallas)', { placeholder: f.name })}{inp('talla', 'Talla')}</>}
         <Campo label="Propiedad"><select value={f.propiedad} onChange={set('propiedad')} className={`${INP} h-12`}><option value="propia">Material propio</option><option value="custodia">En custodia (no es nuestro)</option></select></Campo>
-        {f.propiedad === 'custodia' && <Campo label="Propietario"><select value={f.propietario} onChange={set('propietario')} className={`${INP} h-12`}>{E.propietarios.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</select></Campo>}
+        {f.propiedad === 'custodia' && <Campo label="Socio de custodia"><SelectorSocio value={f.propietario} onChange={v => setF({ ...f, propietario: v })} /></Campo>}
         <details className="sm:col-span-2 rounded-xl bg-surface-container-low p-3"><summary className={`${LBL} cursor-pointer`}>Códigos y proveedor</summary>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
             {inp('sku', admin ? 'SKU (código propio)' : 'SKU (lo revisa el administrador)', { className: `${INP} h-12 font-mono` })}

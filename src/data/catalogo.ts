@@ -130,7 +130,8 @@ export const CONFIG_AVISOS_DEFECTO: ConfigAvisos = { correoActivo: false, correo
   diasRecordatorio: 7, custodiaEnvio: 'manual', informeCustodia: 'mensual', horasReserva: 48 };
 
 /* E-008: depositantes de material en custodia */
-export const SEED_PROPIETARIOS: Propietario[] = [{ id: 'ESMOVE', nombre: 'Esmove', contacto: '', correosReposicion: [], correosInformes: [] }];
+export const SEED_PROPIETARIOS: Propietario[] = [{ id: 'ESMOVE', nombre: 'Esmove', contacto: '', correosReposicion: [], correosInformes: [], activo: true, color: 'violeta' },
+  { id: 'INSTANTBOX', nombre: 'Instant Box', contacto: '', correosReposicion: [], correosInformes: [], activo: true, color: 'naranja' }];
 
 /* Equipos / cuadrillas con su furgoneta */
 /* E-013: equipos con el nombre que envía el wizard; los vehículos son una entidad aparte (datos inventados) */

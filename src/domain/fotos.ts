@@ -2,6 +2,13 @@
 import type { Estado, Herramienta, OrigenFoto, Producto, Rol } from '../data/tipos';
 
 export const ORIGENES_FOTO: OrigenFoto[] = ['propia', 'Saltoki', 'Esmove', 'fabricante'];
+const TXT_ORIGEN: Record<string, string> = { propia: 'Foto propia', Saltoki: 'Saltoki', Esmove: 'Esmove', fabricante: 'Fabricante' };
+/** E-024: orígenes que se ofrecen: propia, Saltoki, cada socio de custodia activo y fabricante */
+export const origenesFoto = (E: Pick<Estado, 'propietarios'>): { v: OrigenFoto; t: string }[] =>
+  [{ v: 'propia', t: TXT_ORIGEN.propia }, { v: 'Saltoki', t: 'Saltoki' }, ...E.propietarios.filter(o => o.activo !== false).map(o => ({ v: o.id, t: o.nombre })), { v: 'fabricante', t: TXT_ORIGEN.fabricante }];
+export const textoOrigen = (E: Pick<Estado, 'propietarios'>, o: OrigenFoto) => TXT_ORIGEN[o] || E.propietarios.find(x => x.id === o)?.nombre || o;
+/** Origen propuesto: el socio del material en custodia; si no, foto propia */
+export const origenInicial = (p: Pick<Producto, 'propiedad' | 'propietario'>): OrigenFoto => (p.propiedad === 'custodia' && p.propietario ? p.propietario : 'propia');
 export const BUCKET_FOTOS = 'fotos-articulos';
 
 /** Artículos que comparten la foto: el propio y, si tiene modelo (ropa y EPIs por tallas), todas las tallas del modelo */

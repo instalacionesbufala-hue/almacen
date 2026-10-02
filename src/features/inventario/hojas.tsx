@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import qrcode from 'qrcode-generator';
 import type { Movimiento, Producto, TipoMov } from '../../data/tipos';
 import { OFICINA, REASONS, UNIDADES, UNIT, catDe, categoriasActivas } from '../../data/catalogo';
-import { contenidoDe, contenidoTxt, critical, find, formatoEntero, nombreVehiculo, pedidoSugerido, qrContenido, qtyTxt, searchProducts, status, ubicaciones, unidadesABordo, unidadTxt } from '../../domain/reglas';
+import { contenidoDe, contenidoTxt, critical, find, formatoEntero, nombreVehiculo, pedidoSugerido, qrContenido, qtyTxt, status, ubicaciones, unidadesABordo, unidadTxt } from '../../domain/reglas';
 import { hace, num, redondea, toNum } from '../../domain/formato';
 import { ejecutar, guardar, mover, operarioSeleccionable, S, useAlmacen } from '../../store/almacen';
 import { salir, sesion } from '../../store/nube/sync';
@@ -12,6 +12,9 @@ import { ir, VISTAS, type Vista, useVista } from '../../store/ui';
 import { closeModal, openModal, SheetFoot, SheetHead } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 import { Avatar, BTN_P, BTN_S, BTN_T, Campo, Icon, INP, LBL, Pill, Tag, TagCustodia, Tile, TIPO, Vacio } from '../../ui/base';
+import { OrdenArticulos, SelectorArticulo, useListaArticulos } from '../../ui/selectorArticulo';
+import { SelectorSocio } from '../config/Socios';
+import { socioInicial } from '../../domain/socios';
 import { usePermisos } from '../../store/permisos';
 import { EditorFoto } from '../../ui/foto';
 import { nuevoId } from '../../store/ops';
@@ -75,7 +78,7 @@ function Ficha({ sku }: { sku: string }) {
       <div className="flex items-center gap-3">
         <div className="flex-1 min-w-0"><div className={`text-headline-lg font-bold break-words ${status(p) === 'red' ? 'text-error' : ''}`}>{qtyTxt(p, p.stock)} <span className="text-body-md font-normal text-secondary">en el almacén</span></div>
           <div className="text-body-sm text-secondary">Mínimo en almacén {p.minimoDefinido === false ? <b className="text-amber-800">sin definir</b> : qtyTxt(p, p.min)}</div>
-          <div className="flex flex-wrap gap-1 mt-1"><TagCustodia p={p} nombre={E.propietarios.find(o => o.id === p.propietario)?.nombre} />{p.borrador && <Tag c="bg-amber-100 text-amber-800">Borrador: falta completarla</Tag>}</div></div>
+          <div className="flex flex-wrap gap-1 mt-1"><TagCustodia p={p} />{p.borrador && <Tag c="bg-amber-100 text-amber-800">Borrador: falta completarla</Tag>}</div></div>
         <span className="shrink-0"><Pill p={p} /></span></div>
       <div><div className={`${LBL} mb-1`}>Dónde está</div><Ubicaciones p={p} /></div>
       <div className="grid grid-cols-2 gap-2 text-body-sm">{datos.map(([k, v]) => <div key={k} className="bg-surface-container-low rounded-lg p-2.5"><div className={LBL}>{k}</div><div className="font-medium break-words">{v}</div></div>)}</div>
@@ -115,8 +118,7 @@ function Fusionar({ sku, destino0 }: { sku: string; destino0: string }) {
   return (<>
     <SheetHead title={`Fusionar ${a.sku}`} sub="Para cuando dos fichas eran el mismo artículo. El stock y lo de los vehículos pasan con ajustes enlazados; nada se borra." />
     <div className="p-5 flex flex-col gap-3">
-      <Campo label="En qué artículo se fusiona"><select value={destino} onChange={e => setDestino(e.target.value)} className={`${INP} h-12`}><option value="">Elige el artículo</option>
-        {E.products.filter(x => x.sku !== sku && !x.borrador).map(x => <option key={x.sku} value={x.sku}>{x.sku} · {x.name}</option>)}</select></Campo>
+      <Campo label="En qué artículo se fusiona"><SelectorArticulo valor={destino || null} onChange={x => setDestino(x || '')} filtro={x => x.sku !== sku} ariaLabel="Artículo en el que se fusiona" /></Campo>
       <Campo label="Motivo (queda en el historial)"><input value={motivo} onChange={e => setMotivo(e.target.value)} className={`${INP} h-12`} placeholder="Se dio de alta dos veces" /></Campo>
       {vista && <p className="text-body-md bg-primary-fixed/40 rounded-lg p-3">{vista}</p>}
       {error && <p className="text-body-md bg-error-container text-error rounded-lg p-3">{error}</p>}
@@ -183,7 +185,7 @@ function HojaMovimiento({ sku, type0, opts }: { sku: string; type0: TipoMov; opt
         {!bad && !(enVehiculo && type === 'merma') && <Pill p={{ stock: after, min: p.min }} short />}
       </div>
       {type === 'merma' && <p className="text-body-sm text-secondary bg-surface-container-low rounded-lg p-3">La merma se aplica al momento y se avisa al administrador (quién, qué, cuánto y por qué).</p>}
-      {p.propiedad === 'custodia' && type === 'salida' && <p className="text-body-sm text-violet-800 bg-violet-50 rounded-lg p-3">Material en custodia: indica la obra o instalación de destino (Esmove quiere saber dónde está cada equipo).</p>}
+      {p.propiedad === 'custodia' && type === 'salida' && <p className="text-body-sm text-violet-800 bg-violet-50 rounded-lg p-3">Material en custodia: indica la obra o instalación de destino (el socio quiere saber dónde está cada equipo).</p>}
       <p className="text-body-sm text-secondary">Se registra a nombre de <b>{E.operator}</b> con fecha y hora.</p>
     </div>
     <SheetFoot><button onClick={confirmar} disabled={!(q > 0) || bad} className={`${BTN_P} w-full h-14 text-body-lg`}><Icon n="check_circle" className="ico-fill" />{type === 'traspaso' ? 'Cargar' : `Confirmar ${TIPO[type].t.toLowerCase()} de`} {q > 0 ? qtyTxt(p, q) : '…'}{type === 'traspaso' ? ' en el vehículo' : ''}</button></SheetFoot>
@@ -233,12 +235,13 @@ function HojaAjuste({ sku }: { sku: string }) {
 /* ---------- Selector de producto ---------- */
 export const abrirSelector = (type: TipoMov) => openModal(<Selector type={type} />);
 function Selector({ type }: { type: TipoMov }) {
-  const E = useAlmacen(); const [q, setQ] = useState('');
-  const lista = searchProducts(E, q).slice(0, 30);
+  const [q, setQ] = useState('');
+  const { lista } = useListaArticulos(q, { borradores: true, max: 60 });          // E-024: A-Z o por referencia
   return (<>
     <SheetHead title={`${TIPO[type].t}: elige el material`} />
     <div className="p-5 flex flex-col gap-3">
       <input autoFocus value={q} onChange={e => setQ(e.target.value)} type="search" className={`${INP} h-12`} placeholder="Busca por nombre, SKU o código" />
+      <OrdenArticulos agrupar={false} />
       <div className="flex flex-col">{lista.length ? lista.map(p =>
         <button key={p.sku} onClick={() => abrirMovimiento(p.sku, type)} className="flex items-center gap-3 py-2.5 border-b border-surface-container text-left min-h-14"><Tile p={p} size="w-10 h-10" />
           <div className="flex-1 min-w-0"><div className="font-medium truncate">{p.name}</div><div className="font-mono text-label-sm text-secondary">{p.sku} · almacén {qtyTxt(p, p.stock)}</div></div><Pill p={p} short /></button>) : <Vacio>Sin resultados.</Vacio>}</div>
@@ -259,7 +262,7 @@ function FormProducto({ sku, preset, onCreado, modo, propuesta }: { sku?: string
     sku: base.sku || '', ean: base.ean || '', name: base.name || '', cat: base.cat || 'fijaciones', unit: base.unit || 'ud', contenido: String(base.contenido ?? 1), packLabel: base.packLabel || '',
     stock: String(p?.borrador ? p.stockPropuesto ?? 0 : 0), min: base.minimoDefinido === false ? '' : String(base.min ?? ''), supplier: base.supplier || '', supplierRef: base.supplierRef || '',
     objetivo: base.objetivo != null ? String(base.objetivo) : '', proveedorHabitual: base.proveedorHabitual || '', modelo: base.modelo || '', talla: base.talla || '',
-    propiedad: base.propiedad || 'propia', propietario: base.propietario || S().propietarios[0]?.id || '', notas: base.notas || '',
+    propiedad: base.propiedad || 'propia', propietario: socioInicial(S(), base.propietario), notas: base.notas || '',
   });
   const set = (k: keyof FormProd) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => { setF({ ...f, [k]: e.target.value }); if (k === 'sku') setChoque(''); };
   const [choque, setChoque] = useState('');
@@ -324,7 +327,7 @@ function FormProducto({ sku, preset, onCreado, modo, propuesta }: { sku?: string
       {inp('supplier', 'Proveedor')}
       {inp('supplierRef', 'Código del proveedor')}
       <Campo label="Propiedad"><select value={f.propiedad} onChange={set('propiedad')} className={`${INP} h-12`}><option value="propia">Material propio</option><option value="custodia">En custodia (no es nuestro)</option></select></Campo>
-      {f.propiedad === 'custodia' && <Campo label="Propietario"><select value={f.propietario} onChange={set('propietario')} className={`${INP} h-12`}>{S().propietarios.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</select></Campo>}
+      {f.propiedad === 'custodia' && <Campo label="Socio de custodia"><SelectorSocio value={f.propietario} onChange={v => setF({ ...f, propietario: v })} /></Campo>}
       {inp('packLabel', 'Descripción corta (opcional: "Monofásico · 40 A")')}
       {inp('objetivo', 'Objetivo de reposición (vacío = 2 × mínimo)', { inputMode: 'decimal' })}
       {inp('proveedorHabitual', 'Proveedor habitual (a quién se pide)')}
@@ -421,6 +424,7 @@ function Menu() {
     <div className="p-3 flex flex-col gap-1">
       {(Object.keys(VISTAS) as Vista[]).map(v =>
         <button key={v} onClick={() => { closeModal(); ir(v); }} className={`flex items-center gap-3 px-4 h-14 rounded-xl text-left ${vista === v ? 'bg-primary-fixed text-primary font-semibold' : 'hover:bg-surface-container-low'}`}><Icon n={VISTAS[v].icon} /><span className="flex-1">{VISTAS[v].label}</span></button>)}
+      <button onClick={() => { closeModal(); ir('albaranes'); void import('../albaranes/AlbaranesView').then(m => m.escanearAlbaran()); }} className="flex items-center gap-3 px-4 h-14 rounded-xl bg-primary text-white font-semibold"><Icon n="document_scanner" /><span className="flex-1 text-left">Escanear albarán</span></button>
       <button onClick={() => { closeModal(); void import('../altaCamara/AltaCamara').then(m => m.abrirAltaCamara()); }} className="flex items-center gap-3 px-4 h-14 rounded-xl bg-primary-fixed/50 text-primary font-semibold"><Icon n="add_a_photo" /><span className="flex-1 text-left">Nuevo con la cámara</span></button>
       <button onClick={abrirAvisos} className="flex items-center gap-3 px-4 h-14 rounded-xl hover:bg-surface-container-low"><Icon n="notifications" /><span className="flex-1 text-left">Avisos de stock</span>{nCrit > 0 && <Tag c="bg-error-container text-error">{nCrit}</Tag>}</button>
       <button onClick={abrirPerfil} className="flex items-center gap-3 px-4 h-14 rounded-xl hover:bg-surface-container-low"><Icon n="person" /><span className="flex-1 text-left">Cambiar operario</span></button>

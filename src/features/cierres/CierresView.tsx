@@ -12,6 +12,7 @@ import { usePermisos } from '../../store/permisos';
 import { closeModal, openModal, SheetFoot, SheetHead } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 import { BTN_P, BTN_S, CARD, Icon, INP, LBL, Tag, Vacio } from '../../ui/base';
+import { SelectorArticulo } from '../../ui/selectorArticulo';
 import { CargarMas, useMas } from '../../ui/lista';
 
 const ESTADO: Record<EstadoCierre, { t: string; c: string }> = {
@@ -87,8 +88,7 @@ function FilaCierre({ c, abierto, alternar, puede }: { c: CierreApp; abierto: bo
               <td className="py-1.5">{p ? p.name : <span className="text-amber-800">{l.estado === 'pendiente' ? 'Por elegir' : 'Sin equivalencia'}</span>}
                 {l.estimada && <Tag c="bg-amber-100 text-amber-800 ml-1">estimado</Tag>}{l.estado === 'discrepancia' && <Tag c="bg-error-container text-error ml-1">deja el vehículo en negativo</Tag>}
                 {l.nota && <div className="text-label-sm text-secondary">{l.nota}</div>}
-                {resolver && <div className="flex gap-2 mt-1"><select value={elegido[l.id] || ''} onChange={e => setElegido({ ...elegido, [l.id]: e.target.value })} className={`${INP} h-11 min-w-0`} aria-label="Artículo">
-                  <option value="">Elige el artículo…</option>{E.products.filter(x => !x.borrador).map(x => <option key={x.sku} value={x.sku}>{x.name} · {x.sku}</option>)}</select>
+                {resolver && <div className="flex gap-2 mt-1 items-start"><SelectorArticulo valor={elegido[l.id] || null} onChange={sku => setElegido({ ...elegido, [l.id]: sku || '' })} className="flex-1" alto="h-11" />
                   <button disabled={!elegido[l.id]} onClick={() => { if (ejecutar({ op: 'resolverLinea', args: { linea: l.id, sku: elegido[l.id] } })) toast('Línea resuelta: se descuenta del vehículo.', 'ok'); }} className={`${BTN_P} h-11 px-3 disabled:opacity-40`}>Aplicar</button></div>}</td>
               <td className="py-1.5 text-right whitespace-nowrap font-semibold">{p ? cant(l.cantidad, p.unit, contenidoDe(p)) : num(l.cantidad)}</td>
               <td />

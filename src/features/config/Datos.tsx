@@ -28,7 +28,7 @@ export function DatosReales() {
   return (<>
     {E.configApp.modoDemo
       ? <div className="rounded-xl bg-error-container/40 p-3 flex flex-col gap-2">
-          <p className="text-body-sm"><b>Ahora hay datos de ejemplo</b> (artículos, equipos, técnicos, vehículos, movimientos y entregas inventados). Antes de trabajar con el material real, bórralos: se hace <b>una sola vez</b>. Se conservan los usuarios, la configuración de avisos y Esmove.</p>
+          <p className="text-body-sm"><b>Ahora hay datos de ejemplo</b> (artículos, equipos, técnicos, vehículos, movimientos y entregas inventados). Antes de trabajar con el material real, bórralos: se hace <b>una sola vez</b>. Se conservan los usuarios, la configuración de avisos y los socios de custodia.</p>
           <button onClick={() => openModal(<BorrarDemo />)} className={`${BTN_BASE} h-12 text-on-error bg-error hover:bg-error/90`}><Icon n="delete_forever" className="ico-20" />Borrar datos de ejemplo</button>
         </div>
       : <p className="text-body-sm text-secondary flex items-center gap-2"><Icon n="check_circle" className="ico-20 text-tertiary" />Datos de ejemplo borrados{E.configApp.demoBorrada ? ` el ${fechaHora(E.configApp.demoBorrada)}` : ''}{E.configApp.demoBorradaPor ? ` por ${E.configApp.demoBorradaPor}` : ''}.</p>}
@@ -63,7 +63,7 @@ function BorrarDemo() {
     <SheetHead title="Borrar datos de ejemplo" sub="Solo se puede hacer una vez" />
     <div className="p-4 flex flex-col gap-3">
       <p className="text-body-md">Se borrarán <b>{E.products.length} artículos</b>, {E.movements.length} movimientos, {E.entregas.length} entregas, {E.equipos.length} equipos, {E.tecnicos.length} técnicos, {E.vehiculos.length} vehículos y {E.herramientas.length} fichas de dotación, con sus fotos.</p>
-      <p className="text-body-sm text-secondary">Se conservan los usuarios, la configuración de avisos y los propietarios (Esmove). El historial vuelve a quedar protegido nada más terminar. Exporta una copia antes si quieres guardar algo.</p>
+      <p className="text-body-sm text-secondary">Se conservan los usuarios, la configuración de avisos y los socios de custodia. El historial vuelve a quedar protegido nada más terminar. Exporta una copia antes si quieres guardar algo.</p>
       <label className="flex flex-col gap-1"><span className={LBL}>Escribe {FRASE} para confirmar</span>
         <input value={frase} onChange={e => setFrase(e.target.value)} className={`${INP} font-mono`} autoFocus autoComplete="off" /></label>
     </div>

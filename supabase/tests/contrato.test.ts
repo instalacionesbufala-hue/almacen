@@ -55,7 +55,7 @@ describe('contrato de operaciones', () => {
     const E = await estado(db);
     expect(E.products.find(p => p.sku === 'BF-FIX-SX6')).toMatchObject({ unit: 'bote', contenido: 1000 });
     expect(E.products.find(p => p.sku === 'WBX-PULSAR-22')).toMatchObject({ propiedad: 'custodia', propietario: 'ESMOVE' });
-    expect(E.propietarios.map(o => o.nombre)).toEqual(['Esmove']);
+    expect(E.propietarios.map(o => o.nombre)).toEqual(['Esmove', 'Instant Box']);                 // E-024: Instant Box llega con la migración
   });
 
   it('equipos, vehículos, técnicos, alta de referencia y dotación (administrador)', async () => {
@@ -115,7 +115,7 @@ describe('contrato de operaciones', () => {
     expect(E.avisos.find(a => a.sku === '7501013532')).toMatchObject({ estado: 'pedido', cantidadPedida: 14 });
     expect(E.avisos.find(a => a.modeloHerramienta === 'Fluke 376 FC')).toBeTruthy();   // la única está asignada: 0 de repuesto
     expect(E.configAvisos).toMatchObject({ correoHora: '07:30', diasRecordatorio: 5, informeCustodia: 'semanal' });
-    expect(E.propietarios[0]).toMatchObject({ contacto: 'Ana', correosReposicion: ['r@esmove.es'] });
+    expect(E.propietarios.find(o => o.id === 'ESMOVE')).toMatchObject({ contacto: 'Ana', correosReposicion: ['r@esmove.es'] });
     expect(E.products.find(p => p.sku === '8909080510')).toMatchObject({ propiedad: 'custodia', propietario: 'ESMOVE' });
     expect(E.envios.some(e => e.tipo === 'prueba')).toBe(true);
     expect(E.actas[0]).toMatchObject({ representante: 'Ana', lineas: [{ sku: 'ESM-CPVE-TRI', sistema: E.products.find(p => p.sku === 'ESM-CPVE-TRI')!.stock, contado: 1 }] });

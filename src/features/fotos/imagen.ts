@@ -4,7 +4,7 @@ import { medidas } from '../../domain/fotos';
 
 export interface FotoComprimida { grande: Blob; mini: Blob; ext: 'webp' | 'jpg' }
 
-async function decodificar(archivo: Blob): Promise<{ img: CanvasImageSource; w: number; h: number; cerrar: () => void }> {
+export async function decodificar(archivo: Blob): Promise<{ img: CanvasImageSource; w: number; h: number; cerrar: () => void }> {
   if ('createImageBitmap' in window) {
     try {
       const b = await createImageBitmap(archivo, { imageOrientation: 'from-image' });

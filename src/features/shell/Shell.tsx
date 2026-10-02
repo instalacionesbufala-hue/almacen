@@ -8,15 +8,15 @@ import { ir, setUI, useEsEscritorio, useUI, VISTAS, type Vista } from '../../sto
 import { Avatar, BTN_P, Icon } from '../../ui/base';
 import { abrirMenu, abrirPerfil } from '../inventario/hojas';
 import { abrirReposicion, useContadorAvisos } from '../reposicion/Reposicion';
-import { procesarArchivo } from '../albaranes/AlbaranesView';
+import { procesarArchivos } from '../albaranes/AlbaranesView';
 import { IndicadorSync } from './Sincronizacion';
 import { BotonPendientes } from './Pendientes';
 import { modoNube } from '../../store/nube/cliente';
 
 function nuevoAlbaran() {
   ir('albaranes');
-  const i = document.createElement('input'); i.type = 'file'; i.accept = 'image/*,application/pdf';
-  i.onchange = () => procesarArchivo(i.files?.[0]); i.click();
+  const i = document.createElement('input'); i.type = 'file'; i.accept = 'image/*,application/pdf'; i.multiple = true;
+  i.onchange = () => procesarArchivos(i.files); i.click();
 }
 
 function SelectorAlmacen({ ancho }: { ancho: string }) {

@@ -17,6 +17,8 @@ import { abrirAltaCamara } from '../altaCamara/AltaCamara';
 import { agruparPorCategoria, filasCsvInventario, htmlImprimirInventario, ordenarInventario, siguienteOrden, type ColOrden } from '../../domain/listaInventario';
 import { BotonSubir, useProgresivo } from '../../ui/lista';
 import { Fragment } from 'react';
+import { chipsFiltros, EST_SIN_MINIMO, filtroDeRecuadro, propDeSocio, SIN_FILTROS, textoEstado, textoPropiedad, type FiltrosInv, type Recuadro } from '../../domain/filtrosInventario';
+import { colorSocio, desgloseCustodia, sociosActivos } from '../../domain/socios';
 
 export function exportarStockCsv(E: Estado = S()) {
   descargarCsv(`stock-${hoyISO()}.csv`, [['SKU', 'Nombre', 'Categoría', 'Propiedad', 'Almacén', 'En vehículos', 'Total', 'Unidad', 'Contenido', 'Mínimo almacén', 'Estado', 'Proveedor', 'Código proveedor', 'EAN'],
@@ -26,7 +28,7 @@ export function exportarStockCsv(E: Estado = S()) {
 /** E-019: la lista filtrada completa, tal como se ve (con una columna por vehículo) */
 export function exportarListaCsv(E: Estado, lista: Producto[]) { descargarCsv(`inventario-${hoyISO()}.csv`, filasCsvInventario(E, lista)); }
 function textoFiltros(E: Estado, u: ReturnType<typeof useUI>) {
-  return [u.q && `"${u.q}"`, u.cat !== 'all' && catDe(u.cat).label, u.est !== 'all' && ST[u.est as 'red'].t, u.prop !== 'all' && (u.prop === 'custodia' ? 'En custodia' : 'Material propio'),
+  return [u.q && `"${u.q}"`, u.cat !== 'all' && catDe(u.cat).label, u.est !== 'all' && textoEstado(u.est), u.prop !== 'all' && textoPropiedad(E, u.prop),
     u.ubi !== 'all' && (u.ubi === 'almacen' ? 'En el almacén' : nombreVehiculo(E, u.ubi))].filter(Boolean).join(' · ') || 'Todas las referencias';
 }
 /** Vista limpia para imprimir (sin fotos) en una ventana aparte */
@@ -54,7 +56,7 @@ export default function StockView() {
 
 function Kpis() {
   const E = useAlmacen();
-  const cust = E.products.filter(esCustodia), custMal = cust.filter(p => status(p) !== 'green').length, custRojo = cust.filter(p => status(p) === 'red').length;
+  const cust = E.products.filter(esCustodia), dc = desgloseCustodia(E), custMal = cust.filter(p => status(p) !== 'green').length, custRojo = cust.filter(p => status(p) === 'red').length;
   const crit = critical(E), sup = new Set(crit.map(p => p.supplier)).size, n = E.products.length || 1;
   const entHoy = E.entregas.filter(e => esHoy(e.ts) && e.estado !== 'anulada'), firm = entHoy.filter(e => (e.estado ?? 'firmada') === 'firmada').length;
   const conCarga = E.vehiculos.filter(v => stockDeVehiculo(E, v.id).length).length, green = E.products.filter(p => status(p) === 'green').length;
@@ -62,12 +64,13 @@ function Kpis() {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-space-md">
       <Kpi icon="category" iconC="bg-surface-container-low text-primary" badge={<><Icon n="check_circle" className="ico-16" /> {Math.round(green / n * 100)}% OK</>} badgeC="text-tertiary bg-tertiary-fixed/30"
-        value={num(E.products.length)} label="Referencias activas" foot={sinMinimo ? 'Sin mínimo definido' : 'Vehículos con material'} footVal={sinMinimo ? `${sinMinimo} por completar` : `${conCarga} de ${E.vehiculos.length}`} footC={sinMinimo ? 'text-amber-800' : undefined} bar={green / n * 100} barC="bg-primary" onClick={() => setUI({ est: 'all', page: 1 })} />
+        value={num(E.products.length)} label="Referencias activas" foot={sinMinimo ? 'Sin mínimo definido' : 'Vehículos con material'} footVal={sinMinimo ? `${sinMinimo} por completar` : `${conCarga} de ${E.vehiculos.length}`} footC={sinMinimo ? 'text-amber-800' : undefined} bar={green / n * 100} barC="bg-primary" onClick={() => sinMinimo ? aplicarRecuadro({ k: 'sinmin' }) : aplicarFiltros(SIN_FILTROS)} />
       <Kpi icon="handshake" iconC="bg-violet-100 text-violet-800" badge={custRojo ? `${custRojo} en rojo` : custMal ? `${custMal} bajos` : 'Todo en verde'} badgeC={custRojo ? 'bg-error-container text-error' : custMal ? 'bg-amber-100 text-amber-800' : 'bg-tertiary-fixed/30 text-tertiary'}
-        value={num(cust.reduce((a, p) => a + stockTotal(E, p), 0))} label="En custodia de Esmove" foot="Referencias" footVal={`${cust.length} · almacén + vehículos`} footC="text-violet-800" bar={cust.length ? (cust.length - custMal) / cust.length * 100 : 0} barC="bg-violet-500" onClick={() => setUI({ prop: 'custodia', page: 1 })} />
+        value={num(dc.total)} label={`En custodia · ${cust.length} ref. (almacén + vehículos)`} foot="" footVal="" bar={cust.length ? (cust.length - custMal) / cust.length * 100 : 0} barC="bg-violet-500" onClick={() => aplicarRecuadro({ k: 'custodia' })}
+        pie={<div className="flex flex-wrap gap-1.5">{dc.socios.map(s => <button key={s.id} onClick={() => aplicarRecuadro({ k: 'custodia', socio: s.id })} title={`Ver solo lo de ${s.nombre}`} className={`inline-flex items-center gap-1 px-2 h-8 rounded-md font-mono text-label-sm ${colorSocio(s).c}`}>{s.nombre} <b>{num(s.unidades)}</b></button>)}</div>} />
       <Kpi icon="warning" iconC="bg-error-container text-error" badge={crit.length ? 'Urgente' : 'Sin alertas'} badgeC={crit.length ? 'text-error font-semibold bg-error-container' : 'text-tertiary bg-tertiary-fixed/30'}
         value={crit.length} valueC={crit.length ? 'text-error' : undefined} label="Bajo mínimo en el almacén" foot="Reposición pendiente" footVal={`${sup} proveedor${sup === 1 ? '' : 'es'}`} footC="text-error"
-        bar={crit.length / n * 400} barC="bg-error" onClick={() => setUI({ est: 'red', page: 1 })} />
+        bar={crit.length / n * 400} barC="bg-error" onClick={() => aplicarRecuadro({ k: 'bajo' })} />
       <Kpi icon="assignment_turned_in" iconC="bg-tertiary-fixed/40 text-tertiary" badge={entHoy.length ? `${Math.round(firm / entHoy.length * 100)}% firmadas` : 'Sin entregas hoy'} badgeC="text-tertiary font-semibold bg-tertiary-fixed/30"
         value={`${firm} / ${entHoy.length}`} label="Entregas firmadas hoy" foot="Equipos en ruta" footVal={`${E.equipos.filter(e => e.estado === 'ruta').length} de ${E.equipos.length}`} footC="text-tertiary" bar={entHoy.length ? firm / entHoy.length * 100 : 0} barC="bg-tertiary" onClick={() => ir('entregas')} />
     </div>
@@ -124,16 +127,17 @@ function StockDesk() {
             </div>
           </section>
 
-          <section className={`${CARD} overflow-hidden`}>
+          <section id="lista-inventario" className={`${CARD} overflow-hidden scroll-mt-20`}>
             <div className="p-space-md flex flex-wrap items-center gap-space-sm">
               <div className="relative flex-1 min-w-[220px]"><Icon n="search" className="absolute left-3 top-1/2 -translate-y-1/2 text-outline ico-20" />
                 <input value={u.q} onChange={e => setUI({ q: e.target.value, page: 1 })} type="search" placeholder="Filtrar por nombre, SKU, código o proveedor…" className={`${INP} pl-10`} /></div>
               <select value={u.cat} onChange={e => setUI({ cat: e.target.value, page: 1 })} className={`${INP} ${sel}`} aria-label="Categoría"><option value="all">Categoría: todas</option>{categoriasActivas().map(([k, c]) => <option key={k} value={k}>{c.label}</option>)}</select>
-              <select value={u.est} onChange={e => setUI({ est: e.target.value, page: 1 })} className={`${INP} ${sel}`} aria-label="Estado"><option value="all">Estado: todos</option>{(['red', 'amber', 'green'] as const).map(s => <option key={s} value={s}>{ST[s].t}</option>)}</select>
-              <select value={u.prop} onChange={e => setUI({ prop: e.target.value, page: 1 })} className={`${INP} ${sel}`} aria-label="Propiedad"><option value="all">Propiedad: todo</option><option value="propia">Material propio</option><option value="custodia">En custodia</option></select>
+              <select value={u.est} onChange={e => setUI({ est: e.target.value, page: 1 })} className={`${INP} ${sel}`} aria-label="Estado"><option value="all">Estado: todos</option>{(['red', 'amber', 'green'] as const).map(s => <option key={s} value={s}>{ST[s].t}</option>)}<option value={EST_SIN_MINIMO}>Sin mínimo</option></select>
+              <select value={u.prop} onChange={e => setUI({ prop: e.target.value, page: 1 })} className={`${INP} ${sel}`} aria-label="Propiedad"><option value="all">Propiedad: todo</option><option value="propia">Material propio</option><option value="custodia">En custodia (todos)</option>{sociosActivos(E).map(o => <option key={o.id} value={propDeSocio(o.id)}>Custodia {o.nombre}</option>)}</select>
               <select value={u.ubi} onChange={e => setUI({ ubi: e.target.value, page: 1 })} className={`${INP} ${sel}`} aria-label="Ubicación"><option value="all">Ubicación: todas</option><option value="almacen">Almacén</option>{E.vehiculos.map(v => <option key={v.id} value={v.id}>{nombreVehiculo(E, v.id)}</option>)}</select>
             </div>
             <div className="px-space-md pb-space-sm flex flex-wrap items-center gap-space-sm">
+              <ChipsFiltro />
               <span className="font-mono text-label-sm text-secondary">Mostrando {lista.length} de {E.products.length} referencias</span>
               <label className="inline-flex items-center gap-2 text-body-sm ml-auto cursor-pointer"><input type="checkbox" checked={u.agrupar} onChange={e => setUI({ agrupar: e.target.checked })} className="w-5 h-5 accent-primary" />Agrupar por categoría</label>
               {perm.configurar && <button onClick={() => exportarListaCsv(E, lista)} className={`${BTN_S} h-10 px-3`}><Icon n="file_download" className="ico-20" />Exportar CSV</button>}
@@ -164,7 +168,8 @@ function StockDesk() {
                 <div className="bg-white rounded-lg p-2.5 text-body-sm">{ultEnt.lineas.map(l => { const p = find(E, l.sku); return <div key={l.sku}>{num(l.qty)} {p ? UNIT[p.unit] : ''} {p?.name || l.sku}</div>; })}
                   <div className="font-mono text-label-sm text-tertiary mt-1"><Icon n="draw" className="ico-16" /> Firma registrada · {(ultEnt.hash || '').slice(0, 10)}</div></div>
               </div>); })()}
-            <button onClick={() => ir('albaranes')} className={`${BTN_P} py-2.5`}><Icon n="document_scanner" className="ico-20" />Leer un albarán</button>
+            <div className="grid grid-cols-2 gap-2"><button onClick={() => { ir('albaranes'); void import('../albaranes/AlbaranesView').then(m => m.escanearAlbaran()); }} className={`${BTN_P} py-2.5`}><Icon n="photo_camera" className="ico-20" />Escanear albarán</button>
+              <button onClick={() => ir('albaranes')} className={`${BTN_S} py-2.5`}><Icon n="document_scanner" className="ico-20" />Leer un albarán</button></div>
           </section>
           <Barras E={E} />
           <section className="bg-primary-fixed/50 rounded-xl p-space-md flex items-center justify-between gap-space-md">
@@ -177,7 +182,21 @@ function StockDesk() {
   );
 }
 
-const limpiarFiltros = () => setUI({ q: '', est: 'all', ubi: 'all', cat: 'all', prop: 'all', page: 1 });
+const limpiarFiltros = () => setUI({ ...SIN_FILTROS, page: 1 });
+/** E-024: un recuadro limpia los demás filtros, aplica el suyo y lleva a la lista */
+function aplicarFiltros(f: FiltrosInv) {
+  setUI({ ...f, page: 1 });
+  requestAnimationFrame(() => document.getElementById('lista-inventario')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+}
+export const aplicarRecuadro = (r: Recuadro) => aplicarFiltros(filtroDeRecuadro(r));
+/** Chips de los filtros activos, cada uno con su × para quitarlo */
+function ChipsFiltro() {
+  const E = useAlmacen(), u = useUI(), chips = chipsFiltros(E, u);
+  if (!chips.length) return null;
+  return <div className="flex flex-wrap items-center gap-1.5" aria-label="Filtros activos">{chips.map(c =>
+    <button key={c.clave} onClick={() => setUI({ ...c.quitar, page: 1 })} className="inline-flex items-center gap-1 h-9 pl-3 pr-2 rounded-full bg-primary-fixed text-primary font-semibold text-body-sm" aria-label={`Quitar filtro ${c.texto}`}>{c.texto}<Icon n="close" className="ico-18" /></button>)}
+    {chips.length > 1 && <button onClick={limpiarFiltros} className="h-9 px-2 text-primary text-body-sm font-semibold">Quitar todos</button>}</div>;
+}
 /** Cabecera que ordena con un toque (otro toque invierte el sentido) */
 function Th({ col, u, children }: { col: ColOrden; u: ReturnType<typeof useUI>; children: React.ReactNode }) {
   const activo = u.orden.col === col;
@@ -209,7 +228,7 @@ function Barras({ E }: { E: Estado }) {
     <section className={`${CARD} p-space-md`}>
       <div className="flex justify-between items-start"><h2 className="text-headline-md font-semibold">Referencias por categoría</h2><span className="font-mono text-label-sm text-secondary">semáforo</span></div>
       <div className="flex flex-col gap-2.5 mt-space-md">{rows.map(r =>
-        <button key={r.k} onClick={() => setUI({ cat: r.k, page: 1 })} className="text-left group">
+        <button key={r.k} onClick={() => aplicarFiltros({ ...SIN_FILTROS, cat: r.k })} className="text-left group">
           <div className="flex justify-between text-body-sm mb-1"><span className="font-medium group-hover:text-primary">{r.c.label}</span><span className="font-mono text-label-sm text-secondary">{r.n} ref.</span></div>
           <div className="flex h-3 rounded-full overflow-hidden bg-surface-container" style={{ width: `${Math.max(18, r.n / max * 100)}%` }}>
             {r.r > 0 && <div className="bg-error" style={{ flex: r.r }} title={`${r.r} en crítico`} />}{r.a > 0 && <div className="bg-amber-400" style={{ flex: r.a }} title={`${r.a} bajo`} />}{r.g > 0 && <div className="bg-tertiary-container" style={{ flex: r.g }} title={`${r.g} correcto`} />}
@@ -221,7 +240,7 @@ function Barras({ E }: { E: Estado }) {
 }
 
 function StockMob() {
-  const { E, u, lista, grupos, clave } = useListaInventario(), nCrit = critical(E).length;
+  const { E, u, lista, grupos, clave } = useListaInventario(), nCrit = critical(E).length, nSinMin = E.products.filter(p => p.minimoDefinido === false).length;
   const { visibles, centinela } = useProgresivo(lista, clave);
   const enVista = new Set(visibles.map(p => p.sku));
   const chip = (k: string, lbl: string, n: number) =>
@@ -232,7 +251,8 @@ function StockMob() {
       <div className="flex items-center gap-3 bg-surface-container-low rounded-xl p-3">
         <span className="w-10 h-10 rounded-lg bg-white grid place-items-center text-primary"><Icon n="sensors" /></span>
         <div className="flex-1 min-w-0"><div className="font-semibold flex items-center gap-1.5">{MARCA.nave}<span className="w-2 h-2 rounded-full bg-tertiary-container" /></div><div className="font-mono text-label-sm text-secondary truncate">Guardado {hace(ultimoGuardado)} · {E.operator}</div></div>
-        {nCrit > 0 && <button onClick={() => setUI({ est: 'red' })} className="shrink-0 inline-flex items-center gap-1 px-3 py-2 rounded-lg bg-error-container text-error font-mono text-label-md"><Icon n="warning" className="ico-18" />{nCrit}</button>}
+        {nSinMin > 0 && <button onClick={() => aplicarRecuadro({ k: 'sinmin' })} className="shrink-0 inline-flex items-center gap-1 px-3 py-2 rounded-lg bg-amber-100 text-amber-800 font-mono text-label-md" aria-label={`${nSinMin} sin mínimo`}><Icon n="rule" className="ico-18" />{nSinMin}</button>}
+        {nCrit > 0 && <button onClick={() => aplicarRecuadro({ k: 'bajo' })} aria-label={`${nCrit} bajo mínimo`} className="shrink-0 inline-flex items-center gap-1 px-3 py-2 rounded-lg bg-error-container text-error font-mono text-label-md"><Icon n="warning" className="ico-18" />{nCrit}</button>}
       </div>
       <div className="flex gap-2">
         <div className="relative flex-1"><Icon n="search" className="absolute left-3 top-1/2 -translate-y-1/2 text-outline" />
@@ -242,12 +262,13 @@ function StockMob() {
       </div>
       <button onClick={() => abrirAltaCamara()} className={`${BTN_P} h-14 text-body-lg`}><Icon n="add_a_photo" className="ico-28" />Nuevo con la cámara</button>
       {u.filtros && <div className="grid grid-cols-2 gap-2 bg-surface-container-lowest rounded-xl p-3 shadow-sm">
-        <label className="flex flex-col gap-1"><span className={LBL}>Estado</span><select value={u.est} onChange={e => setUI({ est: e.target.value })} className={`${INP} h-12`}>{[['all', 'Todos'], ['red', 'Crítico'], ['amber', 'Bajo'], ['green', 'Correcto']].map(([v, t]) => <option key={v} value={v}>{t}</option>)}</select></label>
+        <label className="flex flex-col gap-1"><span className={LBL}>Estado</span><select value={u.est} onChange={e => setUI({ est: e.target.value })} className={`${INP} h-12`}>{[['all', 'Todos'], ['red', 'Crítico'], ['amber', 'Bajo'], ['green', 'Correcto'], [EST_SIN_MINIMO, 'Sin mínimo']].map(([v, t]) => <option key={v} value={v}>{t}</option>)}</select></label>
         <label className="flex flex-col gap-1"><span className={LBL}>Dónde</span><select value={u.ubi} onChange={e => setUI({ ubi: e.target.value })} className={`${INP} h-12`}><option value="all">Todo</option><option value="almacen">Almacén</option>{E.vehiculos.map(v => <option key={v.id} value={v.id}>{nombreVehiculo(E, v.id)}</option>)}</select></label>
-        <label className="col-span-2 flex flex-col gap-1"><span className={LBL}>Propiedad</span><select value={u.prop} onChange={e => setUI({ prop: e.target.value })} className={`${INP} h-12`}><option value="all">Todo</option><option value="propia">Material propio</option><option value="custodia">En custodia de Esmove</option></select></label>
+        <label className="col-span-2 flex flex-col gap-1"><span className={LBL}>Propiedad</span><select value={u.prop} onChange={e => setUI({ prop: e.target.value })} className={`${INP} h-12`}><option value="all">Todo</option><option value="propia">Material propio</option><option value="custodia">En custodia (todos los socios)</option>{sociosActivos(E).map(o => <option key={o.id} value={propDeSocio(o.id)}>Custodia {o.nombre}</option>)}</select></label>
         <button onClick={limpiarFiltros} className={`col-span-2 ${BTN_T} h-11`}>Quitar filtros</button>
       </div>}
       <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-4 px-4 pb-1">{chip('all', 'Todos', E.products.length)}{categoriasActivas().map(([k, c]) => chip(k, c.label, E.products.filter(p => p.cat === k).length))}</div>
+      <div id="lista-inventario" className="scroll-mt-20"><ChipsFiltro /></div>
       <div className="flex flex-wrap items-center gap-2 font-mono text-label-sm text-secondary"><span>Mostrando {lista.length} de {E.products.length} referencias</span>
         {(hayFiltro || u.q) && <button onClick={limpiarFiltros} className="text-primary h-10">Limpiar</button>}
         <select value={`${u.orden.col}:${u.orden.dir}`} onChange={e => { const [col, dir] = e.target.value.split(':'); setUI({ orden: { col: col as ColOrden, dir: Number(dir) as 1 | -1 } }); }} className="ml-auto h-10 rounded-lg bg-surface-container-lowest shadow-sm px-2 text-body-sm" aria-label="Ordenar">

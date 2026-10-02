@@ -1,4 +1,4 @@
-/* E-008 · Material en custodia de Esmove: stock, solicitud de reposición, informe sin importes y acta de recuento firmada */
+/* E-008 / E-024 · Material en custodia de cada socio (Esmove, Instant Box…): stock, solicitud de reposición, informe sin importes y acta de recuento firmada */
 import { useMemo, useState } from 'react';
 import { UNIT } from '../../data/catalogo';
 import { esCustodia, qtyTxt, status, stockTotal } from '../../domain/reglas';
@@ -18,10 +18,15 @@ import { BTN_P, BTN_S, BTN_T, CARD, Campo, FirmaImg, Icon, INP, LBL, Pill, Tag, 
 import { abrirFicha, Ubicaciones } from '../inventario/hojas';
 import { abrirReposicion } from '../reposicion/Reposicion';
 import { fotosInforme } from '../fotos/servicio';
+import { colorSocio } from '../../domain/socios';
+import { ir } from '../../store/ui';
 
 export default function CustodiaView() {
   const E = useAlmacen(), perm = usePermisos();
-  const [prop, setProp] = useState(E.propietarios[0]?.id || 'ESMOVE');
+  // E-024: una pestaña por socio (los activos y los desactivados que aún tengan material)
+  const socios = E.propietarios.filter(o => o.activo !== false || E.products.some(p => esCustodia(p) && p.propietario === o.id));
+  const [elegido, setProp] = useState(socios[0]?.id || 'ESMOVE');
+  const prop = socios.some(o => o.id === elegido) ? elegido : socios[0]?.id || elegido;
   const o = E.propietarios.find(x => x.id === prop);
   const prods = E.products.filter(p => esCustodia(p) && p.propietario === prop).sort((a, b) => a.name.localeCompare(b.name));
   const solicitud = gruposReposicion(E).find(g => g.destino === 'propietario' && g.grupo === prop);
@@ -32,11 +37,16 @@ export default function CustodiaView() {
         <div><span className={LBL}>Material que no es nuestro · sin precios</span><h1 className="text-headline-lg-mobile lg:text-headline-lg font-bold">En custodia de {o?.nombre || prop}</h1>
           <p className="text-secondary">{prods.length} referencias · {num(prods.reduce((a, p) => a + p.stock, 0))} unidades · {rojos} en rojo · {amarillos} bajas</p></div>
         <div className="flex flex-wrap gap-2">
-          {E.propietarios.length > 1 && <select value={prop} onChange={e => setProp(e.target.value)} className={`${INP} !w-auto h-11`} aria-label="Propietario">{E.propietarios.map(x => <option key={x.id} value={x.id}>{x.nombre}</option>)}</select>}
           <button onClick={() => openModal(<Informe prop={prop} />, { ancha: true })} className={`${BTN_S} px-4 h-11`}><Icon n="summarize" className="ico-20" />Informe</button>
           <button onClick={() => openModal(<Acta prop={prop} />, { ancha: true })} className={`${BTN_P} px-4 h-11`}><Icon n="fact_check" className="ico-20" />Recuento con {o?.nombre || 'el propietario'}</button>
         </div>
       </div>
+      {socios.length > 0 && <div role="tablist" aria-label="Socios de custodia" className="flex gap-2 overflow-x-auto no-scrollbar -mx-4 px-4 lg:mx-0 lg:px-0 pb-1">
+        {socios.map(x => { const n = E.products.filter(p => esCustodia(p) && p.propietario === x.id).length, act = x.id === prop; return (
+          <button key={x.id} role="tab" aria-selected={act} onClick={() => setProp(x.id)} className={`shrink-0 inline-flex items-center gap-2 px-4 h-11 rounded-full font-semibold ${act ? 'bg-primary text-white' : `${colorSocio(x).c}`}`}>
+            {x.nombre}<span className={`px-1.5 rounded font-mono text-label-sm ${act ? 'bg-white/20' : 'bg-white/60'}`}>{n}</span>{x.activo === false && <span className="text-label-sm">(desactivado)</span>}</button>); })}
+        {perm.admin && <button onClick={() => ir('config')} className="shrink-0 inline-flex items-center gap-1 px-3 h-11 rounded-full text-primary font-semibold"><Icon n="add" className="ico-20" />Socio</button>}
+      </div>}
       {solicitud && <section className={`${CARD} p-4 flex flex-wrap items-center justify-between gap-3 bg-violet-50`}>
         <div className="flex items-center gap-3"><Icon n="handshake" className="text-violet-800" /><div><div className="font-semibold">{solicitud.lineas.length} referencia{solicitud.lineas.length === 1 ? '' : 's'} bajo mínimo</div><div className="text-body-sm text-secondary">La solicitud de reposición a {o?.nombre} está preparada, sin importes.</div></div></div>
         <button onClick={abrirReposicion} className={`${BTN_T} h-11 px-4`}>{perm.admin ? 'Revisar y enviar' : 'Ver solicitud'}</button></section>}

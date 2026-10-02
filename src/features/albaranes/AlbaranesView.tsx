@@ -1,5 +1,5 @@
 /* Recepción de albaranes con IA: sube foto o PDF, la IA propone líneas y el usuario confirma. Nada entra solo. */
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { AlbaranIA } from '../../data/tipos';
 import { MARCA, UNIT, idsCategoriasActivas } from '../../data/catalogo';
 import { contenidoTxt, find, formatoEntero, matchLine, qtyTxt } from '../../domain/reglas';
@@ -11,20 +11,30 @@ import { crearStore } from '../../store/crear';
 import { useEsEscritorio } from '../../store/ui';
 import { toast } from '../../ui/toast';
 import { BTN_P, BTN_S, BTN_T, CARD, Icon, INP, LBL, Tag, Vacio, Tile } from '../../ui/base';
+import { SelectorArticulo } from '../../ui/selectorArticulo';
 import { abrirBorrador, abrirFormProducto } from '../inventario/hojas';
-import { AVISO_GEMINI, DEMOS, demoPara, iaReal, leerConIA } from './lector';
+import { AVISO_GEMINI, DEMOS, demoPara, iaReal } from './lector';
 import { FotoLinea } from '../../ui/foto';
 import { categoriaSugerida, detectarUnidad, normalizarProveedor } from '../../../supabase/functions/_compartido/clasificar';
 import { abrirDetalleAlbaran } from './DetalleAlbaran';
+import { abrirEscanerAlbaran, EscanerAlbaranRaiz } from './EscanerAlbaran';
+import { alLeerPendientes, cola, guardarPaginasAlbaran, lecturas, nombresPaginas, paginasDeLectura } from './colaLectura';
+import type { Lectura } from '../../domain/lecturaAlbaran';
 
 interface Linea { codigo: string; descripcion: string; cantidad: string; confianza: number; sku: string | null; how: string | null; include: boolean; series: string; nota: string }
 interface Doc { proveedor: string; delegacion?: string; numero: string; fecha: string; cif: string; bultos?: number }
-interface Alb { stage: 'idle' | 'processing' | 'review'; mode: 'ia' | 'sim' | null; steps: ('run' | 'done')[]; doc: Doc; lines: Linea[]; file: string; preview: string | null; isPdf: boolean; ms: number }
-const vacio = (): Alb => ({ stage: 'idle', mode: null, steps: [], doc: { proveedor: '', numero: '', fecha: '', cif: '' }, lines: [], file: '', preview: null, isPdf: false, ms: 0 });
+/** E-024: una vista por página (foto o PDF) y los archivos, que se guardan con el albarán al aprobarlo */
+interface VistaPagina { url: string; pdf: boolean }
+interface Alb { stage: 'idle' | 'processing' | 'review'; mode: 'ia' | 'sim' | null; steps: ('run' | 'done')[]; doc: Doc; lines: Linea[]; file: string; paginas: VistaPagina[]; blobs: Blob[]; lectura: string | null; avisos: string[]; ms: number }
+const vacio = (): Alb => ({ stage: 'idle', mode: null, steps: [], doc: { proveedor: '', numero: '', fecha: '', cif: '' }, lines: [], file: '', paginas: [], blobs: [], lectura: null, avisos: [], ms: 0 });
+const vistas = (blobs: Blob[]): VistaPagina[] => blobs.map(b => ({ url: URL.createObjectURL(b), pdf: b.type === 'application/pdf' }));
 /* El albarán en curso sobrevive a los cambios de pantalla */
 const albStore = crearStore<Alb>(vacio());
 const A = () => albStore.get();
 const emit = () => albStore.emit();
+const soltarVistas = () => A().paginas.forEach(v => URL.revokeObjectURL(v.url));
+/** Cierra la revisión; la lectura guardada en el móvil se borra (ya se ha aprobado o descartado) */
+function terminarRevision() { const l = A().lectura; if (l) void cola.descartar(l); soltarVistas(); albStore.set(vacio()); }
 
 const PASOS: [string, string, string][] = [
   ['Segmentación de cabecera', 'Proveedor, CIF, n.º de albarán y fecha', 'view_agenda'],
@@ -49,31 +59,65 @@ function cargarLineas(doc: AlbaranIA, mode: 'ia' | 'sim') {
 async function pasos() { for (let i = 0; i < 3; i++) { A().steps[i] = 'run'; emit(); await wait(600 + Math.random() * 450); A().steps[i] = 'done'; } }
 
 export async function procesarDemo(key: string, nombre?: string, mantener = false) {
-  const prev = mantener ? { preview: A().preview, isPdf: A().isPdf } : { preview: null, isPdf: false };
+  const prev = mantener ? { paginas: A().paginas, blobs: A().blobs } : (soltarVistas(), { paginas: [], blobs: [] });
   const t0 = performance.now();
   albStore.set({ ...vacio(), stage: 'processing', mode: 'sim', file: nombre || `Ejemplo · ${DEMOS[key].proveedor} ${DEMOS[key].numero}`, ...prev });
   await pasos();
   cargarLineas(DEMOS[key], 'sim'); A().stage = 'review'; A().ms = performance.now() - t0; emit();
 }
-export async function procesarArchivo(file?: File) {
-  if (!file || A().stage === 'processing') return;
-  const isImg = /^image\//.test(file.type), isPdf = file.type === 'application/pdf';
-  if (!isImg && !isPdf) return toast('Formato no admitido. Sube una foto (JPG/PNG) o un PDF.', 'err');
+
+/** E-024 · Todas las páginas forman UN albarán: se leen juntas (por lotes si son muchas) y sale una sola revisión.
+    Sin cobertura quedan "pendientes de leer" en este móvil y se leen solas al volver la conexión. */
+export async function procesarPaginas(blobs: Blob[], nombre: string) {
+  if (!blobs.length || A().stage === 'processing') return;
   const t0 = performance.now();
-  albStore.set({ ...vacio(), stage: 'processing', file: file.name, preview: URL.createObjectURL(file), isPdf });
-  if (iaReal()) {
-    A().mode = 'ia'; A().steps = ['run']; emit();
-    try {
-      const t = setTimeout(() => { A().steps = ['done', 'run']; emit(); }, 2500);
-      const data = await leerConIA(file, S());
-      clearTimeout(t); A().steps = ['done', 'done', 'run']; emit(); await wait(300);
-      cargarLineas(data, 'ia'); A().steps[2] = 'done'; A().stage = 'review'; A().ms = performance.now() - t0; emit();
-      if (!A().lines.length) toast('La IA no ha encontrado líneas de material. Prueba con una foto más nítida y de frente.', 'warn', 7000);
-      return;
-    } catch (e) { toast(`${(e as Error).message}. Se muestra un resultado simulado.`, 'warn', 7000); }
+  soltarVistas();
+  albStore.set({ ...vacio(), stage: 'processing', file: nombre, paginas: vistas(blobs), blobs });
+  if (!iaReal()) return procesarDemo(demoPara(nombre), nombre, true);
+  A().mode = 'ia'; A().steps = ['run']; emit();
+  const t = setTimeout(() => { A().steps = ['done', 'run']; emit(); }, 2500);
+  const l = await cola.nueva(blobs, nombre).catch((e: Error): Lectura => ({ id: '', ts: Date.now(), nombre, paginas: blobs.length, estado: 'error', error: e.message }));
+  clearTimeout(t);
+  if (l.estado === 'leido' && l.resultado) {
+    A().steps = ['done', 'done', 'run']; emit(); await wait(300);
+    cargarRevision(l, blobs); A().ms = performance.now() - t0; emit();
+    return;
   }
-  await procesarDemo(demoPara(file.name), file.name, true);
+  soltarVistas(); albStore.set(vacio());
+  if (l.estado === 'pendiente') toast('Sin cobertura: el albarán queda «pendiente de leer» en este móvil y se leerá solo al volver la conexión.', 'warn', 8000);
+  else toast(`${l.error || 'No se ha podido leer'}. Queda en «Albaranes escaneados» para reintentarlo.`, 'err', 8000);
 }
+function cargarRevision(l: Lectura, blobs: Blob[]) {
+  const a = A();
+  cargarLineas(l.resultado!, 'ia');
+  Object.assign(a, { lectura: l.id || null, avisos: l.resultado!.avisos || [], blobs, stage: 'review' as const, file: l.nombre });
+  if (!a.paginas.length) a.paginas = vistas(blobs);
+  a.steps = ['done', 'done', 'done'];
+  if (!a.lines.length) toast('La IA no ha encontrado líneas de material. Prueba con una foto más nítida y de frente.', 'warn', 7000);
+}
+/** Revisar un albarán que se leyó después (sin cobertura al escanearlo) */
+export async function revisarLectura(l: Lectura) {
+  if (A().stage !== 'idle' && !confirm('Hay otro albarán en revisión. ¿Dejarlo y revisar este?')) return;
+  const blobs = await paginasDeLectura(l.id);
+  soltarVistas(); albStore.set({ ...vacio(), paginas: vistas(blobs) });
+  cargarRevision(l, blobs); emit();
+  requestAnimationFrame(() => document.getElementById('revision-albaran')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+}
+/** Fotos (una o varias) y/o PDF de la galería o del ordenador: las fotos pasan por el recorte del escáner */
+export function procesarArchivos(lista: File[] | FileList | null | undefined) {
+  const files = [...(lista || [])];
+  if (!files.length || A().stage === 'processing') return;
+  const ok = files.filter(f => /^image\//.test(f.type) || f.type === 'application/pdf');
+  if (!ok.length) return toast('Formato no admitido. Sube fotos (JPG/PNG) o un PDF.', 'err');
+  if (ok.length < files.length) toast('Se omiten los archivos que no son foto ni PDF.', 'warn');
+  const pdfs = ok.filter(f => f.type === 'application/pdf'), fotos = ok.filter(f => f.type !== 'application/pdf');
+  const nombre = ok.length === 1 ? ok[0].name : `${ok.length} archivos`;
+  if (!fotos.length) return void procesarPaginas(pdfs, nombre);
+  abrirEscanerAlbaran(p => void procesarPaginas([...pdfs, ...p], nombre), fotos);
+}
+export const procesarArchivo = (f?: File) => procesarArchivos(f ? [f] : []);
+export const escanearAlbaran = () => abrirEscanerAlbaran(p => void procesarPaginas(p, `Escaneado · ${p.length} página${p.length === 1 ? '' : 's'}`));
+alLeerPendientes(n => toast(`${n === 1 ? 'Se ha leído el albarán' : `Se han leído ${n} albaranes`} que estaba${n === 1 ? '' : 'n'} pendiente${n === 1 ? '' : 's'}: revísalo${n === 1 ? '' : 's'} en Albaranes.`, 'ok', 8000));
 
 function confirmar() {
   const E = S(), a = A(), lines = a.lines.filter(l => l.include && l.sku);
@@ -84,10 +128,12 @@ function confirmar() {
   }
   const conf = a.lines.reduce((s, l) => s + l.confianza, 0) / (a.lines.length || 1);
   // todo o nada: se valida entero en local y el servidor lo repite en una sola transacción
-  if (!ejecutar({ op: 'albaran', args: { id: nuevoId(), cabecera: { numero: a.doc.numero || 's/n', proveedor: normalizarProveedor(a.doc.proveedor).proveedor || a.doc.proveedor, delegacion: a.doc.delegacion || '', cif: a.doc.cif, fecha: a.doc.fecha, confianza: conf, modo: a.mode || 'sim' },
+  const id = nuevoId(), paginas = a.mode === 'ia' ? a.blobs : [];         // las páginas de un ejemplo simulado no se guardan
+  if (!ejecutar({ op: 'albaran', args: { id, cabecera: { numero: a.doc.numero || 's/n', proveedor: normalizarProveedor(a.doc.proveedor).proveedor || a.doc.proveedor, delegacion: a.doc.delegacion || '', cif: a.doc.cif, fecha: a.doc.fecha, confianza: conf, modo: a.mode || 'sim', paginas: nombresPaginas(paginas) },
     lineas: lines.map(l => ({ sku: l.sku!, cantidad: toNum(l.cantidad), series: [], codigo: l.codigo || undefined })) } })) return;
+  if (paginas.length) void guardarPaginasAlbaran(id, paginas);
   toast(`Albarán ${a.doc.numero} integrado: ${lines.length} línea${lines.length === 1 ? '' : 's'} sumada${lines.length === 1 ? '' : 's'} al stock.`, 'ok', 6000);
-  albStore.set(vacio());
+  terminarRevision();
 }
 
 export default function AlbaranesView() {
@@ -110,17 +156,18 @@ export default function AlbaranesView() {
       </section>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-space-lg">
-        <section className={`lg:col-span-8 ${CARD} p-space-md`}>
+        <section className={`lg:col-span-8 ${CARD} p-space-md flex flex-col gap-space-md`}>
+          <button onClick={escanearAlbaran} disabled={procesando} className={`${BTN_P} h-16 text-body-lg w-full`}><Icon n="document_scanner" className="ico-28" />Escanear albarán con la cámara</button>
           <button onClick={() => input.current?.click()} disabled={procesando}
-            onDragOver={e => { e.preventDefault(); setArrastrando(true); }} onDragLeave={() => setArrastrando(false)} onDrop={e => { e.preventDefault(); setArrastrando(false); procesarArchivo(e.dataTransfer.files[0]); }}
+            onDragOver={e => { e.preventDefault(); setArrastrando(true); }} onDragLeave={() => setArrastrando(false)} onDrop={e => { e.preventDefault(); setArrastrando(false); procesarArchivos(e.dataTransfer.files); }}
             className={`w-full flex flex-col items-center justify-center text-center gap-3 min-h-[220px] rounded-xl border-2 border-dashed ${arrastrando ? 'border-primary bg-primary-fixed/50' : 'border-primary-fixed-dim bg-surface-container-low hover:bg-surface-container'} p-6 transition-colors`}>
             <span className="w-16 h-16 rounded-2xl bg-primary-fixed text-primary grid place-items-center"><Icon n={procesando ? 'progress_activity' : 'cloud_upload'} className={`ico-32 ${procesando ? 'girar' : ''}`} /></span>
-            <span className="text-headline-sm font-semibold">{procesando ? `Procesando ${a.file}…` : desk ? 'Arrastra aquí el albarán o selecciónalo de tu equipo' : 'Hacer foto o subir albarán'}</span>
-            <span className="text-body-sm text-secondary">PDF, JPG o PNG. En el móvil puedes usar la cámara directamente.</span>
-            <span className="flex flex-wrap justify-center gap-2"><Tag>PDF</Tag><Tag>JPG / PNG</Tag><Tag>CÁMARA</Tag></span>
+            <span className="text-headline-sm font-semibold">{procesando ? `Procesando ${a.file}…` : desk ? 'Arrastra aquí el albarán o selecciónalo de tu equipo' : 'Fotos o PDF de la galería'}</span>
+            <span className="text-body-sm text-secondary">Puedes elegir varias fotos (las hojas de un mismo albarán) o un PDF de varias páginas: sale una sola revisión.</span>
+            <span className="flex flex-wrap justify-center gap-2"><Tag>PDF</Tag><Tag>JPG / PNG</Tag><Tag>VARIAS HOJAS</Tag></span>
           </button>
-          <input ref={input} type="file" accept="image/*,application/pdf" className="hidden" onChange={e => { procesarArchivo(e.target.files?.[0]); e.target.value = ''; }} />
-          <div className="mt-space-md"><div className={`${LBL} mb-2`}>¿Sin albarán a mano? Prueba con uno de ejemplo</div>
+          <input ref={input} type="file" accept="image/*,application/pdf" multiple className="hidden" onChange={e => { procesarArchivos(e.target.files); e.target.value = ''; }} />
+          <div><div className={`${LBL} mb-2`}>¿Sin albarán a mano? Prueba con uno de ejemplo</div>
             <div className="flex flex-wrap gap-2">{Object.entries(DEMOS).map(([k, d]) => <button key={k} onClick={() => procesarDemo(k)} disabled={procesando} className={`${BTN_T} px-3 h-11 text-body-sm`}><Icon n="description" className="ico-18" />{d.proveedor} · {d.lineas?.length} líneas</button>)}</div></div>
         </section>
         <section className={`lg:col-span-4 ${CARD} p-space-md flex flex-col gap-2`}>
@@ -133,7 +180,9 @@ export default function AlbaranesView() {
         </section>
       </div>
 
+      <Lecturas />
       {a.stage === 'review' && <Revision />}
+      <EscanerAlbaranRaiz />
 
       <section className={`${CARD} overflow-hidden`}>
         <div className="p-space-md"><h2 className="text-headline-md font-semibold">Historial de albaranes procesados</h2><p className="text-body-sm text-secondary">Registro auditable de las entradas confirmadas desde albarán.</p></div>
@@ -146,6 +195,34 @@ export default function AlbaranesView() {
   );
 }
 
+/** E-024 · Albaranes escaneados en este móvil: pendientes de leer (sin cobertura), leídos por revisar o con error */
+function Lecturas() {
+  const ls = lecturas.use(), a = albStore.use();
+  const [enLinea, setEnLinea] = useState(navigator.onLine);
+  useEffect(() => { const f = () => setEnLinea(navigator.onLine); addEventListener('online', f); addEventListener('offline', f); return () => { removeEventListener('online', f); removeEventListener('offline', f); }; }, []);
+  const visibles = ls.filter(l => l.id !== a.lectura);
+  if (!visibles.length) return null;
+  const EST: Record<Lectura['estado'], [string, string, string]> = {
+    pendiente: ['cloud_off', 'text-amber-800', enLinea ? 'Pendiente de leer' : 'Pendiente de leer: se leerá al volver la cobertura'],
+    leyendo: ['progress_activity', 'text-primary', 'Leyendo…'], leido: ['task_alt', 'text-tertiary', 'Leído: falta revisarlo y confirmarlo'], error: ['error', 'text-error', 'No se ha podido leer'],
+  };
+  return (
+    <section className={`${CARD} p-space-md flex flex-col gap-2`}>
+      <h2 className="text-headline-sm font-semibold flex items-center gap-2"><Icon n="smartphone" className="text-primary" />Albaranes escaneados en este dispositivo</h2>
+      {visibles.map(l => { const [ico, c, t] = EST[l.estado]; return (
+        <div key={l.id} className="flex flex-wrap items-center gap-3 py-2 border-t border-surface-container">
+          <Icon n={ico} className={`${c} ${l.estado === 'leyendo' ? 'girar' : ''}`} />
+          <div className="flex-1 min-w-[180px]"><div className="font-semibold">{l.resultado?.proveedor ? `${l.resultado.proveedor} · ${l.resultado.numero || 's/n'}` : l.nombre}</div>
+            <div className={`text-body-sm ${c}`}>{t}{l.error ? `: ${l.error}` : ''}</div>
+            <div className="font-mono text-label-sm text-secondary">{l.paginas} página{l.paginas === 1 ? '' : 's'} · {hace(l.ts)}</div></div>
+          {l.estado === 'leido' && <button onClick={() => void revisarLectura(l)} className={`${BTN_P} h-11 px-4`}><Icon n="fact_check" className="ico-20" />Revisar</button>}
+          {(l.estado === 'error' || l.estado === 'pendiente') && enLinea && <button onClick={() => void cola.reintentar(l.id)} className={`${BTN_S} h-11 px-3`}><Icon n="refresh" className="ico-20" />Leer ahora</button>}
+          <button onClick={() => { if (confirm('¿Descartar este albarán escaneado? Se borran sus páginas de este dispositivo.')) void cola.descartar(l.id); }} className="h-11 px-3 text-error font-semibold">Descartar</button>
+        </div>); })}
+    </section>
+  );
+}
+
 function Revision() {
   useAlmacen(); // se repinta al crear una referencia desde una línea
   const a = albStore.use(), d = a.doc, ok = a.lines.filter(l => l.include && l.sku);
@@ -153,13 +230,15 @@ function Revision() {
   const exportar = () => descargarCsv(`albaran-${(d.numero || 'sn').replace(/[^\w-]/g, '')}.csv`, [['Proveedor', 'N.º albarán', 'Fecha', 'Código', 'Descripción', 'SKU', 'Cantidad', 'N.º serie', 'Confianza', 'Se ingresa'],
     ...a.lines.map(l => [d.proveedor, d.numero, d.fecha, l.codigo, l.descripcion, l.sku || '', l.cantidad, parseSN(l.series).join(' '), Math.round(l.confianza * 100) + '%', l.include && l.sku ? 'Sí' : 'No'])]);
   return (
-    <section className="flex flex-col gap-space-md">
-      <div className="flex flex-wrap items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-tertiary-container" /><h2 className="text-headline-md font-semibold">Validación de albarán en curso</h2><Tag c="bg-primary-fixed text-primary">{d.numero || 's/n'}</Tag>{a.mode === 'ia' ? <Tag c="bg-tertiary-fixed/40 text-tertiary">Lectura real</Tag> : <Tag>Simulado</Tag>}<span className="text-body-sm text-secondary lg:ml-auto">Archivo: {a.file}</span></div>
+    <section id="revision-albaran" className="flex flex-col gap-space-md scroll-mt-20">
+      {a.avisos.map(t => <p key={t} className="text-body-md bg-amber-50 text-amber-900 rounded-lg p-3 flex gap-2"><Icon n="warning" className="text-amber-700 shrink-0" />{t}</p>)}
+      <div className="flex flex-wrap items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-tertiary-container" /><h2 className="text-headline-md font-semibold">Validación de albarán en curso</h2>{a.paginas.length > 1 && <Tag>{a.paginas.length} páginas</Tag>}<Tag c="bg-primary-fixed text-primary">{d.numero || 's/n'}</Tag>{a.mode === 'ia' ? <Tag c="bg-tertiary-fixed/40 text-tertiary">Lectura real</Tag> : <Tag>Simulado</Tag>}<span className="text-body-sm text-secondary lg:ml-auto">Archivo: {a.file}</span></div>
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-space-lg items-start">
         <div className={`lg:col-span-5 ${CARD} p-space-md`}><div className="flex items-center gap-2 mb-3"><Icon n="image" className="text-secondary" /><span className="font-semibold">Documento fuente</span></div>
           <div className="bg-primary-fixed/40 rounded-xl p-3">
-            {a.preview && !a.isPdf ? <img src={a.preview} alt="Albarán subido" className="w-full rounded-lg" />
-              : a.preview && a.isPdf ? <iframe src={a.preview} title="Albarán PDF" className="w-full h-[560px] rounded-lg bg-white" />
+            {a.paginas.length ? <div className="flex flex-col gap-3">{a.paginas.map((v, k) => <figure key={v.url} className="flex flex-col gap-1">
+                {a.paginas.length > 1 && <figcaption className="font-mono text-label-sm text-secondary">Página {k + 1} de {a.paginas.length}</figcaption>}
+                {v.pdf ? <iframe src={v.url} title={`Albarán PDF ${k + 1}`} className="w-full h-[560px] rounded-lg bg-white" /> : <a href={v.url} target="_blank" rel="noreferrer"><img src={v.url} alt={`Página ${k + 1} del albarán`} className="w-full rounded-lg bg-white" /></a>}</figure>)}</div>
                 : <div className="papel rounded-lg p-4 text-[12px] leading-snug">
                   <div className="marca-ia p-2 flex justify-between gap-2"><div><div className="font-bold text-[14px]">{d.proveedor}</div><div className="text-secondary">CIF: {d.cif || '—'}</div></div><div className="text-right"><div className="font-bold">ALBARÁN</div><div className="font-mono text-primary">#{d.numero}</div><div className="text-secondary">{d.fecha}</div></div></div>
                   <div className="flex justify-between text-secondary mt-3 mb-2"><span>Destinatario: {MARCA.nombre}</span><span>{d.bultos || a.lines.length} bultos</span></div>
@@ -181,7 +260,7 @@ function Revision() {
             <div className="p-space-md flex flex-col sm:flex-row gap-2 bg-surface-container-low">
               <button onClick={() => { a.lines.push({ codigo: '', descripcion: 'Línea añadida a mano', cantidad: '1', confianza: 1, sku: null, how: 'manual', include: false, series: '', nota: '' }); emit(); }} className={`${BTN_S} h-12 px-4`}><Icon n="playlist_add" className="ico-20" />Añadir línea manual</button>
               <button onClick={exportar} className={`${BTN_S} h-12 px-4`}><Icon n="ios_share" className="ico-20" />Exportar CSV</button>
-              <button onClick={() => albStore.set(vacio())} className={`${BTN_S} h-12 px-4`}>Descartar</button>
+              <button onClick={() => { if (confirm('¿Descartar esta lectura? No se ingresa nada.')) terminarRevision(); }} className={`${BTN_S} h-12 px-4`}>Descartar</button>
               <button onClick={confirmar} disabled={!ok.length} className={`${BTN_P} h-14 sm:h-auto px-5 flex-1 text-body-lg`}><Icon n="check_circle" className="ico-fill" />Confirmar e integrar en stock ({ok.length} línea{ok.length === 1 ? '' : 's'}, {num(unidades)} uds)</button>
             </div>
           </div>
@@ -210,8 +289,7 @@ function LineaAlb({ l, i, proveedor }: { l: Linea; i: number; proveedor: string 
           <div className="flex flex-wrap justify-between gap-2"><div className="min-w-0"><div className="font-semibold">{l.descripcion}</div><div className="font-mono text-label-sm text-secondary">{l.codigo || 'sin código'}{l.how && ` · emparejado por ${l.how}`}{l.nota && ` · ${l.nota}`}</div></div>
             <span className={`self-start font-mono text-label-sm px-2 py-1 rounded-full whitespace-nowrap ${est.c}`}>● {est.t}</span></div>
           <div className="grid grid-cols-1 sm:grid-cols-[1fr_150px] gap-2">
-            <select value={l.sku || ''} onChange={e => { l.sku = e.target.value || null; l.include = !!e.target.value; l.how = e.target.value ? 'manual' : null; emit(); }} className={`${INP} h-11 text-body-sm`} aria-label="Referencia del catálogo">
-              <option value="">— Sin correspondencia (no se ingresa) —</option>{E.products.map(x => <option key={x.sku} value={x.sku}>{x.sku} · {x.name}</option>)}</select>
+            <SelectorArticulo valor={l.sku} onChange={sku => { l.sku = sku; l.include = !!sku; l.how = sku ? 'manual' : null; emit(); }} vacio="— Sin correspondencia (no se ingresa) —" ariaLabel="Referencia del catálogo" alto="h-11" borradores />
             <label className={`flex items-center gap-2 ${INP} h-11`}><input value={l.cantidad} onChange={e => { l.cantidad = e.target.value; emit(); }} inputMode="decimal" className="w-full bg-transparent focus:outline-none font-semibold" aria-label="Cantidad" /><span className="text-body-sm text-secondary">{p ? UNIT[p.unit] : ''}</span></label>
           </div>
           {p ? <div className="text-body-sm text-secondary">Entra en el almacén{contenidoTxt(p) ? ` (${contenidoTxt(p)})` : ''} · stock {qtyTxt(p, p.stock)} → <b className="text-on-surface">{qtyTxt(p, p.stock + q)}</b></div>
