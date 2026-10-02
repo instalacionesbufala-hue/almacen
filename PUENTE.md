@@ -840,6 +840,59 @@ Hoy el propietario Esmove existe en la tabla `propietarios`, pero **no se pueden
 - Hay pruebas de los puntos 1 a 4.
 - La guía explica que el histórico se lanza **una sola vez** (`cargarHistoricoRegistro`) y **después** de desplegar este encargo, y que el recuento de furgonetas del lunes va **después** del histórico.
 
+### E-027 · Roles y permisos configurables, con un rol de solo lectura para dirección · PENDIENTE (después de E-026)
+**Petición del usuario (02/10):** "Necesito poder crear y modificar lo que ven los usuarios. He creado uno para la dirección y quiero darle acceso de **solo lectura**, que no pueda modificar nada."
+**Hoy** solo existen dos roles fijos (`perfiles.rol in ('admin','almacen')`). El usuario de dirección tiene como mínimo los permisos de almacén: **puede escribir**.
+
+**1. Roles configurables**
+- **Tabla `roles`:** id, nombre, descripción, `sistema` (no se borra), `permisos jsonb`. `perfiles.rol` pasa a ser una referencia a `roles.id`. Migración sin pérdida: `admin` → Administrador y `almacen` → Almacén.
+- **Roles de sistema:**
+  - **Administrador:** todo. No se puede editar ni dejar el sistema sin ningún administrador activo (E-004).
+  - **Almacén:** lo que hay hoy (E-004, E-018 y E-022).
+  - **Solo lectura**, nuevo, pensado para **dirección**: ve, no toca.
+- **Roles propios:** el administrador puede **crear, renombrar, duplicar y borrar** roles propios. Solo se borran si nadie los usa.
+
+**2. Matriz de permisos** (Configuración → Usuarios y permisos → pestaña "Roles")
+Una tabla con una fila por apartado y casillas **Ver** y **Modificar**, en lenguaje normal:
+- Inventario (ver stock y fichas · crear y editar artículos · fotos)
+- Movimientos (entradas, salidas, mermas, traspasos y ajustes)
+- Albaranes (leer con IA y aprobar · reasignar líneas)
+- Entregas y firmas (preparar, firmar y anular · ver los PDF)
+- Equipos, técnicos y vehículos (ver · altas, bajas y asignaciones)
+- Recuentos de furgoneta y cíclicos (ver · hacer recuentos)
+- Herramientas, EPIs y ropa (ver · asignar e incidencias)
+- Custodia de socios (ver stock e informes · solicitudes, informes y actas)
+- Cierres del wizard (ver cierres y consumos · reprocesar y resolver pendientes)
+- Avisos y bandeja (ver · validar pendientes)
+- Exportar e imprimir (CSV, PDF y listas)
+- Configuración (categorías, socios, equivalencias, avisos, integraciones y tokens). Por defecto, **solo el administrador**.
+- Usuarios y roles: **solo el administrador**, siempre. No se puede delegar.
+
+"Modificar" implica "Ver". Para cada rol, un botón **"Probar como este rol"** permite al administrador ver la app tal como la ve ese usuario, en solo lectura y con un aviso arriba.
+
+**3. Rol "Solo lectura" (dirección), por defecto**
+- **Ve:** inventario, movimientos, albaranes (sin aprobar), entregas y sus PDF, equipos y vehículos, cierres y consumos, custodia e informes, avisos.
+- **Puede:** exportar e imprimir.
+- **No ve:** configuración, tokens, usuarios ni la bandeja de validación.
+- **No puede modificar nada:** en la interfaz no aparecen los botones de acción (Entrada, Salida, Nueva entrega, Escanear para mover, Editar, Ajuste, Recuento, Fusionar, Borrar, Crear con la cámara, Leer un albarán…). Arriba se ve una etiqueta discreta: "Solo lectura".
+
+**4. Se aplica en el servidor, no solo en la interfaz (obligatorio)**
+- **Todas las funciones que escriben** (las `SECURITY DEFINER` que hoy usan `perfil_actual()` o `exigir_admin()`) comprueban el permiso concreto con una función común (`exigir_permiso('movimientos.modificar')`).
+- **Un usuario de solo lectura no puede escribir nada**, aunque llame a la API directamente.
+- **Las lecturas (RLS) respetan "Ver":**
+  - un rol sin "Ver custodia" no lee esas tablas;
+  - **tokens de integración, propiedades y usuarios:** solo el administrador.
+- **Storage:** las fotos y los PDF se leen con "Ver" del apartado correspondiente; subir o borrar exige "Modificar".
+- **Funciones de servidor** (`leer-albaran`, `usuarios`, `notificar`…): comprueban el permiso de quien llama.
+
+**5. Usuarios**
+- **En la lista de usuarios,** cada usuario tiene un desplegable con su rol. Al cambiarlo, el efecto es inmediato: la app del usuario se recarga sola y el servidor aplica el nuevo rol en la siguiente llamada.
+- **El usuario de dirección que ya existe** queda en **Solo lectura** si el administrador lo elige. La migración no cambia el rol de nadie por su cuenta.
+
+**6. Hecho cuando**
+- Hay pruebas de: solo lectura que intenta registrar un movimiento, una entrega, un ajuste, un recuento o editar un artículo, y el **servidor lo rechaza**; un rol propio con "Ver custodia" sin "Modificar"; quitar "Ver" oculta y bloquea la lectura; no se puede borrar un rol en uso; siempre queda un administrador.
+- El usuario de dirección entra y ve todo sin ningún botón de modificar.
+
 ---
 
 ## Revisión del chat
@@ -853,7 +906,7 @@ Hoy el propietario Esmove existe en la tabla `propietarios`, pero **no se pueden
   - reglas de cargadores con el texto real del calendario;
   - corrección con la prefactura aprobada de Holded;
   - material especial.
-- **Orden: E-026 → E-025.** Después de E-026: lanzar el histórico y, el lunes, el recuento de las furgonetas.
+- **Orden: E-026 → E-027 → E-025.** Después de E-026: lanzar el histórico y, el lunes, el recuento de las furgonetas. **E-027 (nuevo, 02/10):** roles y permisos configurables, con solo lectura para dirección.
 
 ### 02/10/2026 · Revisión de E-024 y cambios del chat
 Verificado sobre `51767e4`:
