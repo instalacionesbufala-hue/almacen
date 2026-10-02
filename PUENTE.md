@@ -675,9 +675,90 @@ El administrador tiene que poder hacer estas tres cosas, y que queden reflejadas
 - En producción, el usuario cambia TRY32-1-L10-P a 8900500020 desde el móvil y queda un solo artículo activo con sus 6 ud y su EAN.
 - En un iPhone (o en el modo móvil de 375 px) no hay desplazamiento horizontal ni zoom al tocar campos.
 
+### E-024 · Albarán con la cámara (modo documento), desplegables ordenados, socios de custodia y recuadros que filtran · PENDIENTE
+**Peticiones del usuario (02/10).**
+
+**1. Leer un albarán con la cámara del móvil, como "Escanear documentos" del iPhone**
+Hoy, en Albaranes, el móvil solo permite **un archivo** (`<input type="file">` y `files[0]`). El usuario recibe el pedido con el albarán en la mano y quiere fotografiarlo allí mismo, aunque tenga varias hojas, en vez de escanear los artículos uno a uno.
+- **Botón grande "Escanear albarán"** en Albaranes y en el menú rápido del móvil, junto a "Leer un albarán".
+- **Cámara a pantalla completa** (`getUserMedia`, cámara trasera):
+  - **detección de bordes del papel** en vivo, con el contorno dibujado encima;
+  - **disparo automático** cuando la hoja está quieta y bien encuadrada, y también manual;
+  - linterna.
+  - Por ejemplo con **jscanify / OpenCV.js empaquetado en la app** y cargado solo al abrir el escáner (como el `.wasm` de ZXing, sin CDN).
+- **Tras cada foto:**
+  - **recorte con corrección de perspectiva**, con las 4 esquinas ajustables con el dedo si la detección no acierta;
+  - mejora de lectura (contraste o blanco y negro, conmutable);
+  - giro.
+- **Varias páginas:** "Añadir página", miniaturas para **reordenar o borrar**, y "Listo".
+- **Todas las páginas forman un solo albarán:** `leer-albaran` debe aceptar **varias imágenes** (y PDF de varias páginas) en una llamada y devolver una única lista de líneas, sin duplicar la cabecera ni las líneas que se repiten en "suma y sigue".
+- **Tamaño:** cada página se comprime (unos 1600 px de lado largo, JPEG o WebP) para no pasar el límite de Gemini. Si hay muchas, se envían en lotes y se unen.
+- **También desde la galería:** elegir **varias fotos a la vez** o un PDF de varias páginas.
+- **Sin cobertura:** las páginas quedan en la cola del móvil y se leen al volver la conexión. El albarán aparece como "pendiente de leer".
+- **Las páginas originales recortadas** se guardan con el albarán (Storage privado) para poder consultarlas después.
+- **Hecho cuando:**
+  - en el iPhone del usuario se escanea un albarán Saltoki de 2 hojas y sale una sola revisión con todas sus líneas;
+  - hay pruebas de: unión de páginas sin duplicados, recorte de perspectiva con un fixture, y cola sin conexión.
+
+**2. Desplegables de artículos ordenados**
+Hoy hay **4 desplegables** que listan los artículos en el orden en que se crearon:
+- revisión de albaranes (`AlbaranesView.tsx:214`);
+- reasignar línea (`DetalleAlbaran.tsx:45`);
+- fusionar (`hojas.tsx:119`);
+- cierres (`CierresView.tsx:91`).
+
+**Qué hacer:**
+- **Un componente común `SelectorArticulo`:**
+  - con **buscador** (nombre, SKU, EAN y códigos alternativos) y foto en miniatura;
+  - ordenado **por nombre (A-Z)** por defecto, con un conmutador **"por referencia"** (SKU) que la app recuerda;
+  - agrupado opcionalmente por categoría.
+- **Usarlo en esos 4 y en todos los demás selectores de artículos:** entregas, kits de fijación, equivalencias, ajustes, códigos alternativos… Ningún desplegable de artículos queda sin ordenar.
+
+**3. Socios de custodia: Esmove, Instant Box y los que vengan**
+Hoy el propietario Esmove existe en la tabla `propietarios`, pero **no se pueden crear más desde la app**, y "Esmove" está escrito fijo en varios sitios:
+- `TagCustodia` en `base.tsx:55`;
+- el KPI "En custodia de Esmove";
+- el origen de la foto en `foto.tsx`;
+- `propietarios[0]` como valor por defecto en el alta y en la custodia.
+
+**Qué hacer:**
+- **Configuración → "Socios de custodia" (administrador):** crear, editar y desactivar socios, con nombre, contacto, correos de reposición e informes, y color o etiqueta.
+- **Dar de alta "Instant Box"** (migración que lo crea si no existe).
+- **Todo lo de custodia por socio:**
+  - la etiqueta del artículo muestra **su** socio ("Custodia Instant Box");
+  - la vista Custodia tiene una pestaña por socio;
+  - solicitudes de reposición, informe sin importes y acta de recuento, por socio;
+  - el origen de la foto lista los socios activos.
+- **KPI "En custodia":** total y desglose por socio (por ejemplo, "Esmove 68 · Instant Box 4"); al pulsar un socio, filtra por él.
+- **Al crear o editar un artículo en custodia,** el socio **se elige** (sin valor por defecto oculto). Si hay un solo socio activo, se preselecciona.
+- **Cierres (E-012):** la regla del cargador instalado sirve para cualquier socio, según el propietario del artículo.
+- **Prueba:** dos socios con stock, informe de cada uno sin mezclar, y desactivar un socio sin artículos.
+
+**4. Los recuadros de arriba del inventario deben llevar a lo que dicen**
+- **"6 por completar" no lleva a nada:** el primer KPI hace `setUI({ est: 'all' })`, que no filtra los artículos sin mínimo. Hace falta un filtro **"Sin mínimo"** (en Estado o como interruptor), y que **tanto el recuadro como el texto "N por completar"** lo apliquen.
+- **Con una categoría pinchada, los recuadros no hacen nada:** al pulsar un recuadro se añade su filtro, pero se mantiene la **categoría** elegida (y el buscador y la ubicación). Al pulsar un KPI hay que:
+  - **limpiar los demás filtros** (categoría a "todas", texto, ubicación, propiedad);
+  - aplicar el del recuadro;
+  - **desplazar la vista a la lista**;
+  - mostrar arriba de la lista un **chip con el filtro activo** ("Sin mínimo ×") para quitarlo.
+- **Igual para todos los recuadros:** sin mínimo, custodia (por socio), bajo mínimo y entregas. Las pestañas de "Categorías estratégicas" tampoco deben bloquear nada.
+- **Hecho cuando:**
+  - con "Cargadores VE" pinchado, pulsar "N por completar" muestra exactamente las N referencias sin mínimo de todas las categorías;
+  - hay prueba de la lógica de filtros.
+
 ---
 
 ## Revisión del chat
+
+### 02/10/2026 · Chat: nuevas peticiones del usuario y estado de la app real
+En la app real:
+- **Stock:** tapa final y ángulo exterior corregidos (10 ud cada uno) y el Trydan unificado en `8900500020`.
+- **Equivalencias:** las 18 confirmadas, ninguna en rojo (el kit A ya tiene clavo).
+- **Mínimos:** quedan 9 artículos sin mínimo.
+
+Nuevo: **E-024** (albarán con la cámara en modo documento, desplegables ordenados, socios de custodia con Instant Box, y recuadros del inventario que filtran de verdad).
+
+**Orden: E-024.**
 
 ### 01/10/2026 · Revisión de E-019 a E-022 y fallos reales
 Verificado desde el chat sobre `6cc2aa2`:
