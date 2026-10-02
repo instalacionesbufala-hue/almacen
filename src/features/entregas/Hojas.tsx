@@ -22,6 +22,7 @@ import { compartirJustificante, descargarJustificante } from './justificante';
 import { enlaceWhatsApp, normalizarTelefono, textoWhatsApp } from '../../domain/whatsapp';
 import { enlacePortal, generarToken, hashToken } from '../../domain/portal';
 import { esPersonal, firmantesDe } from '../../domain/entregas';
+import { usePermisos } from '../../store/permisos';
 
 /** Sin dominio propio verificado en Resend, la copia solo llega al correo del administrador */
 export const sinDominioResend = (remitente: string) => !remitente.trim() || /resend\.dev/i.test(remitente);
@@ -154,6 +155,7 @@ export function EtiquetaCopia({ e }: { e: Entrega }) {
 /* ---------- Albarán de la entrega (con la copia por correo) ---------- */
 export const abrirRecibo = (id: string) => openModal(<Recibo id={id} />);
 function Recibo({ id }: { id: string }) {
+  const perm = usePermisos();
   const E = useAlmacen(), e = E.entregas.find(x => x.id === id);
   const [email, setEmail] = useState('');
   if (!e) return <SheetHead title="Entrega no encontrada" />;
@@ -176,14 +178,14 @@ function Recibo({ id }: { id: string }) {
       {e.obra && <p className="text-body-sm">Obra: <b>{e.obra}</b></p>}
       <p className="text-body-sm text-secondary">Recogida por {rec?.nombre || 'un técnico del equipo'} para el equipo {eq?.nombre || e.equipo}. Registrado por {e.operator}.</p>
     </div>
-    {firmada && <CopiaWhatsApp e={e} />}
-    {firmada && <CopiaCorreo e={e} email={email} setEmail={setEmail} />}
+    {firmada && perm.mod('entregas') && <CopiaWhatsApp e={e} />}
+    {firmada && perm.mod('entregas') && <CopiaCorreo e={e} email={email} setEmail={setEmail} />}
     {firmada && <HistorialCopias e={e} />}
     <SheetFoot className="flex flex-wrap gap-2">
       <button onClick={closeModal} className={`${BTN_S} h-14 px-5`}>Cerrar</button>
-      <button onClick={() => void compartirJustificante(e).then(ok => { if (ok && firmada) ejecutar({ op: 'copiaEntrega', args: { id: nuevoId(), entrega: e.id, canal: 'compartir', destino: '' } }); })} className={`${BTN_P} h-16 w-full sm:w-auto sm:flex-1 text-headline-sm order-first`}><Icon n="share" className="ico-20" />Compartir PDF</button>
+      <button onClick={() => void compartirJustificante(e).then(ok => { if (ok && firmada && perm.mod('entregas')) ejecutar({ op: 'copiaEntrega', args: { id: nuevoId(), entrega: e.id, canal: 'compartir', destino: '' } }); })} className={`${BTN_P} h-16 w-full sm:w-auto sm:flex-1 text-headline-sm order-first`}><Icon n="share" className="ico-20" />Compartir PDF</button>
       <button onClick={() => void descargarJustificante(e)} className={`${BTN_S} h-14 px-4`}><Icon n="download" className="ico-20" />Descargar PDF</button>
-      <button onClick={() => print()} className={`${BTN_S} h-14 px-4`}><Icon n="print" className="ico-20" />Imprimir</button>
+      {perm.exportar && <button onClick={() => print()} className={`${BTN_S} h-14 px-4`}><Icon n="print" className="ico-20" />Imprimir</button>}
     </SheetFoot>
   </>);
 }

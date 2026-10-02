@@ -23,13 +23,13 @@ Deno.serve(conCors(async (req) => {
   try { cuerpo = await req.json(); } catch { return json({ error: 'Petición no válida' }, 400); }
 
   if (cuerpo.accion === 'crear') {
-    const alta = { email: String(cuerpo.email || '').trim().toLowerCase(), nombre: String(cuerpo.nombre || '').trim(), rol: cuerpo.rol as 'admin' | 'almacen', clave: String(cuerpo.clave || '') };
+    const alta = { email: String(cuerpo.email || '').trim().toLowerCase(), nombre: String(cuerpo.nombre || '').trim(), rol: String(cuerpo.rol || ''), clave: String(cuerpo.clave || '') };
     const err = validarAlta(alta);
     if (err) return json({ error: err }, 400);
     const { data, error } = await admin.auth.admin.createUser({ email: alta.email, password: alta.clave, email_confirm: true, user_metadata: { nombre: alta.nombre } });
     if (error || !data.user) return json({ error: error?.message?.includes('already') ? 'Ya existe un usuario con ese correo' : (error?.message || 'No se pudo crear') }, 400);
     const { error: e2 } = await admin.from('perfiles').insert({ id: data.user.id, nombre: alta.nombre, email: alta.email, rol: alta.rol, activo: true });
-    if (e2) { await admin.auth.admin.deleteUser(data.user.id); return json({ error: e2.message }, 400); }
+    if (e2) { await admin.auth.admin.deleteUser(data.user.id); return json({ error: /perfiles_rol_fkey/.test(e2.message) ? 'Rol no válido' : e2.message }, 400); }
     return json({ ok: true, id: data.user.id });
   }
 

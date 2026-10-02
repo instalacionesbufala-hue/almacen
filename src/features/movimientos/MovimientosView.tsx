@@ -10,9 +10,10 @@ import { BTN_P, BTN_S, BTN_T, CARD, Icon, INP, LBL, TIPO, Vacio } from '../../ui
 import { abrirFicha, abrirSelector, MovRow } from '../inventario/hojas';
 import { exportarMovimientosCsv } from '../inventario/StockView';
 import { CargarMas, useMas } from '../../ui/lista';
+import { usePermisos } from '../../store/permisos';
 
 export default function MovimientosView() {
-  const E = useAlmacen(), desk = useEsEscritorio();
+  const E = useAlmacen(), perm = usePermisos(), desk = useEsEscritorio();
   const [tipo, setTipo] = useState<'all' | TipoMov>('all'), [q, setQ] = useState(''), [rango, setRango] = useState('all');
   const ahora = Date.now(), lim = ({ hoy: new Date().setHours(0, 0, 0, 0), '7': ahora - 7 * 864e5, '30': ahora - 30 * 864e5, all: 0 } as Record<string, number>)[rango];
   const toks = norm(q).split(/\s+/).filter(Boolean);
@@ -27,15 +28,15 @@ export default function MovimientosView() {
       <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-3">
         <div><span className={LBL}>Trazabilidad completa</span><h1 className="text-headline-lg-mobile lg:text-headline-lg font-bold">Registro de movimientos</h1><p className="text-secondary">{tot('entrada')} entradas · {tot('salida')} salidas · {tot('merma')} mermas en la selección</p></div>
         <div className="grid grid-cols-3 lg:flex gap-2">
-          <button onClick={() => abrirSelector('entrada')} className={`${BTN_T} h-12 px-4 !text-tertiary`}><Icon n="move_to_inbox" className="ico-20" />Entrada</button>
-          <button onClick={() => abrirSelector('salida')} className={`${BTN_P} h-12 px-4`}><Icon n="outbox" className="ico-20" />Salida</button>
-          <button onClick={() => abrirSelector('merma')} className={`${BTN_T} h-12 px-4 !text-error`}><Icon n="report" className="ico-20" />Merma</button>
+          {perm.mod('movimientos') && <button onClick={() => abrirSelector('entrada')} className={`${BTN_T} h-12 px-4 !text-tertiary`}><Icon n="move_to_inbox" className="ico-20" />Entrada</button>}
+          {perm.mod('movimientos') && <button onClick={() => abrirSelector('salida')} className={`${BTN_P} h-12 px-4`}><Icon n="outbox" className="ico-20" />Salida</button>}
+          {perm.mod('movimientos') && <button onClick={() => abrirSelector('merma')} className={`${BTN_T} h-12 px-4 !text-error`}><Icon n="report" className="ico-20" />Merma</button>}
         </div>
       </div>
       <div className="flex flex-col lg:flex-row gap-2">
         <div className="relative flex-1"><Icon n="search" className="absolute left-3 top-1/2 -translate-y-1/2 text-outline ico-20" /><input value={q} onChange={e => setQ(e.target.value)} type="search" className={`${INP} pl-10 h-12`} placeholder="Material, obra, operario, n.º de serie…" /></div>
         <select value={rango} onChange={e => setRango(e.target.value)} className={`${INP} lg:!w-44 h-12`}>{[['hoy', 'Hoy'], ['7', 'Últimos 7 días'], ['30', 'Últimos 30 días'], ['all', 'Todo']].map(([v, t]) => <option key={v} value={v}>{t}</option>)}</select>
-        {E.rol === 'admin' && <button onClick={() => exportarMovimientosCsv(E)} className={`${BTN_S} h-12 px-4`}><Icon n="file_download" className="ico-20" />CSV</button>}
+        {perm.exportar && <button onClick={() => exportarMovimientosCsv(E)} className={`${BTN_S} h-12 px-4`}><Icon n="file_download" className="ico-20" />CSV</button>}
       </div>
       <div className="flex gap-2 overflow-x-auto no-scrollbar">{chip('all', 'Todos')}{chip('entrada', 'Entradas')}{chip('salida', 'Salidas')}{chip('merma', 'Mermas')}</div>
       {desk ? <section className={`${CARD} overflow-x-auto`}><table className="tabla w-full min-w-[900px]"><thead className="bg-surface-container-low"><tr><th>Fecha</th><th>Tipo</th><th>Material</th><th className="text-right">Cantidad</th><th>Motivo</th><th>Referencia</th><th>Operario</th></tr></thead>

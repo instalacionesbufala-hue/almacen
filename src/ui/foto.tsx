@@ -5,6 +5,7 @@ import type { CatId, Herramienta, OrigenFoto, Producto } from '../data/tipos';
 import { catDe } from '../data/catalogo';
 import { fotoDe, fotoDeHerramienta, origenesFoto, origenInicial, permisoFoto, textoOrigen } from '../domain/fotos';
 import { useAlmacen } from '../store/almacen';
+import { puede as puedeEn } from '../domain/permisos';
 import { crearStore } from '../store/crear';
 import { guardarFoto, quitarFoto, subidasPendientes, useFotoUrl } from '../features/fotos/servicio';
 import { toast } from './toast';
@@ -81,7 +82,7 @@ const BTN_FOTO = 'inline-flex items-center justify-center gap-2 rounded-lg font-
 
 export function EditorFoto({ p }: { p: Producto }) {
   const E = useAlmacen(), pend = subidasPendientes.use(), f = fotoDe(E, p);
-  const perm = permisoFoto(E, E.rol, p), puede = perm.poner || perm.sustituir;
+  const perm = permisoFoto(E, E.rol, p), puede = (perm.poner || perm.sustituir) && puedeEn(E, 'inventario', 'modificar');   // E-027
   const [origen, setOrigen] = useState<OrigenFoto>(origenInicial(p));
   const [ocupado, setOcupado] = useState(false);
   const camara = useRef<HTMLInputElement>(null), archivo = useRef<HTMLInputElement>(null);

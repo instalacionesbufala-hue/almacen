@@ -9,7 +9,7 @@ import { aEstado, COLUMNAS, TABLAS, type Tablas } from './mapeo';
 import { supabase } from './cliente';
 import { motivoLegible } from '../motivos';
 
-export interface Perfil { id: string; nombre: string; email: string | null; rol: 'admin' | 'almacen'; activo: boolean }
+export interface Perfil { id: string; nombre: string; email: string | null; rol: string; activo: boolean }
 export interface Sesion { estado: 'cargando' | 'sin-sesion' | 'lista'; perfil?: Perfil; error?: string; conexion: 'en-linea' | 'sin-conexion'; ultimaCarga?: number }
 export const sesion = crearStore<Sesion>({ estado: 'cargando', conexion: navigator.onLine ? 'en-linea' : 'sin-conexion' });
 
@@ -80,6 +80,9 @@ export async function recargar(): Promise<void> {
   if (fallo?.error) { marcarConexion(!esErrorDeRed(fallo.status, fallo.error.message)); return; }
   marcarConexion(true);
   const tablas = Object.fromEntries(TABLAS.map((t, i) => [t, res[i].data || []])) as unknown as Tablas;
+  // E-027: si el administrador le ha cambiado el rol, la app se recarga sola con lo que ahora puede ver y hacer
+  const yo = (tablas.perfiles as { id: string; rol: string; activo: boolean }[]).find(x => x.id === sesion.get().perfil?.id);
+  if (yo && sesion.get().perfil && (yo.rol !== sesion.get().perfil!.rol || !yo.activo)) { location.reload(); return; }
   const rol = sesion.get().perfil?.rol || 'almacen';
   const actual = obtenerEstado();
   const nuevo = aEstado(tablas, { cesta: actual.cesta, seq: actual.seq }, sesion.get().perfil?.nombre || '', rol);

@@ -24,6 +24,7 @@ import { avisoStockInicial, previsionAjuste } from '../../domain/ajuste';
 import { motivoSkuNoValido, skuPropuesto, skuValido } from '../../domain/codigos';
 import { CodigosFicha } from './codigos';
 import { abrirRetirar } from './archivo';
+import { rolDe, vistaPermitida } from '../../domain/permisos';
 
 /* ---------- Fila de movimiento ---------- */
 export function MovRow({ m }: { m: Movimiento }) {
@@ -85,18 +86,19 @@ function Ficha({ sku }: { sku: string }) {
       <div className="flex items-center gap-4 bg-surface-container-low rounded-xl p-3">
         <QR texto={qrContenido(p.sku)} className="w-24 h-24 shrink-0" />
         <div className="text-body-sm text-secondary">Etiqueta QR (<span className="font-mono">{qrContenido(p.sku)}</span>): el escáner la reconoce al instante.<br />
-          <button onClick={() => imprimirEtiqueta(p)} className="text-primary font-semibold mt-1 h-10">Imprimir etiqueta</button></div>
+          {perm.exportar && <button onClick={() => imprimirEtiqueta(p)} className="text-primary font-semibold mt-1 h-10">Imprimir etiqueta</button>}</div>
       </div>
       {!p.borrador && <CodigosFicha sku={sku} />}
       <div><div className={`${LBL} mb-1`}>Últimos movimientos</div>{movs.length ? movs.map(m => <MovRow key={m.id} m={m} />) : <p className="text-secondary text-body-sm">Sin movimientos todavía.</p>}</div>
     </div>
-    <SheetFoot className={`grid gap-2 ${perm.editarCatalogo || !p.borrador ? 'grid-cols-2 sm:grid-cols-3' : 'grid-cols-2'}`}>
-      <button onClick={() => abrirMovimiento(sku, 'entrada')} className={`${BTN_T} h-14 !text-tertiary`}><Icon n="add" className="ico-20" />Entrada</button>
-      <button onClick={() => abrirMovimiento(sku, 'salida')} className={`${BTN_P} h-14`}><Icon n="remove" className="ico-20" />Salida</button>
+    {/* E-027: sin permisos de modificar, la ficha se ve sin botones de acción */}
+    {(perm.mod('movimientos') || perm.mod('inventario')) && <SheetFoot className={`grid gap-2 ${perm.editarCatalogo || !p.borrador ? 'grid-cols-2 sm:grid-cols-3' : 'grid-cols-2'}`}>
+      {perm.mod('movimientos') && <button onClick={() => abrirMovimiento(sku, 'entrada')} className={`${BTN_T} h-14 !text-tertiary`}><Icon n="add" className="ico-20" />Entrada</button>}
+      {perm.mod('movimientos') && <button onClick={() => abrirMovimiento(sku, 'salida')} className={`${BTN_P} h-14`}><Icon n="remove" className="ico-20" />Salida</button>}
       {perm.editarCatalogo ? <button onClick={() => abrirFormProducto(sku)} className={`${BTN_S} h-14`}><Icon n="edit" className="ico-20" />{p.borrador ? 'Completar' : 'Editar'}</button>
-        : !p.borrador && <button onClick={() => abrirFormProducto(sku, {}, undefined, { modo: 'propuesta' })} className={`${BTN_S} h-14 col-span-2`}><Icon n="edit_note" className="ico-20" />Proponer un cambio de la ficha</button>}
-    </SheetFoot>
-    {!p.borrador && <div className="px-4 pb-2 flex flex-wrap gap-x-5"><button onClick={() => abrirAjuste(sku)} className="text-amber-800 text-body-sm font-semibold h-10">{E.rol === 'admin' ? 'Ajuste de inventario…' : 'Proponer ajuste de inventario…'}</button>
+        : !p.borrador && perm.mod('inventario') && <button onClick={() => abrirFormProducto(sku, {}, undefined, { modo: 'propuesta' })} className={`${BTN_S} h-14 col-span-2`}><Icon n="edit_note" className="ico-20" />Proponer un cambio de la ficha</button>}
+    </SheetFoot>}
+    {!p.borrador && <div className="px-4 pb-2 flex flex-wrap gap-x-5">{perm.mod('movimientos') && <button onClick={() => abrirAjuste(sku)} className="text-amber-800 text-body-sm font-semibold h-10">{E.rol === 'admin' ? 'Ajuste de inventario…' : 'Proponer ajuste de inventario…'}</button>}
       {perm.editarCatalogo && <button onClick={() => abrirFusionar(sku)} className="text-primary text-body-sm font-semibold h-10">Fusionar en otro artículo (era el mismo)…</button>}</div>}
     {perm.editarCatalogo && <div className="px-4 pb-4"><button onClick={() => abrirRetirar(sku)} className="text-error text-body-sm font-semibold h-10">Borrar o archivar…</button></div>}
   </>);
@@ -404,7 +406,7 @@ export const abrirPerfil = () => openModal(<Perfil />);
 function Perfil() {
   const E = useAlmacen(), ses = sesion.use(), ops = [OFICINA, ...E.tecnicos.map(t => t.nombre)];
   if (!operarioSeleccionable) return (<>
-    <SheetHead title={ses.perfil?.nombre || 'Mi usuario'} sub={ses.perfil ? `${ses.perfil.email || ''} · ${ses.perfil.rol === 'admin' ? 'Administrador' : 'Almacén'}` : ''} />
+    <SheetHead title={ses.perfil?.nombre || 'Mi usuario'} sub={ses.perfil ? `${ses.perfil.email || ''} · ${rolDe(S(), ses.perfil.rol)?.nombre || ses.perfil.rol}` : ''} />
     <div className="p-5 flex flex-col gap-3"><p className="text-body-sm text-secondary">Cada movimiento queda registrado a tu nombre. Para usar la app con otra persona, cierra la sesión.</p>
       <button onClick={() => { closeModal(); void salir(); }} className={`${BTN_S} h-12`}><Icon n="logout" className="ico-20" />Cerrar sesión</button></div>
   </>);
@@ -418,14 +420,14 @@ function Perfil() {
 }
 export const abrirMenu = () => openModal(<Menu />);
 function Menu() {
-  const E = useAlmacen(), vista = useVista(), nCrit = critical(E).length;
+  const E = useAlmacen(), vista = useVista(), nCrit = critical(E).length, perm = usePermisos();
   return (<>
     <SheetHead title="Menú" sub={`Operario activo: ${E.operator}`} />
     <div className="p-3 flex flex-col gap-1">
-      {(Object.keys(VISTAS) as Vista[]).map(v =>
+      {(Object.keys(VISTAS) as Vista[]).filter(v => vistaPermitida(E, v)).map(v =>
         <button key={v} onClick={() => { closeModal(); ir(v); }} className={`flex items-center gap-3 px-4 h-14 rounded-xl text-left ${vista === v ? 'bg-primary-fixed text-primary font-semibold' : 'hover:bg-surface-container-low'}`}><Icon n={VISTAS[v].icon} /><span className="flex-1">{VISTAS[v].label}</span></button>)}
-      <button onClick={() => { closeModal(); ir('albaranes'); void import('../albaranes/AlbaranesView').then(m => m.escanearAlbaran()); }} className="flex items-center gap-3 px-4 h-14 rounded-xl bg-primary text-white font-semibold"><Icon n="document_scanner" /><span className="flex-1 text-left">Escanear albarán</span></button>
-      <button onClick={() => { closeModal(); void import('../altaCamara/AltaCamara').then(m => m.abrirAltaCamara()); }} className="flex items-center gap-3 px-4 h-14 rounded-xl bg-primary-fixed/50 text-primary font-semibold"><Icon n="add_a_photo" /><span className="flex-1 text-left">Nuevo con la cámara</span></button>
+      {perm.mod('albaranes') && <button onClick={() => { closeModal(); ir('albaranes'); void import('../albaranes/AlbaranesView').then(m => m.escanearAlbaran()); }} className="flex items-center gap-3 px-4 h-14 rounded-xl bg-primary text-white font-semibold"><Icon n="document_scanner" /><span className="flex-1 text-left">Escanear albarán</span></button>}
+      {perm.mod('inventario') && <button onClick={() => { closeModal(); void import('../altaCamara/AltaCamara').then(m => m.abrirAltaCamara()); }} className="flex items-center gap-3 px-4 h-14 rounded-xl bg-primary-fixed/50 text-primary font-semibold"><Icon n="add_a_photo" /><span className="flex-1 text-left">Nuevo con la cámara</span></button>}
       <button onClick={abrirAvisos} className="flex items-center gap-3 px-4 h-14 rounded-xl hover:bg-surface-container-low"><Icon n="notifications" /><span className="flex-1 text-left">Avisos de stock</span>{nCrit > 0 && <Tag c="bg-error-container text-error">{nCrit}</Tag>}</button>
       <button onClick={abrirPerfil} className="flex items-center gap-3 px-4 h-14 rounded-xl hover:bg-surface-container-low"><Icon n="person" /><span className="flex-1 text-left">Cambiar operario</span></button>
     </div>

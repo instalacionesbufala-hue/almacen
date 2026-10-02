@@ -12,6 +12,7 @@ import { aplicarLocal, nuevoId, type Op } from './ops';
 import { modoNube } from './nube/cliente';
 import { encolar, enlazar } from './nube/sync';
 import { toast } from '../ui/toast';
+import { motivoSinPermiso } from '../domain/permisos';
 
 // v4: datos de demostración con custodia, cuadros, ropa y EPIs (E-006/E-008)
 const LS = modoNube ? 'almacen-bufala-nube-cache-v1' : 'almacen-bufala-v5';
@@ -65,6 +66,9 @@ enlazar(() => almacen.get(), e => { almacen.set(e); guardar(); }, toast);
 
 /** Aplica una operación: la valida y la muestra al momento; en modo nube la envía al servidor (o la deja en cola sin cobertura). */
 export function ejecutar(op: Op): boolean {
+  // E-027: lo que el rol no permite no se intenta (el servidor lo rechazaría igual)
+  const sinPermiso = motivoSinPermiso(almacen.get(), op.op);
+  if (sinPermiso) { toast(sinPermiso, 'warn', 6000); return false; }
   try { aplicarLocal(almacen.get(), op); }
   catch (e) { toast((e as Error).message, 'err'); return false; }
   guardar();

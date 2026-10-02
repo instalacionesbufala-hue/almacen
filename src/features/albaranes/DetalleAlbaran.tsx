@@ -16,7 +16,7 @@ import { rutaPagina, urlPagina } from './colaLectura';
 export const abrirDetalleAlbaran = (id: string) => openModal(<DetalleAlbaran id={id} />, { ancha: true });
 
 function DetalleAlbaran({ id }: { id: string }) {
-  const E = useAlmacen(), { editarCatalogo } = usePermisos();
+  const E = useAlmacen(), { editarCatalogo: catalogo, mod } = usePermisos(), editarCatalogo = catalogo && mod('albaranes');
   const al = E.albaranes.find(a => a.id === id);
   const [abierta, setAbierta] = useState<string | null>(null);
   const [f, setF] = useState({ destino: '', cantidad: '' });

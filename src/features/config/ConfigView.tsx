@@ -9,7 +9,7 @@ import { setUI } from '../../store/ui';
 import { toast } from '../../ui/toast';
 import { Avatar, BTN_BASE, BTN_P, BTN_S, CARD, Icon } from '../../ui/base';
 import { usePermisos } from '../../store/permisos';
-import { Usuarios } from './Usuarios';
+import { UsuariosYRoles } from './Usuarios';
 import { abrirPendientes } from '../shell/Pendientes';
 import { ConfigAvisosPanel } from './Avisos';
 import { abrirMinimos } from '../reposicion/Minimos';
@@ -49,12 +49,12 @@ export default function ConfigView() {
     <div className="px-4 lg:px-gutter py-4 lg:py-space-lg flex flex-col gap-4 max-w-5xl">
       <div><span className="font-mono text-label-sm uppercase tracking-wider text-secondary">Sistema</span><h1 className="text-headline-lg-mobile lg:text-headline-lg font-bold">Configuración &amp; auditoría</h1></div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {perm.configurar && <div className="lg:col-span-2"><Bloque icon="swap_horiz" t="Pasar a datos reales"><DatosReales /></Bloque></div>}
-        {perm.configurar && <Bloque icon="inventory_2" t="Archivados"><p className="text-body-sm text-secondary">Referencias fusionadas en otra o retiradas. No salen en listas, buscador, escáner ni entregas; el historial las conserva. Su código se puede reutilizar (al usarlo, se reactiva).</p><Archivados /></Bloque>}
-        {perm.admin && <Bloque icon="handshake" t="Socios de custodia"><p className="text-body-sm text-secondary">Empresas que dejan material en el almacén (Esmove, Instant Box…). Cada artículo en custodia es de un socio; sus informes, solicitudes y actas van por separado. Un socio con artículos no se desactiva.</p><Socios /></Bloque>}
+        {perm.admin && <div className="lg:col-span-2"><Bloque icon="swap_horiz" t="Pasar a datos reales"><DatosReales /></Bloque></div>}
+        {perm.editarCatalogo && <Bloque icon="inventory_2" t="Archivados"><p className="text-body-sm text-secondary">Referencias fusionadas en otra o retiradas. No salen en listas, buscador, escáner ni entregas; el historial las conserva. Su código se puede reutilizar (al usarlo, se reactiva).</p><Archivados /></Bloque>}
+        {perm.configurar && <Bloque icon="handshake" t="Socios de custodia"><p className="text-body-sm text-secondary">Empresas que dejan material en el almacén (Esmove, Instant Box…). Cada artículo en custodia es de un socio; sus informes, solicitudes y actas van por separado. Un socio con artículos no se desactiva.</p><Socios /></Bloque>}
         {perm.configurar && <Bloque icon="category" t="Categorías"><p className="text-body-sm text-secondary">Las del inventario, los filtros y la lectura con IA. Una con artículos no se borra: se desactiva moviéndolos a otra.</p><Categorias /></Bloque>}
         {perm.configurar && <div className="lg:col-span-2"><Bloque icon="hub" t="Integraciones y cierres del wizard"><Integraciones /></Bloque></div>}
-        {modoNube && perm.configurar && <div className="lg:col-span-2"><Bloque icon="group" t="Usuarios"><p className="text-body-sm text-secondary">Almacén: operativa diaria; sus mermas se aplican al momento y te llega el aviso, y sus recuentos quedan pendientes de validar. Administrador: todo. Al desactivar a alguien deja de poder entrar y su historial se conserva.</p><Usuarios /></Bloque></div>}
+        {perm.admin && <div className="lg:col-span-2"><Bloque icon="group" t="Usuarios y permisos"><p className="text-body-sm text-secondary">Cada usuario tiene un rol: Administrador (todo), Almacén (operativa diaria; sus mermas se aplican al momento y sus recuentos quedan pendientes de validar), Solo lectura (dirección: ve y exporta, no modifica nada) o uno propio. Al desactivar a alguien deja de poder entrar y su historial se conserva.</p><UsuariosYRoles /></Bloque></div>}
         {perm.validar && <Bloque icon="pending_actions" t="Pendientes de validar"><p className="text-body-sm text-secondary">{nPend ? `Hay ${nPend} pendiente${nPend === 1 ? '' : 's'} de validar.` : 'No hay nada pendiente.'}</p><button onClick={abrirPendientes} className={`${BTN_S} h-12`}><Icon n="pending_actions" className="ico-20" />Abrir la bandeja</button></Bloque>}
         <Bloque icon="person" t={modoNube ? 'Mi usuario' : 'Operario activo'}><p className="text-body-sm text-secondary">Cada entrada, salida, merma e incidencia queda a su nombre.</p>
           <button onClick={abrirPerfil} className="flex items-center gap-3 bg-surface-container-low rounded-xl p-3 text-left"><Avatar n={E.operator} /><span className="flex-1 font-semibold">{E.operator}</span><span className="text-primary text-body-sm">Cambiar</span></button></Bloque>
@@ -65,18 +65,18 @@ export default function ConfigView() {
             <li className="flex gap-2"><span className="w-3 h-3 mt-1 rounded-full bg-amber-400 shrink-0" /><span><b>Amarillo</b>: por debajo de 1,5 × el mínimo.</span></li>
             <li className="flex gap-2"><span className="w-3 h-3 mt-1 rounded-full bg-tertiary-container shrink-0" /><span><b>Verde</b>: nivel correcto.</span></li></ul>
           <p className="text-body-sm text-secondary">El mínimo se edita en la ficha de cada referencia.</p></Bloque>
-        <Bloque icon="auto_awesome" t="Lectura de albaranes con IA">
+        {perm.ver('configuracion') && <Bloque icon="auto_awesome" t="Lectura de albaranes con IA">
           <p className="text-body-sm">Estado: <b>{iaReal() ? 'IA conectada' : 'modo simulado'}</b>{iaReal() && <span className="font-mono text-label-sm text-secondary break-all"> · {URL_IA}</span>}</p>
           <p className="text-body-sm text-secondary">La lectura real usa Gemini (capa gratuita) desde una función del servidor, para que la clave nunca esté en el navegador. Mientras no esté configurada, se usan albaranes de ejemplo.</p>
-          <p className="text-body-sm text-amber-800">{AVISO_GEMINI}</p></Bloque>
-        {perm.configurar && <Bloque icon="photo_library" t="Fotos de los artículos">
+          <p className="text-body-sm text-amber-800">{AVISO_GEMINI}</p></Bloque>}
+        {perm.editarCatalogo && <Bloque icon="photo_library" t="Fotos de los artículos">
           <p className="text-body-sm text-secondary">{modoNube ? 'Se guardan en un espacio privado de Supabase: solo se ven con sesión iniciada, nunca en la web pública.' : 'Demostración: las fotos se quedan en este navegador y no se suben a ningún sitio.'} El almacén puede poner foto a un artículo que no tiene; sustituirla o quitarla es solo tuyo.</p>
           <p className="text-body-sm text-secondary">{E.products.filter(p => p.foto).length} de {E.products.length} artículos con foto.</p>
           <button onClick={abrirImportarFotos} className={`${BTN_S} h-12`}><Icon n="add_photo_alternate" className="ico-20" />Importar fotos por lote</button></Bloque>}
         <Bloque icon="fact_check" t="Integridad de entregas">
           <p className="text-body-sm text-secondary">Cada entrega firmada guarda una huella SHA-256 de su contenido y de la firma. Si alguien la modifica, la huella deja de coincidir.</p>
           <button onClick={verificar} className={`${BTN_S} h-12`}><Icon n="verified" className="ico-20" />Verificar {E.entregas.length} entregas</button></Bloque>
-        {perm.configurar && <Bloque icon="database" t="Datos y copias de seguridad">
+        {perm.admin && <Bloque icon="database" t="Datos y copias de seguridad">
           <p className="text-body-sm text-secondary">{modoNube ? <>Los datos están en la nube (Supabase{urlSupabase ? ': ' + new URL(urlSupabase).host : ''}) y se copian cada semana fuera del repositorio. Aquí puedes descargar una copia o los listados.</> : <>Modo demostración: los datos viven en este navegador ({(tamañoGuardado() / 1024).toFixed(0)} KB). Haz copias a menudo: si se borran los datos del navegador, se pierden.</>}</p>
           <div className="grid grid-cols-2 gap-2">
             <button onClick={() => descargar(`almacen-copia-${hoyISO()}.json`, exportarCopia(), 'application/json')} className={`${BTN_P} h-12`}><Icon n="download" className="ico-20" />Exportar copia</button>

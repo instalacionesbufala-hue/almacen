@@ -840,7 +840,7 @@ Hoy el propietario Esmove existe en la tabla `propietarios`, pero **no se pueden
 - Hay pruebas de los puntos 1 a 4.
 - La guía explica que el histórico se lanza **una sola vez** (`cargarHistoricoRegistro`) y **después** de desplegar este encargo, y que el recuento de furgonetas del lunes va **después** del histórico.
 
-### E-027 · Roles y permisos configurables, con un rol de solo lectura para dirección · PENDIENTE (después de E-026)
+### E-027 · Roles y permisos configurables, con un rol de solo lectura para dirección · HECHO
 **Petición del usuario (02/10):** "Necesito poder crear y modificar lo que ven los usuarios. He creado uno para la dirección y quiero darle acceso de **solo lectura**, que no pueda modificar nada."
 **Hoy** solo existen dos roles fijos (`perfiles.rol in ('admin','almacen')`). El usuario de dirección tiene como mínimo los permisos de almacén: **puede escribir**.
 
@@ -2341,3 +2341,73 @@ En "Para el día a día" se explican el ajuste y el aviso.
 - Comprobado en el navegador (demo): "Mostrar todo el catálogo" con 36 artículos, 2 seleccionados, y "Asignar seleccionados" abre la entrega de Búfala 2 con los 2 en la cesta.
 
 **E-027** (roles y permisos, que el chat añadió mientras tanto) **queda PENDIENTE**: no estaba en lo pedido.
+
+### 03/10/2026 · E-027 · HECHO
+**Aplicado en producción:**
+- migración `20261017000100_e027_roles_permisos.sql`;
+- `leer-albaran`, `leer-articulo` y `usuarios` desplegadas.
+
+**Comprobado en producción (solo lectura):**
+- los 3 roles de sistema y 77 funciones con su permiso;
+- los 2 usuarios siguen como estaban (`admin` y `almacen`): **la migración no cambia el rol de nadie**;
+- el usuario de dirección hay que pasarlo a **Solo lectura** desde la app.
+
+**1. Roles**
+- **Tabla `roles`** (id, nombre, descripción, `sistema`, `permisos`). `perfiles.rol` es ahora una referencia a `roles.id` (antes, `check in ('admin','almacen')`).
+- **De sistema:** Administrador, Almacén y **Solo lectura** (`lectura`).
+- **Decisión de Code: los tres de sistema son fijos** (también Almacén). Para personalizar uno se **duplica**. Así Almacén conserva exactamente lo de E-004/E-018/E-022 y no se le pueden dar por error funciones de administrador.
+- **Propios** (`guardar_rol`, `borrar_rol`): crear, renombrar (editar), duplicar y borrar si nadie lo usa. Todo queda en la auditoría.
+- **Sigue la regla de siempre:** al menos un administrador activo, y uno no se quita el acceso a sí mismo.
+
+**2. Matriz** (Configuración → **Usuarios y permisos** → pestañas Usuarios y Roles)
+- **Ver / Modificar** por apartado, con los textos del encargo. "Modificar" marca "Ver", y quitar "Ver" quita "Modificar".
+- **Usuarios y roles:** siempre solo del administrador. No se puede marcar, y el servidor lo filtra aunque venga en la petición.
+- **Exportar e imprimir:** solo tiene "Ver" (permitido o no).
+- **"Probar como este rol":** la app se ve como con ese rol, con una franja "Estás viendo la app como «…» · Dejar de probar". Mientras dura, `ejecutar()` no deja modificar nada.
+
+**3. Solo lectura**
+- **Permisos:** ve inventario, movimientos, albaranes, entregas y sus PDF, equipos, recuentos, dotación, custodia e informes, cierres y avisos; exporta.
+- **No ve:** configuración interna, usuarios, tokens ni la bandeja de validación.
+- **Interfaz:**
+  - sin pestañas a las que no tiene acceso (pantalla "Tu rol no da acceso…" si se escribe la dirección);
+  - **sin botones de acción**: Entrada, Salida, Merma, Nueva entrega (el asistente no sale; solo las entregas hechas y sus PDF), modos de Escanear (solo consulta), Editar, Ajuste, Recuento, Fusionar, Borrar, Nuevo con la cámara, Leer o escanear albarán, Pedir, Incidencia, Acta, Asignar, Recontar, copias por WhatsApp o correo…;
+  - etiqueta discreta **"Solo lectura"** en la cabecera.
+- **Comprobado en el navegador (demo, "Probar como Solo lectura"):** recorridas las 9 pantallas y la ficha en escritorio y en 375 px; no queda ningún botón de modificar. El estado del equipo se ve, pero no se puede pulsar.
+
+**4. En el servidor (obligatorio)**
+- **Decisión de Code (la parte importante):** en vez de reescribir unas 80 funciones, la comprobación está en **un solo sitio**.
+  - `perfil_actual()` y `exigir_admin()`, por las que pasan todas las que escriben, miran **qué función de la API les ha llamado** (la última de la pila, `PG_CONTEXT`) y buscan su permiso en la tabla **`permisos_funcion`** (77 funciones asignadas).
+  - Comprobado en PGlite y en Supabase que la pila se lee igual.
+- **Lo que comprueba:**
+  - Administrador: todo.
+  - Roles de sistema: las funciones de administrador siguen siendo solo del administrador, y las demás, si el rol tiene el permiso. **Solo lectura no escribe nada**, aunque llame a la API directamente.
+  - Roles propios: con "Modificar" de un apartado pueden lo mismo que el administrador en él (p. ej., crear y editar artículos), **salvo usuarios, roles, integraciones, datos reales y copias**.
+- **Prueba de cobertura:** falla si alguna función que comprueba al usuario se queda **sin permiso asignado**, para que una función nueva no abra un hueco.
+- **Lecturas (RLS) con "Ver"** de su apartado (`tiene_permiso`): productos, movimientos, albaranes, entregas, recuentos, dotación, actas, cierres y equivalencias, avisos… Pendientes: quien valida la bandeja y cada uno los suyos. Integraciones, usuarios y auditoría: solo el administrador (como antes).
+- **Storage:** fotos, páginas de albarán y justificantes se leen con "Ver" y se suben con "Modificar".
+- **Funciones de servidor:**
+  - `leer-albaran` exige "Modificar albaranes";
+  - `leer-articulo` exige "Modificar inventario";
+  - `usuarios` y `notificar` siguen solo para el administrador;
+  - `usuarios` acepta cualquier rol existente.
+- **En la app,** `ejecutar()` también comprueba el permiso de cada operación (mapa operación → apartado) y avisa en vez de intentarlo.
+
+**5. Usuarios**
+- Desplegable de rol en la lista, con confirmación.
+- **Efecto inmediato:** la app del usuario se recarga sola al recargar los datos (tiempo real), y el servidor aplica el rol nuevo en la siguiente llamada.
+
+**Pruebas: 427 en verde** (+15):
+- `e027.test.ts` de base de datos (8):
+  - solo lectura intenta un movimiento, una entrega, un ajuste y su propuesta, un recuento, editar y crear artículos, una foto, un acta y el estado de un equipo, y **el servidor lo rechaza todo**;
+  - lo que sí ve y lo que no;
+  - un rol propio con "Ver custodia" sin "Modificar": lee actas y no las registra; sin "Ver movimientos" no los lee;
+  - un rol propio con "Modificar inventario" crea artículos pero nunca usuarios, roles ni integraciones;
+  - `usuarios.*` no se puede dar;
+  - no se borra un rol en uso, los de sistema no se tocan y siempre queda un administrador;
+  - permisos iguales en la base y en la app;
+  - cobertura.
+- `e027.test.ts` local (7).
+- Las 232 pruebas de base de datos anteriores pasan sin cambios, que es la prueba de que Almacén conserva lo que tenía.
+- `tsc -b`, `deno check` y build correctos.
+
+**Para el usuario:** Configuración → Usuarios y permisos → pon a tu usuario de dirección en **Solo lectura**. Si quieres comprobarlo antes, en la pestaña Roles tienes **"Probar como este rol"**.

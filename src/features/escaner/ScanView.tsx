@@ -15,6 +15,7 @@ import { fotoDe } from '../../domain/fotos';
 import { abrirAltaCamara } from '../altaCamara/AltaCamara';
 import { abrirAsociarCodigo, asociarCodigo } from '../inventario/codigos';
 import { esUrl, guardarComoAlternativo, skuPropuesto } from '../../domain/codigos';
+import { usePermisos } from '../../store/permisos';
 
 type Modo = 'entrada' | 'salida' | 'consulta';
 interface Hit { code: string; sku: string | null; via: string; formato?: string }
@@ -23,8 +24,8 @@ const PRUEBAS: [string, string][] = [['BUF:BF-FIX-SX8', 'Caja tacos SX 8'], ['40
 
 
 export default function ScanView() {
-  const E = useAlmacen();
-  const [modo, setModo] = useState<Modo>('entrada');
+  const E = useAlmacen(), perm = usePermisos();
+  const [modo, setModo] = useState<Modo>(perm.mod('movimientos') ? 'entrada' : 'consulta');   // E-027: sin permiso, solo consulta
   const [hit, setHit] = useState<Hit | null>(null);
   const [qty, setQty] = useState('1');
   const [reason, setReason] = useState(REASONS.entrada[0]), [ref, setRef] = useState(''), [manual, setManual] = useState('');
@@ -70,8 +71,8 @@ export default function ScanView() {
     <div className="lg:px-gutter lg:py-space-lg lg:grid lg:grid-cols-12 lg:gap-space-lg lg:items-start max-w-[1500px]">
       <section className="lg:col-span-7 flex flex-col">
         <div className="hidden lg:block mb-4"><span className={LBL}>Lectura QR · EAN · código del proveedor</span><h1 className="text-headline-lg font-bold">Escanear stock con cámara</h1></div>
-        <div className="px-4 pt-3 lg:px-0 lg:pt-0"><div className="grid grid-cols-3 bg-inverse-surface rounded-xl p-1 gap-1">{([['entrada', 'Entrada stock', 'move_to_inbox'], ['salida', 'Salida', 'outbox'], ['consulta', 'Consulta', 'search']] as [Modo, string, string][]).map(([k, l, i]) =>
-          <button key={k} onClick={() => cambiarModo(k)} className={`h-14 rounded-lg flex flex-col items-center justify-center gap-0.5 text-body-sm font-semibold ${modo === k ? 'bg-primary-container text-white' : 'text-white/70'}`}><Icon n={i} className="ico-20" />{l}</button>)}</div></div>
+        {perm.mod('movimientos') && <div className="px-4 pt-3 lg:px-0 lg:pt-0"><div className="grid grid-cols-3 bg-inverse-surface rounded-xl p-1 gap-1">{([['entrada', 'Entrada stock', 'move_to_inbox'], ['salida', 'Salida', 'outbox'], ['consulta', 'Consulta', 'search']] as [Modo, string, string][]).map(([k, l, i]) =>
+          <button key={k} onClick={() => cambiarModo(k)} className={`h-14 rounded-lg flex flex-col items-center justify-center gap-0.5 text-body-sm font-semibold ${modo === k ? 'bg-primary-container text-white' : 'text-white/70'}`}><Icon n={i} className="ico-20" />{l}</button>)}</div></div>}
         <div className="cam mt-3 h-[44vh] min-h-[280px] lg:h-[520px] lg:rounded-2xl">
           <div className="cam-fondo" /><video ref={cam.video} playsInline muted autoPlay />
           <div className="esq tl" /><div className="esq tr" /><div className="esq bl" /><div className="esq br" />
@@ -105,13 +106,13 @@ export default function ScanView() {
           : !p ? <div className="flex flex-col gap-4">
             <div className="flex items-center gap-3 bg-error-container/60 rounded-xl p-4"><Icon n="help" className="text-error ico-32" /><div><div className="font-semibold break-all">“{hit.code}” no está en el catálogo</div><div className="text-body-sm text-secondary">{esUrl(hit.code) ? 'Es el QR de una web (del fabricante), no un código del almacén. ' : ''}Si es un artículo que ya tienes, enséñaselo una vez y el siguiente escaneo lo abrirá.</div></div></div>
             {/* E-020: el EAN de la caja no es el SKU (código del proveedor): se guarda como código alternativo del artículo */}
-            <button onClick={() => { const h = hit; abrirAsociarCodigo(h.code, h.formato, sku => setHit({ ...h, sku })); }} className={`${BTN_P} h-14`}><Icon n="link" className="ico-20" />Es un artículo que ya tengo</button>
-            <button onClick={() => { const c = hit.code.replace(/^BUF:/i, '').split('|')[0]; setHit(null); abrirAltaCamara({ codigo: c, formato: hit.formato }); }} className={`${BTN_S} h-14`}><Icon n="add_a_photo" className="ico-20" />Crear con la cámara</button>
-            <button onClick={() => {
+            {perm.mod('inventario') && <button onClick={() => { const h = hit; abrirAsociarCodigo(h.code, h.formato, sku => setHit({ ...h, sku })); }} className={`${BTN_P} h-14`}><Icon n="link" className="ico-20" />Es un artículo que ya tengo</button>}
+            {perm.mod('inventario') && <button onClick={() => { const c = hit.code.replace(/^BUF:/i, '').split('|')[0]; setHit(null); abrirAltaCamara({ codigo: c, formato: hit.formato }); }} className={`${BTN_S} h-14`}><Icon n="add_a_photo" className="ico-20" />Crear con la cámara</button>}
+            {perm.mod('inventario') && <button onClick={() => {
               const c = hit.code.replace(/^BUF:/i, '').split('|')[0], f = hit.formato;
               const alCrear = (sku: string) => { const p = S().products.find(x => x.sku === sku); if (p && guardarComoAlternativo(c, p)) asociarCodigo(c, sku, f, false); setHit(null); };
               if (E.rol !== 'admin') abrirBorrador(c, alCrear); else abrirFormProducto(undefined, /^\d{8,14}$/.test(c) ? { ean: c } : { sku: skuPropuesto(S(), c) }, alCrear);
-            }} className={`${BTN_S} h-14`}><Icon n="add_circle" className="ico-20" />Crear a mano</button>
+            }} className={`${BTN_S} h-14`}><Icon n="add_circle" className="ico-20" />Crear a mano</button>}
             <button onClick={siguiente} className={`${BTN_T} h-14 text-body-lg`}><Icon n="skip_next" />Escanear siguiente</button>
             <Manual valor={manual} setValor={setManual} onEnviar={c => alLeer(c, 'teclado')} />
           </div>
@@ -129,7 +130,7 @@ export default function ScanView() {
               {modo === 'consulta' ? <>
                 <div className="flex items-center justify-between bg-surface-container-low rounded-xl p-3"><Pill p={p} /><span className="text-body-sm text-secondary">Mín. {qtyTxt(p, p.min)} · {p.supplier}</span></div>
                 <div>{E.movements.filter(m => m.sku === p.sku).slice(0, 3).map(m => <MovRow key={m.id} m={m} />)}</div>
-                <div className="grid grid-cols-2 gap-2"><button onClick={() => cambiarModo('entrada')} className={`${BTN_T} h-12 !text-tertiary`}><Icon n="move_to_inbox" className="ico-20" />Dar entrada</button><button onClick={() => cambiarModo('salida')} className={`${BTN_T} h-12`}><Icon n="outbox" className="ico-20" />Dar salida</button></div>
+                <div className="grid grid-cols-2 gap-2">{perm.mod('movimientos') && <button onClick={() => cambiarModo('entrada')} className={`${BTN_T} h-12 !text-tertiary`}><Icon n="move_to_inbox" className="ico-20" />Dar entrada</button>}<button onClick={() => cambiarModo('salida')} className={`${BTN_T} h-12`}><Icon n="outbox" className="ico-20" />Dar salida</button></div>
                 <button onClick={() => abrirFicha(p.sku)} className={`${BTN_S} h-12`}><Icon n="description" className="ico-20" />Ver ficha completa</button>
               </> : <>
                 <div className="bg-surface-container-low rounded-xl p-3"><div className="flex justify-between items-center mb-2"><span className={LBL}>{modo === 'entrada' ? 'Recibido' : 'Sale'} ({unidadTxt(p.unit, 2)})</span>{contenidoTxt(p) && <span className="font-mono text-label-sm text-primary">{contenidoTxt(p)}</span>}</div>

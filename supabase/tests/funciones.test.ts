@@ -7,7 +7,8 @@ describe('alta de usuarios', () => {
   it('exige correo, nombre, rol válido y contraseña segura', () => {
     expect(validarAlta({ email: 'mal', nombre: 'A', rol: 'almacen', clave: 'abcdefghij1' })).toMatch(/Correo/);
     expect(validarAlta({ email: 'a@b.es', nombre: ' ', rol: 'almacen', clave: 'abcdefghij1' })).toMatch(/nombre/);
-    expect(validarAlta({ email: 'a@b.es', nombre: 'A', rol: 'jefe' as 'admin', clave: 'abcdefghij1' })).toMatch(/Rol/);
+    expect(validarAlta({ email: 'a@b.es', nombre: 'A', rol: 'Jefe de obra!', clave: 'abcdefghij1' })).toMatch(/Rol/);   // E-027: cualquier rol existente (la base comprueba que exista)
+    expect(validarAlta({ email: 'a@b.es', nombre: 'A', rol: 'lectura', clave: 'abcdefghij1' })).toBeNull();
     expect(validarAlta({ email: 'a@b.es', nombre: 'A', rol: 'almacen', clave: 'abcdefghij1' })).toBeNull();
   });
   it('contraseñas de al menos 10 caracteres con letras y números', () => {

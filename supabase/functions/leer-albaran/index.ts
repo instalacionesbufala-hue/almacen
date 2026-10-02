@@ -27,6 +27,9 @@ Deno.serve(conCors(async (req) => {
   const db = createClient(URL, ANON, { global: { headers: { Authorization: req.headers.get('Authorization') || '' } } });
   const { data: activo } = await db.rpc('es_usuario_activo');
   if (activo !== true) return json({ error: 'Inicia sesión para leer albaranes' }, 401);
+  // E-027: leer con IA es parte de recibir un albarán (permiso "Modificar albaranes")
+  const { data: puede } = await db.rpc('tiene_permiso', { p_permiso: 'albaranes.modificar' });
+  if (puede !== true) return json({ error: 'Tu rol no permite leer albaranes con IA' }, 403);
 
   let archivos: File[] = [];
   try { const fd = await req.formData(); archivos = fd.getAll('archivo').filter((f): f is File => f instanceof File); } catch { /* no es multipart */ }

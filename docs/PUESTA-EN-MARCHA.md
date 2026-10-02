@@ -388,6 +388,12 @@ La primera carga se hizo leyendo los albaranes con la IA y dejó algunas fichas 
   - Al dar de alta material en custodia, **elige el socio** (si solo hay uno activo, sale ya puesto).
   - Custodia tiene una pestaña por socio, con su solicitud de reposición, su informe sin importes y su acta.
 - **Recuadros del inventario** (E-024): al pulsar uno (*N por completar*, *En custodia* o un socio, *Bajo mínimo*) se quitan los demás filtros, se aplica el suyo y la vista baja a la lista. Arriba de la lista sale un chip con el filtro (p. ej. *Sin mínimo ×*) para quitarlo.
+- **Roles y permisos** (E-027): Configuración → **Usuarios y permisos**.
+  - **Usuarios:** cada uno tiene un desplegable con su rol; el cambio es inmediato (su app se recarga sola).
+  - **Solo lectura**, para dirección: ve inventario, movimientos, albaranes, entregas y sus PDF, equipos, cierres, custodia y avisos, y exporta; no ve la configuración ni la bandeja de validación y **no puede modificar nada** (el servidor lo rechaza aunque se intente por otro camino).
+  - **Para tu usuario de dirección:** pon su rol en **Solo lectura**. Nadie cambia de rol por su cuenta.
+  - **Roles:** Administrador, Almacén y Solo lectura son de sistema y no se cambian; **Duplicar** crea una copia que sí puedes ajustar con la tabla **Ver / Modificar** de cada apartado. Un rol propio con "Modificar" de un apartado puede en él lo mismo que el administrador; usuarios y roles son siempre solo tuyos. Un rol que usa alguien no se borra.
+  - **Probar como este rol:** ves la app como la vería ese usuario, sin poder modificar nada; arriba sale **Dejar de probar**.
 - **Dar material a una furgoneta** (E-025): Equipos → tarjeta del equipo → **Ver todo** → **Mostrar todo el catálogo**. Salen todos los artículos (también los de 0 ud y los recién creados; los borradores y archivados no), con buscador y orden A-Z o por referencia. **Asignar** (o marca varios y **Asignar seleccionados**) abre la entrega para ese equipo con los artículos ya en la cesta: ajusta cantidades y firma como siempre.
 - **Desplegables de artículos** (E-024): todos tienen buscador (nombre, SKU, EAN y códigos alternativos) y van **A-Z**. **Por referencia** los ordena por código; la app lo recuerda.
 

@@ -21,6 +21,9 @@ Deno.serve(conCors(async (req) => {
   const db = createClient(URL, ANON, { global: { headers: { Authorization: req.headers.get('Authorization') || '' } } });
   const { data: activo } = await db.rpc('es_usuario_activo');
   if (activo !== true) return json({ error: 'Inicia sesión para leer artículos' }, 401);
+  // E-027: dar de alta con la cámara exige "Modificar inventario"
+  const { data: puede } = await db.rpc('tiene_permiso', { p_permiso: 'inventario.modificar' });
+  if (puede !== true) return json({ error: 'Tu rol no permite dar de alta artículos' }, 403);
 
   let foto: File | null = null, codigo = '';
   try { const fd = await req.formData(); const f = fd.get('foto'); foto = f instanceof File ? f : null; codigo = String(fd.get('codigo') || '').slice(0, 64); } catch { /* no es multipart */ }

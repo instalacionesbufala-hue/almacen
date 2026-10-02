@@ -25,6 +25,8 @@ import { CargarMas, useMas } from '../../ui/lista';
 
 type Pestaña = 'equipos' | 'vehiculos' | 'tecnicos' | 'historial' | 'cierres';
 
+const usePermisosExportar = () => usePermisos().exportar;
+
 export default function EquiposView() {
   const E = useAlmacen(), u = useUI(), { gestionarFlota } = usePermisos();
   const pest = (['equipos', 'vehiculos', 'tecnicos', 'historial', 'cierres'] as Pestaña[]).includes(u.eqTab as Pestaña) ? u.eqTab as Pestaña : 'equipos';
@@ -57,7 +59,7 @@ export default function EquiposView() {
 }
 
 function CardEquipo({ e }: { e: Equipo }) {
-  const E = useAlmacen(), { gestionarFlota } = usePermisos();
+  const E = useAlmacen(), { gestionarFlota, mod } = usePermisos();
   const v = E.vehiculos.find(x => x.id === e.vehiculo), vs = v ? stockDeVehiculo(E, v.id) : [], ult = E.entregas.filter(x => x.equipo === e.id).sort((a, b) => b.ts - a.ts)[0];
   const dot = herramientasDe(E, { equipo: e.id }), avis = new Set(avisosDotacion(E).map(h => h.id)), dotAvisos = dot.filter(h => avis.has(h.id)).length;
   const fuera = E.tecnicos.filter(t => !e.tecnicos.includes(t.id));
@@ -68,7 +70,7 @@ function CardEquipo({ e }: { e: Equipo }) {
     <article className={`${CARD} p-4 lg:p-space-md flex flex-col gap-3`}>
       <div className="flex items-start gap-3"><span className="w-12 h-12 rounded-xl bg-surface-container-low text-primary grid place-items-center shrink-0"><Icon n="groups" /></span>
         <div className="flex-1 min-w-0"><div className={LBL}>Equipo</div><div className="text-headline-md font-semibold">{e.nombre}</div></div>
-        <button onClick={cambiarEstado} title="Cambiar estado" className={`font-mono text-label-sm px-2.5 py-1 rounded-full whitespace-nowrap ${ESTADO_EQ[e.estado].c}`}>● {ESTADO_EQ[e.estado].t}</button></div>
+        <button onClick={mod('equipos') ? cambiarEstado : undefined} disabled={!mod('equipos')} title={mod('equipos') ? 'Cambiar estado' : undefined} className={`font-mono text-label-sm px-2.5 py-1 rounded-full whitespace-nowrap ${ESTADO_EQ[e.estado].c}`}>● {ESTADO_EQ[e.estado].t}</button></div>
 
       <div className="bg-surface-container-low rounded-xl p-3 flex flex-col gap-2"><div className={LBL}>Vehículo</div>
         {v ? <div className="flex items-center gap-3"><Icon n="local_shipping" className="text-primary" /><div className="flex-1 min-w-0"><div className="font-semibold font-mono">{v.matricula}</div><div className="text-body-sm text-secondary truncate">{v.modelo || '—'}</div></div></div>
@@ -92,7 +94,7 @@ function CardEquipo({ e }: { e: Equipo }) {
         <div className="flex-1 min-w-0"><div className="font-mono text-label-sm text-secondary">Dotación (herramientas, EPIs, ropa)</div><div className="font-semibold">{dot.length} fichas{dotAvisos ? <span className="text-error"> · {dotAvisos} con aviso</span> : ''}</div></div><Icon n="chevron_right" className="text-primary" /></button>
       {ult && <button onClick={() => abrirRecibo(ult.id)} className="text-left bg-surface-container-low rounded-xl p-3 flex items-center gap-3 min-h-14"><Icon n="draw" className="text-tertiary" />
         <div className="flex-1 min-w-0"><div className="font-mono text-label-sm text-secondary">Última entrega</div><div className="font-semibold">{hace(ult.ts)} (#{numEntrega(ult)})</div></div><Icon n="visibility" className="text-primary" /></button>}
-      <button onClick={cargar} className={`${BTN_P} h-14 mt-auto`}><Icon n="inventory" className="ico-20" />Entregar material a {e.nombre}</button>
+      {mod('entregas') && <button onClick={cargar} className={`${BTN_P} h-14 mt-auto`}><Icon n="inventory" className="ico-20" />Entregar material a {e.nombre}</button>}
       {gestionarFlota && <div className="flex gap-3 justify-end">
         <button onClick={() => abrirFormEquipo(e)} className="text-primary text-body-sm font-semibold h-10">Editar</button>
         <button onClick={() => { if (confirm(`¿Retirar el equipo ${e.nombre}? Su vehículo queda sin equipo y el historial se conserva.`) && ejecutar({ op: 'retirarEquipo', args: { id: e.id } })) toast('Equipo retirado.', 'ok'); }} className="text-error text-body-sm font-semibold h-10">Retirar</button></div>}
@@ -101,7 +103,7 @@ function CardEquipo({ e }: { e: Equipo }) {
 }
 
 function Vehiculos() {
-  const E = useAlmacen(), { gestionarFlota } = usePermisos();
+  const E = useAlmacen(), { gestionarFlota, mod } = usePermisos();
   if (!E.vehiculos.length) return <section className={`${CARD} p-6 text-center text-secondary`}>Aún no hay vehículos. {gestionarFlota && <button onClick={() => abrirFormVehiculo()} className="text-primary font-semibold">Dar de alta el primero</button>}</section>;
   return (
     <div className={`${CARD} overflow-hidden`}>{E.vehiculos.map(v => { const vs = stockDeVehiculo(E, v.id); return (
@@ -113,7 +115,7 @@ function Vehiculos() {
           <select disabled={!gestionarFlota} value={v.equipo || ''} onChange={x => { if (ejecutar({ op: 'asignarVehiculo', args: { vehiculo: v.id, equipo: x.target.value || undefined } })) toast(x.target.value ? 'Vehículo asignado: su material va con él.' : 'Vehículo sin equipo (p. ej. en taller).', 'ok'); }} className={`${INP} !w-auto h-12`}>
             <option value="">— Sin equipo —</option>{E.equipos.map(e => <option key={e.id} value={e.id}>{e.nombre}</option>)}</select></label>
         {gestionarFlota && <button onClick={() => abrirFormVehiculo(v)} className="text-primary text-body-sm font-semibold h-10">Editar</button>}
-        <button onClick={() => abrirRecuentoVehiculo(v.id)} className="text-primary text-body-sm font-semibold h-10">Recontar</button>
+        {mod('recuentos') && <button onClick={() => abrirRecuentoVehiculo(v.id)} className="text-primary text-body-sm font-semibold h-10">Recontar</button>}
         {gestionarFlota && <button onClick={() => { if (confirm(`¿Dar de baja el vehículo ${v.matricula}? El historial se conserva.`) && ejecutar({ op: 'bajaVehiculo', args: { id: v.id } })) toast('Vehículo dado de baja.', 'ok'); }} className="text-error text-body-sm font-semibold h-10">Baja</button>}
       </div>); })}</div>
   );
@@ -144,7 +146,7 @@ function Historial() {
   const csv = () => descargarCsv(`asignaciones-${hoyISO()}.csv`, [['Tipo', 'Quién', 'Equipo', 'Desde', 'Hasta'], ...filas.map(a => [a.tipo === 'tecnico' ? 'Técnico' : 'Vehículo', quien(a), E.equipos.find(e => e.id === a.equipo)?.nombre || a.equipo, fechaHora(a.desde), a.hasta ? fechaHora(a.hasta) : 'actual'])]);
   return (
     <section className={`${CARD} p-4 lg:p-space-md flex flex-col gap-1`}>
-      <div className="flex justify-between items-center mb-2"><h2 className="text-headline-sm font-semibold">Historial de asignaciones</h2><button onClick={csv} disabled={!filas.length} className={`${BTN_S} h-11 px-3 text-body-sm`}><Icon n="download" className="ico-18" />CSV</button></div>
+      <div className="flex justify-between items-center mb-2"><h2 className="text-headline-sm font-semibold">Historial de asignaciones</h2>{usePermisosExportar() && <button onClick={csv} disabled={!filas.length} className={`${BTN_S} h-11 px-3 text-body-sm`}><Icon n="download" className="ico-18" />CSV</button>}</div>
       {filas.length ? filas.map((a, i) => <div key={i} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5 border-t border-surface-container text-body-sm">
         <Icon n={a.tipo === 'tecnico' ? 'engineering' : 'local_shipping'} className="text-secondary ico-20" />
         <span className="flex-1 min-w-[200px]"><b>{quien(a)}</b> en <b>{E.equipos.find(e => e.id === a.equipo)?.nombre || a.equipo}</b></span>
@@ -171,7 +173,7 @@ export function AuditoriaEntregas() {
     <section className={`${CARD} overflow-hidden`}>
       <div className="p-space-md flex flex-wrap items-center justify-between gap-3"><div className="flex items-center gap-3"><span className="w-11 h-11 rounded-xl bg-tertiary-fixed text-on-tertiary-fixed grid place-items-center"><Icon n="verified_user" /></span>
         <div><h2 className="text-headline-md font-semibold">Auditoría de entregas y firmas</h2><p className="font-mono text-label-sm text-secondary">Almacén → vehículo del equipo · huella SHA-256</p></div></div>
-        <div className="flex gap-2"><button onClick={verificar} className={`${BTN_S} px-3 h-11 text-body-sm`}><Icon n="fact_check" className="ico-18" />Verificar huellas</button><button onClick={csv} className={`${BTN_S} px-3 h-11 text-body-sm`}><Icon n="download" className="ico-18" />CSV</button></div></div>
+        <div className="flex gap-2"><button onClick={verificar} className={`${BTN_S} px-3 h-11 text-body-sm`}><Icon n="fact_check" className="ico-18" />Verificar huellas</button>{usePermisosExportar() && <button onClick={csv} className={`${BTN_S} px-3 h-11 text-body-sm`}><Icon n="download" className="ico-18" />CSV</button>}</div></div>
       {desk ? <div className="overflow-x-auto"><table className="tabla w-full min-w-[900px]"><thead className="bg-surface-container-low"><tr><th>Referencia / fecha</th><th>Equipo / vehículo</th><th>Receptor</th><th>Resumen de material</th><th>Firma capturada</th><th className="text-right">Doc.</th></tr></thead>
         <tbody>{es.length ? es.slice(0, n).map(e => { const eq = E.equipos.find(x => x.id === e.equipo), r = E.tecnicos.find(t => t.id === e.receptor); return (
           <tr key={e.id}><td><div className="font-mono text-label-md text-primary">#{numEntrega(e)}</div><div className="font-mono text-label-sm text-secondary">{hace(e.ts)}</div></td>

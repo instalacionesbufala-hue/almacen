@@ -101,8 +101,8 @@ function StockDesk() {
         </div>
         <div className="flex items-center gap-space-sm flex-wrap">
           <button onClick={() => ir('scan')} className={`${BTN_S} px-space-md py-2.5`}><Icon n="barcode_scanner" className="text-secondary ico-20" />Escanear</button>
-          <button onClick={() => abrirAltaCamara()} className={`${BTN_P} px-space-md h-14`}><Icon n="add_a_photo" className="ico-20" />Nuevo con la cámara</button>
-          <button onClick={() => perm.editarCatalogo ? abrirFormProducto() : abrirBorrador()} className={`${BTN_S} px-space-md py-2.5`}><Icon n="add_circle" className="ico-20" />{perm.editarCatalogo ? 'Añadir referencia' : 'Nueva referencia (borrador)'}</button>
+          {perm.mod('inventario') && <button onClick={() => abrirAltaCamara()} className={`${BTN_P} px-space-md h-14`}><Icon n="add_a_photo" className="ico-20" />Nuevo con la cámara</button>}
+          {perm.mod('inventario') && <button onClick={() => perm.editarCatalogo ? abrirFormProducto() : abrirBorrador()} className={`${BTN_S} px-space-md py-2.5`}><Icon n="add_circle" className="ico-20" />{perm.editarCatalogo ? 'Añadir referencia' : 'Nueva referencia (borrador)'}</button>}
         </div>
       </div>
       <Kpis />
@@ -142,11 +142,11 @@ function StockDesk() {
               <ChipsFiltro />
               <span className="font-mono text-label-sm text-secondary">Mostrando {lista.length} de {E.products.length} referencias</span>
               <label className="inline-flex items-center gap-2 text-body-sm ml-auto cursor-pointer"><input type="checkbox" checked={u.agrupar} onChange={e => setUI({ agrupar: e.target.checked })} className="w-5 h-5 accent-primary" />Agrupar por categoría</label>
-              {perm.configurar && <button onClick={() => exportarListaCsv(E, lista)} className={`${BTN_S} h-10 px-3`}><Icon n="file_download" className="ico-20" />Exportar CSV</button>}
-              <button onClick={() => imprimirLista(E, lista, textoFiltros(E, u))} className={`${BTN_S} h-10 px-3`}><Icon n="print" className="ico-20" />Imprimir lista</button>
+              {perm.exportar && <button onClick={() => exportarListaCsv(E, lista)} className={`${BTN_S} h-10 px-3`}><Icon n="file_download" className="ico-20" />Exportar CSV</button>}
+              {perm.exportar && <button onClick={() => imprimirLista(E, lista, textoFiltros(E, u))} className={`${BTN_S} h-10 px-3`}><Icon n="print" className="ico-20" />Imprimir lista</button>}
             </div>
             <div className="overflow-auto max-h-[78vh] border-t border-surface-container"><table className="tabla w-full min-w-[860px]">
-              <thead className="bg-surface-container-low sticky top-0 z-10 shadow-[0_1px_0_rgba(0,0,0,.06)]"><tr><Th col="sku" u={u}>Referencia / SKU</Th><Th col="nombre" u={u}>Descripción</Th><th>Dónde está</th><Th col="stock" u={u}>Almacén</Th><Th col="estado" u={u}>Estado</Th><th className="text-right">Acciones</th></tr></thead>
+              <thead className="bg-surface-container-low sticky top-0 z-10 shadow-[0_1px_0_rgba(0,0,0,.06)]"><tr><Th col="sku" u={u}>Referencia / SKU</Th><Th col="nombre" u={u}>Descripción</Th><th>Dónde está</th><Th col="stock" u={u}>Almacén</Th><Th col="estado" u={u}>Estado</Th>{perm.mod('movimientos') && <th className="text-right">Acciones</th>}</tr></thead>
               <tbody>{!lista.length ? <tr><td colSpan={6} className="text-center text-secondary py-10">No hay referencias con esos filtros. <button onClick={limpiarFiltros} className="text-primary font-semibold">Quitar filtros</button></td></tr>
                 : grupos ? grupos.map(g => <Fragment key={g.cat}><tr className="bg-surface-container-lowest"><td colSpan={6} className="!py-2 font-semibold text-primary">{g.label} <span className="font-mono text-label-sm text-secondary">· {g.items.length} ref.</span></td></tr>
                   {g.items.filter(p => enVista.has(p.sku)).map(p => <FilaStock key={p.sku} p={p} pedido={!!E.pedidos[p.sku]} />)}</Fragment>)
@@ -170,13 +170,13 @@ function StockDesk() {
                 <div className="bg-white rounded-lg p-2.5 text-body-sm">{ultEnt.lineas.map(l => { const p = find(E, l.sku); return <div key={l.sku}>{num(l.qty)} {p ? UNIT[p.unit] : ''} {p?.name || l.sku}</div>; })}
                   <div className="font-mono text-label-sm text-tertiary mt-1"><Icon n="draw" className="ico-16" /> Firma registrada · {(ultEnt.hash || '').slice(0, 10)}</div></div>
               </div>); })()}
-            <div className="grid grid-cols-2 gap-2"><button onClick={() => { ir('albaranes'); void import('../albaranes/AlbaranesView').then(m => m.escanearAlbaran()); }} className={`${BTN_P} py-2.5`}><Icon n="photo_camera" className="ico-20" />Escanear albarán</button>
-              <button onClick={() => ir('albaranes')} className={`${BTN_S} py-2.5`}><Icon n="document_scanner" className="ico-20" />Leer un albarán</button></div>
+            <div className="grid grid-cols-2 gap-2">{perm.mod('albaranes') && <button onClick={() => { ir('albaranes'); void import('../albaranes/AlbaranesView').then(m => m.escanearAlbaran()); }} className={`${BTN_P} py-2.5`}><Icon n="photo_camera" className="ico-20" />Escanear albarán</button>}
+              {perm.mod('albaranes') && <button onClick={() => ir('albaranes')} className={`${BTN_S} py-2.5`}><Icon n="document_scanner" className="ico-20" />Leer un albarán</button>}</div>
           </section>
           <Barras E={E} />
           <section className="bg-primary-fixed/50 rounded-xl p-space-md flex items-center justify-between gap-space-md">
             <div><h3 className="text-headline-sm font-semibold">Recuento cíclico semanal</h3><p className="text-body-sm text-secondary">{catDe(catAud).label || 'Almacén'} · {E.products.filter(p => p.cat === catAud).length} referencias a recontar</p></div>
-            <button onClick={() => abrirConteo(catAud)} className={`${BTN_S} px-3 py-2 text-body-sm`}>Iniciar conteo</button>
+            {perm.mod('recuentos') && <button onClick={() => abrirConteo(catAud)} className={`${BTN_S} px-3 py-2 text-body-sm`}>Iniciar conteo</button>}
           </section>
         </div>
       </div>
@@ -206,7 +206,7 @@ function Th({ col, u, children }: { col: ColOrden; u: ReturnType<typeof useUI>; 
 }
 
 function FilaStock({ p, pedido }: { p: Producto; pedido: boolean }) {
-  const r = status(p) === 'red';
+  const r = status(p) === 'red', perm = usePermisos();
   return (
     <tr className={r ? 'bg-error-container/20' : ''}>
       <td><div className="flex items-center gap-2"><Icon n={r ? 'warning' : 'qr_code_2'} className={`${r ? 'text-error' : 'text-secondary'} ico-20`} /><div><div className={`font-mono text-label-md ${r ? 'text-error' : ''} whitespace-nowrap`}>{p.sku}</div>{p.ean && <div className="font-mono text-label-sm text-secondary">EAN {p.ean}</div>}</div></div></td>
@@ -214,11 +214,11 @@ function FilaStock({ p, pedido }: { p: Producto; pedido: boolean }) {
       <td className="max-w-[260px]"><Ubicaciones p={p} /></td>
       <td><div className={`text-headline-sm font-bold ${r ? 'text-error' : ''}`}>{qtyTxt(p, p.stock)}</div><div className={`font-mono text-label-sm ${r ? 'text-error' : 'text-secondary'}`}>Mín: {p.minimoDefinido === false ? 'sin definir' : num(p.min)}</div></td>
       <td><Pill p={p} /></td>
-      <td className="text-right whitespace-nowrap">
-        <button onClick={() => abrirMovimiento(p.sku, 'entrada')} title="Registrar entrada" className="p-2 rounded-lg text-tertiary hover:bg-tertiary-fixed/30"><Icon n="add_circle" /></button>
-        <button onClick={() => abrirMovimiento(p.sku, 'salida')} title="Registrar salida" className="p-2 rounded-lg text-primary hover:bg-primary-fixed"><Icon n="remove_circle" /></button>
-        <button onClick={() => abrirMovimiento(p.sku, 'merma')} title="Registrar merma" className="p-2 rounded-lg text-error hover:bg-error-container"><Icon n="report" /></button>
-      </td>
+      {perm.mod('movimientos') && <td className="text-right whitespace-nowrap">
+        {perm.mod('movimientos') && <button onClick={() => abrirMovimiento(p.sku, 'entrada')} title="Registrar entrada" className="p-2 rounded-lg text-tertiary hover:bg-tertiary-fixed/30"><Icon n="add_circle" /></button>}
+        {perm.mod('movimientos') && <button onClick={() => abrirMovimiento(p.sku, 'salida')} title="Registrar salida" className="p-2 rounded-lg text-primary hover:bg-primary-fixed"><Icon n="remove_circle" /></button>}
+        {perm.mod('movimientos') && <button onClick={() => abrirMovimiento(p.sku, 'merma')} title="Registrar merma" className="p-2 rounded-lg text-error hover:bg-error-container"><Icon n="report" /></button>}
+      </td>}
     </tr>
   );
 }
@@ -243,7 +243,7 @@ function Barras({ E }: { E: Estado }) {
 
 function StockMob() {
   const { E, u, lista, grupos, clave } = useListaInventario(), nCrit = critical(E).length, nSinMin = E.products.filter(p => p.minimoDefinido === false).length;
-  const { visibles, centinela } = useProgresivo(lista, clave);
+  const { visibles, centinela } = useProgresivo(lista, clave), perm = usePermisos();
   const enVista = new Set(visibles.map(p => p.sku));
   const chip = (k: string, lbl: string, n: number) =>
     <button key={k} onClick={() => setUI({ cat: u.cat === k ? 'all' : k })} className={`shrink-0 inline-flex items-center gap-2 px-4 h-11 rounded-full font-mono text-label-md uppercase ${u.cat === k ? 'bg-primary text-white' : 'bg-surface-container-lowest text-on-surface shadow-sm'}`}>{lbl}<span className={`px-1.5 rounded ${u.cat === k ? 'bg-white/20' : 'bg-surface-container-high'}`}>{n}</span></button>;
@@ -262,7 +262,7 @@ function StockMob() {
         <button onClick={() => ir('scan')} className="w-14 h-14 rounded-xl bg-primary text-white grid place-items-center shadow-sm" aria-label="Escanear"><Icon n="barcode_scanner" className="ico-28" /></button>
         <button onClick={() => setUI({ filtros: !u.filtros })} className={`w-14 h-14 rounded-xl ${u.filtros || hayFiltro ? 'bg-primary-fixed text-primary' : 'bg-surface-container-low'} grid place-items-center`} aria-label="Filtros"><Icon n="tune" className="ico-28" /></button>
       </div>
-      <button onClick={() => abrirAltaCamara()} className={`${BTN_P} h-14 text-body-lg`}><Icon n="add_a_photo" className="ico-28" />Nuevo con la cámara</button>
+      {perm.mod('inventario') && <button onClick={() => abrirAltaCamara()} className={`${BTN_P} h-14 text-body-lg`}><Icon n="add_a_photo" className="ico-28" />Nuevo con la cámara</button>}
       {u.filtros && <div className="grid grid-cols-2 gap-2 bg-surface-container-lowest rounded-xl p-3 shadow-sm">
         <label className="flex flex-col gap-1"><span className={LBL}>Estado</span><select value={u.est} onChange={e => setUI({ est: e.target.value })} className={`${INP} h-12`}>{[['all', 'Todos'], ['red', 'Crítico'], ['amber', 'Bajo'], ['green', 'Correcto'], [EST_SIN_MINIMO, 'Sin mínimo']].map(([v, t]) => <option key={v} value={v}>{t}</option>)}</select></label>
         <label className="flex flex-col gap-1"><span className={LBL}>Dónde</span><select value={u.ubi} onChange={e => setUI({ ubi: e.target.value })} className={`${INP} h-12`}><option value="all">Todo</option><option value="almacen">Almacén</option>{E.vehiculos.map(v => <option key={v.id} value={v.id}>{nombreVehiculo(E, v.id)}</option>)}</select></label>
@@ -287,7 +287,7 @@ function StockMob() {
 }
 
 function CardMob({ p, pedido }: { p: Producto; pedido: boolean }) {
-  const E = useAlmacen(), r = status(p) === 'red', total = stockTotal(E, p);
+  const E = useAlmacen(), r = status(p) === 'red', total = stockTotal(E, p), perm = usePermisos();
   return (
     <article className={`bg-surface-container-lowest rounded-2xl shadow-sm p-4 flex flex-col gap-3 ${r ? 'ring-1 ring-error/25' : ''}`}>
       <button onClick={() => abrirFicha(p.sku)} className="flex gap-3 text-left"><Tile p={p} size="w-14 h-14" />
@@ -301,24 +301,24 @@ function CardMob({ p, pedido }: { p: Producto; pedido: boolean }) {
       {r && <div className="flex items-center gap-3 bg-error-container/50 rounded-xl p-3"><Icon n="warning" className="text-error" />
         <div className="flex-1 min-w-0"><div className="font-mono text-label-md text-error font-semibold uppercase">{qtyTxt(p, p.stock)} restante{p.stock === 1 ? '' : 's'} (mín: {num(p.min)})</div><div className="text-body-sm text-on-surface-variant">en el almacén</div></div>
         {pedido ? <span className="font-mono text-label-sm text-amber-800 bg-amber-100 px-2 py-1 rounded">PEDIDO</span>
-          : <button onClick={() => pedir(p.sku)} className="shrink-0 inline-flex items-center gap-1 bg-error text-white px-3 h-10 rounded-lg font-mono text-label-md"><Icon n="local_shipping" className="ico-18" />PEDIR</button>}
+          : (perm.mod('inventario')) && <button onClick={() => pedir(p.sku)} className="shrink-0 inline-flex items-center gap-1 bg-error text-white px-3 h-10 rounded-lg font-mono text-label-md"><Icon n="local_shipping" className="ico-18" />PEDIR</button>}
       </div>}
       <div className="grid grid-cols-3 bg-surface-container-low rounded-xl p-3 text-center">
         <div><div className={LBL}>Almacén</div><div className={`text-headline-md font-bold ${r ? 'text-error' : 'text-primary'}`}>{num(p.stock)} <span className="text-body-sm font-normal text-secondary">{UNIT[p.unit]}</span></div></div>
         <div><div className={LBL}>Mínimo</div><div className="text-headline-md font-bold">{num(p.min)} <span className="text-body-sm font-normal text-secondary">{UNIT[p.unit]}</span></div></div>
         <div><div className={LBL}>En vehículos</div><div className="text-headline-md font-bold text-violet-800">{num(redondea(total - p.stock))}</div></div>
       </div>
-      <div className="grid grid-cols-[1fr_auto_auto] gap-2">
-        <button onClick={() => abrirMovimiento(p.sku, 'salida')} disabled={p.stock <= 0} className={`${BTN_P} h-14 text-body-lg`}><Icon n="outbox" className="ico-fill" />Registrar salida</button>
-        <button onClick={() => { anadirACesta(p.sku); toast('Añadido a la entrega. Ve a “Entrega” para firmar.', 'ok'); }} className="w-14 h-14 rounded-lg bg-surface-container-low text-primary grid place-items-center" aria-label="Añadir a la entrega"><Icon n="add_shopping_cart" /></button>
-        <button onClick={() => abrirMovimiento(p.sku, 'entrada')} className="w-14 h-14 rounded-lg bg-surface-container-low text-tertiary grid place-items-center" aria-label="Registrar entrada"><Icon n="move_to_inbox" /></button>
-      </div>
+      {perm.mod('movimientos') && <div className="grid grid-cols-[1fr_auto_auto] gap-2">
+        {perm.mod('movimientos') && <button onClick={() => abrirMovimiento(p.sku, 'salida')} disabled={p.stock <= 0} className={`${BTN_P} h-14 text-body-lg`}><Icon n="outbox" className="ico-fill" />Registrar salida</button>}
+        {perm.mod('entregas') && <button onClick={() => { anadirACesta(p.sku); toast('Añadido a la entrega. Ve a “Entrega” para firmar.', 'ok'); }} className="w-14 h-14 rounded-lg bg-surface-container-low text-primary grid place-items-center" aria-label="Añadir a la entrega"><Icon n="add_shopping_cart" /></button>}
+        {perm.mod('movimientos') && <button onClick={() => abrirMovimiento(p.sku, 'entrada')} className="w-14 h-14 rounded-lg bg-surface-container-low text-tertiary grid place-items-center" aria-label="Registrar entrada"><Icon n="move_to_inbox" /></button>}
+      </div>}
     </article>
   );
 }
 
 function VanView() {
-  const E = useAlmacen(), u = useUI(), v = E.vehiculos.find(x => x.id === u.almacen);
+  const E = useAlmacen(), u = useUI(), v = E.vehiculos.find(x => x.id === u.almacen), perm = usePermisos();
   const [todo, setTodo] = useState(false);
   if (!v) { setTimeout(() => setUI({ almacen: 'central' })); return null; }
   const eq = E.equipos.find(e => e.vehiculo === v.id), vs = stockDeVehiculo(E, v.id);
@@ -328,7 +328,7 @@ function VanView() {
         <div><span className={LBL}>Stock a bordo · entregado − consumido − devuelto</span><h1 className="text-headline-lg-mobile lg:text-headline-lg font-bold">{v.matricula}{v.modelo ? ` · ${v.modelo}` : ''}</h1>
           <p className="text-secondary">{eq ? `${eq.nombre} · ${eq.tecnicos.map(t => E.tecnicos.find(x => x.id === t)?.nombre).join(' + ') || 'sin técnicos'}` : 'Sin equipo asignado (p. ej. en taller)'}</p></div>
         <div className="flex gap-2"><button onClick={() => setUI({ almacen: 'central' })} className={`${BTN_S} px-4 h-12`}><Icon n="warehouse" className="ico-20" />Volver al almacén</button>
-          {eq && <button onClick={() => asignar(eq.id, [])} className={`${BTN_P} px-4 h-12`}><Icon n="add_shopping_cart" className="ico-20" />Cargar material</button>}</div>
+          {eq && (perm.mod('entregas')) && <button onClick={() => asignar(eq.id, [])} className={`${BTN_P} px-4 h-12`}><Icon n="add_shopping_cart" className="ico-20" />Cargar material</button>}</div>
       </div>
       {/* E-025: todo el catálogo, también lo que lleva 0 ud y lo recién creado, para asignarlo con una entrega firmada */}
       <label className="inline-flex items-center gap-3 self-start bg-surface-container-low rounded-xl px-4 h-12 cursor-pointer font-semibold">
@@ -339,7 +339,7 @@ function VanView() {
           <div className="flex-1 min-w-0"><div className="font-mono text-label-sm text-secondary">{p.sku}</div><div className="font-semibold truncate">{p.name}</div>
             {contenidoTxt(p) && <div className="font-mono text-label-sm text-secondary">{num(x.unidades)} ud sueltas</div>}{x.qty < 0 && <div className="text-body-sm text-error">Discrepancia: consta más gastado que entregado</div>}</div>
           <div className="text-right"><div className={`text-headline-md font-bold ${x.qty < 0 ? 'text-error' : ''}`}>{qtyTxt(p, x.qty)}</div>
-            {x.qty >= 1 && <button onClick={() => abrirMovimiento(p.sku, 'devolucion', { vehiculo: v.id, qty: Math.floor(x.qty), lock: true, ref: `Devuelto de ${v.matricula}` })} className="font-mono text-label-sm text-primary h-10">Devolver ↩</button>}</div>
+            {x.qty >= 1 && (perm.mod('movimientos')) && <button onClick={() => abrirMovimiento(p.sku, 'devolucion', { vehiculo: v.id, qty: Math.floor(x.qty), lock: true, ref: `Devuelto de ${v.matricula}` })} className="font-mono text-label-sm text-primary h-10">Devolver ↩</button>}</div>
         </article>); }) : <div className={`${CARD} p-8 text-center text-secondary md:col-span-2`}>Este vehículo no lleva material del almacén. Activa <b>Mostrar todo el catálogo</b> para asignarle artículos.</div>}</div>}
     </div>
   );
@@ -359,8 +359,8 @@ function asignar(equipo: string, skus: string[]) {
   ir('entregas');
 }
 
-function CatalogoVehiculo({ vehiculo, equipo }: { vehiculo: string; equipo?: string }) {
-  const E = useAlmacen();
+function CatalogoVehiculo({ vehiculo, equipo: eqId }: { vehiculo: string; equipo?: string }) {
+  const E = useAlmacen(), equipo = usePermisos().mod('entregas') ? eqId : undefined;   // sin permiso de entregas, la lista se ve pero no asigna
   const [q, setQ] = useState(''), [sel, setSel] = useState<string[]>([]);
   const { lista } = useListaArticulos(q);                                  // sin borradores; los archivados no están en el catálogo
   const { visibles, centinela } = useProgresivo(lista, q);
@@ -371,7 +371,7 @@ function CatalogoVehiculo({ vehiculo, equipo }: { vehiculo: string; equipo?: str
         <input value={q} onChange={e => setQ(e.target.value)} type="search" placeholder="Nombre, SKU, EAN o código" className={`${INP} h-12 pl-10`} aria-label="Buscar en el catálogo" /></div>
       <OrdenArticulos agrupar={false} />
     </div>
-    {!equipo && <p className="text-body-sm text-amber-800 bg-amber-50 rounded-lg p-3">Este vehículo no tiene equipo: asígnalo a un equipo para entregarle material.</p>}
+    {!eqId && <p className="text-body-sm text-amber-800 bg-amber-50 rounded-lg p-3">Este vehículo no tiene equipo: asígnalo a un equipo para entregarle material.</p>}
     {sel.length > 0 && equipo && <div className="sticky top-16 z-10 flex flex-wrap items-center gap-2 bg-primary-fixed rounded-xl p-3 shadow-sm">
       <span className="flex-1 font-semibold">{sel.length} seleccionado{sel.length === 1 ? '' : 's'}</span>
       <button onClick={() => setSel([])} className={`${BTN_S} h-11 px-3`}>Quitar selección</button>

@@ -7,7 +7,7 @@ export interface Tablas {
   productos: Fila[]; equipos: Fila[]; tecnicos: Fila[]; movimientos: Fila[];
   albaranes: Fila[]; entregas: Fila[]; entrega_lineas: Fila[]; dotacion: Fila[];
   dotacion_historial: Fila[]; avisos_reposicion: Fila[]; propietarios: Fila[];
-  vehiculos: Fila[]; asignaciones_tecnico: Fila[]; asignaciones_vehiculo: Fila[]; stock_vehiculo: Fila[]; config_app: Fila[]; portal_enlaces: Fila[]; copias_entrega: Fila[]; categorias: Fila[]; propuestas_ficha: Fila[]; cierres: Fila[]; cierre_lineas: Fila[]; cierre_versiones: Fila[]; equivalencias_cierre: Fila[]; kits_fijacion: Fila[]; integraciones: Fila[]; codigos_articulo: Fila[];
+  vehiculos: Fila[]; asignaciones_tecnico: Fila[]; asignaciones_vehiculo: Fila[]; stock_vehiculo: Fila[]; config_app: Fila[]; portal_enlaces: Fila[]; copias_entrega: Fila[]; categorias: Fila[]; propuestas_ficha: Fila[]; cierres: Fila[]; cierre_lineas: Fila[]; cierre_versiones: Fila[]; roles: Fila[]; equivalencias_cierre: Fila[]; kits_fijacion: Fila[]; integraciones: Fila[]; codigos_articulo: Fila[];
   minimos_herramienta: Fila[]; config_avisos: Fila[]; envios_aviso: Fila[]; actas_custodia: Fila[];
   tallas_tecnico: Fila[];
   perfiles: Fila[]; pendientes: Fila[]; valores_pendientes?: Fila[];
@@ -16,7 +16,7 @@ export interface Tablas {
 export const TABLAS: (keyof Tablas)[] = ['productos', 'equipos', 'tecnicos', 'movimientos', 'albaranes', 'entregas',
   'entrega_lineas', 'dotacion', 'dotacion_historial', 'avisos_reposicion', 'propietarios', 'perfiles', 'pendientes',
   'minimos_herramienta', 'config_avisos', 'envios_aviso', 'actas_custodia', 'tallas_tecnico',
-  'vehiculos', 'asignaciones_tecnico', 'asignaciones_vehiculo', 'stock_vehiculo', 'config_app', 'categorias', 'propuestas_ficha', 'portal_enlaces', 'copias_entrega', 'cierres', 'cierre_lineas', 'cierre_versiones', 'equivalencias_cierre', 'kits_fijacion', 'integraciones', 'codigos_articulo'];
+  'vehiculos', 'asignaciones_tecnico', 'asignaciones_vehiculo', 'stock_vehiculo', 'config_app', 'categorias', 'propuestas_ficha', 'portal_enlaces', 'copias_entrega', 'cierres', 'cierre_lineas', 'cierre_versiones', 'roles', 'equivalencias_cierre', 'kits_fijacion', 'integraciones', 'codigos_articulo'];
 /** Columnas legibles por cada rol (en pendientes el importe se lee aparte, solo el administrador) */
 export const COLUMNAS: Partial<Record<keyof Tablas, string>> = {
   portal_enlaces: 'tecnico_id, entrega_id, creado, creado_por, revocado',
@@ -106,5 +106,6 @@ export function aEstado(t: Tablas, base: Pick<Estado, 'cesta' | 'seq'>, operador
   const pendientes: Pendiente[] = t.pendientes.map(p => ({ id: p.id, ts: ms(p.ts), tipo: p.tipo, sku: p.sku, qty: n(p.cantidad), reason: p.motivo, ref: p.referencia || '',
     serials: p.series || [], operator: p.operario, estado: p.estado, resueltoPor: p.resuelto_por ?? undefined, nota: p.nota_resolucion ?? undefined, ...(p.vehiculo_id ? { vehiculo: p.vehiculo_id } : {}) })).sort((a, b) => b.ts - a.ts);
   const perfiles: PerfilUsuario[] = t.perfiles.map(p => ({ id: p.id, nombre: p.nombre, email: p.email ?? null, rol: p.rol, activo: !!p.activo }));
-  return { v: 3, products, movements, albaranes, equipos, tecnicos, entregas, herramientas, propietarios, pendientes, perfiles, rol, avisos, minimosHerramienta, configAvisos, envios, actas, vehiculos, asignaciones, aBordo, configApp, categorias, archivados, codigos, propuestas, portalEnlaces, copias, cierres, lineasCierre, equivalencias, kits, integraciones, operator: operador, pedidos, cesta: base.cesta, seq: base.seq };
+  const roles = (t.roles || []).map(r => ({ id: r.id, nombre: r.nombre, descripcion: r.descripcion || '', sistema: !!r.sistema, permisos: r.permisos || {} }));
+  return { v: 3, roles, products, movements, albaranes, equipos, tecnicos, entregas, herramientas, propietarios, pendientes, perfiles, rol, avisos, minimosHerramienta, configAvisos, envios, actas, vehiculos, asignaciones, aBordo, configApp, categorias, archivados, codigos, propuestas, portalEnlaces, copias, cierres, lineasCierre, equivalencias, kits, integraciones, operator: operador, pedidos, cesta: base.cesta, seq: base.seq };
 }

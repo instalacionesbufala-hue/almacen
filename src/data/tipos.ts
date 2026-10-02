@@ -57,7 +57,9 @@ export interface Producto {
 /** E-024: además, el id de cualquier socio de custodia ('Esmove' queda como valor antiguo) */
 export type OrigenFoto = 'Saltoki' | 'Esmove' | 'fabricante' | 'propia' | (string & {});
 
-export type Rol = 'admin' | 'almacen';
+/** E-027: id de un rol: 'admin', 'almacen', 'lectura' o uno propio */
+export type Rol = string;
+export interface RolApp { id: string; nombre: string; descripcion: string; sistema: boolean; permisos: Record<string, boolean> }
 export interface PerfilUsuario { id: string; nombre: string; email: string | null; rol: Rol; activo: boolean }
 /** Merma o diferencia de recuento del almacén que espera la validación del administrador (E-004) */
 export interface Pendiente {
@@ -297,6 +299,8 @@ export interface Estado {
   perfiles: PerfilUsuario[];
   /** Rol del usuario con sesión (en modo demo, administrador) */
   rol: Rol;
+  /** E-027: roles y sus permisos (en la demostración, los de sistema) */
+  roles?: RolApp[];
   operator: string;
   pedidos: Record<string, Pedido>;
   avisos: AvisoReposicion[];

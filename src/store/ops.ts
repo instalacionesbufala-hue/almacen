@@ -2,7 +2,7 @@
    - aplicarse en local (validación previa con src/domain y respuesta inmediata en pantalla), y
    - traducirse a su función SQL del servidor (la fuente de verdad en modo nube).
    En modo nube la operación se guarda en la cola y se reaplica en local hasta que el servidor la confirma. */
-import type { OrigenFoto, Tallas, ConfigAvisos, Propietario, Rol, CatId, EstadoEquipo, Estado, Herramienta, LineaEntrega, Producto, TipoIncidencia, TipoMov, Equivalencia, ArticuloRegla, Categoria } from '../data/tipos';
+import type { OrigenFoto, Tallas, ConfigAvisos, Propietario, Rol, RolApp, CatId, EstadoEquipo, Estado, Herramienta, LineaEntrega, Producto, TipoIncidencia, TipoMov, Equivalencia, ArticuloRegla, Categoria } from '../data/tipos';
 import { applyMovement, find, delta, disponibleReal, formatoEntero, vehiculoDeEquipo, unidadesABordo, contenidoDe } from '../domain/reglas';
 import { emailValido, herramientasLibres } from '../domain/entregas';
 import { redondea } from '../domain/formato';
@@ -17,6 +17,8 @@ import { archivarLocal, borrarLocal, deshacerFusionLocal, reactivarArchivado, re
 import { exigirSocioActivo, validarSocio } from '../domain/socios';
 const exigirSku = (sku: string) => { const m = motivoSkuNoValido(sku); if (m) throw new Error(m); };
 import { uid } from '../domain/formato';
+import { rolDe, rolesDe } from '../domain/permisos';
+import { normalizarPermisos } from '../../supabase/functions/_compartido/permisos';
 
 export interface OpMovimiento { id: string; sku: string; tipo: TipoMov; qty: number; motivo: string; ref: string; series: string[]; equipo?: string; vehiculo?: string }
 export interface OpAlbaran { id: string; cabecera: { numero: string; proveedor: string; delegacion?: string; cif: string; fecha: string; confianza: number; modo: 'ia' | 'sim'; /** E-024 */ paginas?: string[] }; lineas: { sku: string; cantidad: number; series: string[]; codigo?: string }[] }
@@ -67,6 +69,8 @@ export type Op =
   | { op: 'restaurarProducto'; args: { sku: string } }
   | { op: 'deshacerFusion'; args: { sku: string } }
   | { op: 'perfil'; args: { id: string; nombre: string; rol: Rol; activo: boolean } }
+  | { op: 'guardarRol'; args: RolApp }
+  | { op: 'borrarRol'; args: { id: string } }
   | { op: 'minimos'; args: { cambios: { sku: string; minimo: number; objetivo?: number | null; proveedorHabitual?: string }[] } }
   | { op: 'minimoHerramienta'; args: { modelo: string; minimo: number; objetivo?: number; proveedor: string } }
   | { op: 'pedidoHerramienta'; args: { modelo: string; qty: number; proveedor?: string } }
@@ -645,9 +649,42 @@ export const OPS: Defs = {
     desc: (_S, a) => `Deshacer la fusión de ${a.sku}`,
   },
   perfil: {
-    local: (S, a) => { const u = S.perfiles.find(x => x.id === a.id); if (u) Object.assign(u, { nombre: a.nombre, rol: a.rol, activo: a.activo }); },
+    local: (S, a) => {
+      if (!rolDe(S, a.rol)) throw new Error('Rol no válido');
+      const u = S.perfiles.find(x => x.id === a.id);
+      if (u && S.perfiles.every(x => (x === u ? !(a.rol === 'admin' && a.activo) : !(x.rol === 'admin' && x.activo)))) throw new Error('Tiene que quedar al menos un administrador activo');
+      if (u) Object.assign(u, { nombre: a.nombre, rol: a.rol, activo: a.activo });
+    },
     rpc: a => ['actualizar_perfil', { p_id: a.id, p_nombre: a.nombre, p_rol: a.rol, p_activo: a.activo }],
     desc: (_S, a) => `Usuario ${a.nombre}`,
+  },
+  /* ---------- E-027 · Roles (solo el administrador; los de sistema no se tocan) ---------- */
+  guardarRol: {
+    local: (S, a) => {
+      if (S.rol !== 'admin') throw new Error('Solo el administrador puede hacer esto');
+      const lista = S.roles?.length ? S.roles : (S.roles = rolesDe(S).map(r => ({ ...r, permisos: { ...r.permisos } })));
+      const nombre = a.nombre.trim(), r = lista.find(x => x.id === a.id);
+      if (!/^[a-z0-9_]{2,40}$/.test(a.id)) throw new Error('Identificador de rol no válido');
+      if (!nombre) throw new Error('Pon el nombre del rol');
+      if (r?.sistema) throw new Error('Los roles de sistema no se modifican: duplícalo y cambia la copia');
+      if (lista.some(x => x.id !== a.id && x.nombre.toLowerCase() === nombre.toLowerCase())) throw new Error(`Ya hay un rol llamado ${nombre}`);
+      const nuevo = { id: a.id, nombre, descripcion: a.descripcion || '', sistema: false, permisos: normalizarPermisos(a.permisos) };
+      if (r) Object.assign(r, nuevo); else lista.push(nuevo);
+    },
+    rpc: a => ['guardar_rol', { p: { id: a.id, nombre: a.nombre, descripcion: a.descripcion, permisos: normalizarPermisos(a.permisos) } }],
+    desc: (_S, a) => `Rol ${a.nombre}`,
+  },
+  borrarRol: {
+    local: (S, a) => {
+      if (S.rol !== 'admin') throw new Error('Solo el administrador puede hacer esto');
+      const r = rolDe(S, a.id); if (!r) throw new Error('Rol no encontrado');
+      if (r.sistema) throw new Error('Los roles de sistema no se borran');
+      const n = S.perfiles.filter(p => p.rol === a.id).length;
+      if (n) throw new Error(`El rol ${r.nombre} lo usa${n === 1 ? '' : 'n'} ${n} usuario${n === 1 ? '' : 's'}: cámbiales el rol antes de borrarlo`);
+      S.roles = (S.roles || []).filter(x => x.id !== a.id);
+    },
+    rpc: a => ['borrar_rol', { p_id: a.id }],
+    desc: () => 'Borrar un rol',
   },
   minimos: {
     local: (S, a) => {

@@ -1,11 +1,12 @@
 /* Validaciones puras (sin Deno), compartidas por las funciones y probadas con Vitest */
 
-export interface AltaUsuario { email: string; nombre: string; rol: 'admin' | 'almacen'; clave: string }
+/** E-027: el rol es el id de cualquier rol (admin, almacen, lectura o uno propio); la base comprueba que exista */
+export interface AltaUsuario { email: string; nombre: string; rol: string; clave: string }
 
 export function validarAlta(d: Partial<AltaUsuario>): string | null {
   if (!d.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(d.email.trim())) return 'Correo no válido';
   if (!d.nombre || !d.nombre.trim()) return 'Indica el nombre';
-  if (d.rol !== 'admin' && d.rol !== 'almacen') return 'Rol no válido';
+  if (!d.rol || !/^[a-z0-9_]{2,40}$/.test(d.rol)) return 'Rol no válido';
   return validarClave(d.clave);
 }
 

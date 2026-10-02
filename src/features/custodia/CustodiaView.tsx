@@ -38,7 +38,7 @@ export default function CustodiaView() {
           <p className="text-secondary">{prods.length} referencias · {num(prods.reduce((a, p) => a + p.stock, 0))} unidades · {rojos} en rojo · {amarillos} bajas</p></div>
         <div className="flex flex-wrap gap-2">
           <button onClick={() => openModal(<Informe prop={prop} />, { ancha: true })} className={`${BTN_S} px-4 h-11`}><Icon n="summarize" className="ico-20" />Informe</button>
-          <button onClick={() => openModal(<Acta prop={prop} />, { ancha: true })} className={`${BTN_P} px-4 h-11`}><Icon n="fact_check" className="ico-20" />Recuento con {o?.nombre || 'el propietario'}</button>
+          {perm.mod('custodia') && <button onClick={() => openModal(<Acta prop={prop} />, { ancha: true })} className={`${BTN_P} px-4 h-11`}><Icon n="fact_check" className="ico-20" />Recuento con {o?.nombre || 'el propietario'}</button>}
         </div>
       </div>
       {socios.length > 0 && <div role="tablist" aria-label="Socios de custodia" className="flex gap-2 overflow-x-auto no-scrollbar -mx-4 px-4 lg:mx-0 lg:px-0 pb-1">
@@ -109,8 +109,8 @@ function Informe({ prop }: { prop: string }) {
           : <p className="text-body-sm text-secondary">Sin registros en el periodo.</p>}</div>)}
     </div>
     <SheetFoot className="flex flex-wrap gap-2">
-      <button onClick={() => descargar(nombre + '.csv', informeCsv(inf), 'text/csv;charset=utf-8')} className={`${BTN_S} h-12 px-4`}><Icon n="table" className="ico-20" />CSV</button>
-      <button onClick={() => void pdf()} className={`${BTN_S} h-12 px-4`}><Icon n="picture_as_pdf" className="ico-20" />PDF</button>
+      {perm.exportar && <button onClick={() => descargar(nombre + '.csv', informeCsv(inf), 'text/csv;charset=utf-8')} className={`${BTN_S} h-12 px-4`}><Icon n="table" className="ico-20" />CSV</button>}
+      {perm.exportar && <button onClick={() => void pdf()} className={`${BTN_S} h-12 px-4`}><Icon n="picture_as_pdf" className="ico-20" />PDF</button>}
       {perm.admin && <button onClick={() => void enviar()} className={`${BTN_P} h-12 flex-1`}><Icon n="send" className="ico-20" />Enviar a {o?.nombre}</button>}
     </SheetFoot>
   </>);

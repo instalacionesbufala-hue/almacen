@@ -25,7 +25,7 @@ const cant = (u: number, unidad: string, contenido: number) => `${num(redondea(u
 const inicioMes = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`; };
 
 export default function CierresView() {
-  const E = useAlmacen(), { validar } = usePermisos();
+  const E = useAlmacen(), { gestionarCierres: validar, exportar: puedeExportar } = usePermisos();
   const [f, setF] = useState({ equipo: 'all', desde: inicioMes(), hasta: hoyISO(), estado: 'all' });
   const [abierto, setAbierto] = useState<string | null>(null);
   const equipos = [...new Set(E.cierres.map(c => c.equipoWizard).filter(Boolean))].sort();
@@ -54,7 +54,7 @@ export default function CierresView() {
       </section>
       <aside className="flex flex-col gap-4">
         <section className={`${CARD} p-4 flex flex-col gap-2`}>
-          <div className="flex items-center justify-between gap-2"><h2 className="font-semibold">Consumo del periodo</h2><button onClick={exportar} disabled={!consumo.length} className={`${BTN_S} h-10 px-3 disabled:opacity-40`}><Icon n="file_download" className="ico-18" />CSV</button></div>
+          <div className="flex items-center justify-between gap-2"><h2 className="font-semibold">Consumo del periodo</h2>{puedeExportar && <button onClick={exportar} disabled={!consumo.length} className={`${BTN_S} h-10 px-3 disabled:opacity-40`}><Icon n="file_download" className="ico-18" />CSV</button>}</div>
           {consumo.length ? consumo.map(x => <div key={x.sku} className="flex justify-between gap-2 py-1.5 border-b border-surface-container text-body-sm"><span className="min-w-0 truncate">{x.nombre}{x.estimada && <Tag c="bg-amber-100 text-amber-800 ml-1">estimado</Tag>}</span><b className="whitespace-nowrap">{num(x.formatos)} {unidadTxt(x.unidad as Unidad, x.formatos)}</b></div>)
             : <p className="text-body-sm text-secondary">Sin consumos en el periodo.</p>}
         </section>

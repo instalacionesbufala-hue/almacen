@@ -18,6 +18,9 @@ import { modoNube } from './store/nube/cliente';
 import { sesion } from './store/nube/sync';
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { tokenDeRuta } from './domain/portal';
+import { useAlmacen } from './store/almacen';
+import { vistaPermitida } from './domain/permisos';
+import { AvisoRol, SinAcceso } from './features/shell/Rol';
 
 // E-014: el portal del técnico es una página aparte (sin sesión) que solo se carga si se abre su enlace
 const PortalTecnico = lazy(() => import('./features/portal/PortalTecnico'));
@@ -33,10 +36,12 @@ const PANTALLAS: Record<Vista, ComponentType> = {
 };
 
 export default function App() {
-  const vista = useVista(), Pantalla = PANTALLAS[vista], s = sesion.use(), portal = useTokenPortal();
+  const vista = useVista(), s = sesion.use(), portal = useTokenPortal(), E = useAlmacen();
+  const Pantalla = vistaPermitida(E, vista) ? PANTALLAS[vista] : SinAcceso;            // E-027: lo que el rol no ve, no se abre
   if (portal) return <Suspense fallback={null}><PortalTecnico token={portal} /></Suspense>;
   if (modoNube && s.estado !== 'lista') return <><Acceso /><Toasts /></>;
   return (<>
+    <AvisoRol />
     <Sidebar vista={vista} />
     <CabeceraEscritorio />
     <CabeceraMovil vista={vista} />

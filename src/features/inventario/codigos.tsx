@@ -8,6 +8,7 @@ import { toast } from '../../ui/toast';
 import { BTN_S, Icon, INP, LBL, Pill, Tile, Vacio } from '../../ui/base';
 import { OrdenArticulos, useListaArticulos } from '../../ui/selectorArticulo';
 import { useCamara } from '../escaner/camara';
+import { gestiona, puede } from '../../domain/permisos';
 
 /** Asocia un código ya leído a un artículo existente (o lo intenta y avisa) */
 export function asociarCodigo(codigo: string, sku: string, formato = '', aviso = true): boolean {
@@ -39,10 +40,10 @@ export function CodigosFicha({ sku }: { sku: string }) {
   const E = useAlmacen(), lista = codigosDe(E, sku);
   return (
     <div><div className="flex items-center justify-between"><div className={LBL}>Códigos alternativos (EAN del fabricante…)</div>
-      <button onClick={() => abrirAnadirCodigo(sku)} className="text-primary text-body-sm font-semibold h-10 inline-flex items-center gap-1"><Icon n="barcode_scanner" className="ico-20" />Añadir</button></div>
+      {puede(E, 'inventario', 'modificar') && <button onClick={() => abrirAnadirCodigo(sku)} className="text-primary text-body-sm font-semibold h-10 inline-flex items-center gap-1"><Icon n="barcode_scanner" className="ico-20" />Añadir</button>}</div>
       {lista.length ? <ul className="flex flex-col">{lista.map(c => <li key={c.codigo} className="flex items-center justify-between gap-2 py-1.5 border-b border-surface-container">
         <span className="min-w-0"><span className="font-mono text-body-md break-all">{c.codigo}</span> <span className="text-label-sm text-secondary">{c.tipo} · {c.operator}</span></span>
-        {E.rol === 'admin' && <button onClick={() => { if (confirm(`¿Quitar el código ${c.codigo} de este artículo?`)) ejecutar({ op: 'quitarCodigo', args: { codigo: c.codigo } }); }} className="text-error text-body-sm h-10 px-2" aria-label={`Quitar ${c.codigo}`}>Quitar</button>}</li>)}</ul>
+        {gestiona(E, 'inventario') && <button onClick={() => { if (confirm(`¿Quitar el código ${c.codigo} de este artículo?`)) ejecutar({ op: 'quitarCodigo', args: { codigo: c.codigo } }); }} className="text-error text-body-sm h-10 px-2" aria-label={`Quitar ${c.codigo}`}>Quitar</button>}</li>)}</ul>
         : <p className="text-body-sm text-secondary">Ninguno. Si la caja trae otro código (el EAN del fabricante), añádelo y el escáner la reconocerá.</p>}
     </div>
   );

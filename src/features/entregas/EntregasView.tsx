@@ -16,13 +16,14 @@ import { OrdenArticulos, useListaArticulos } from '../../ui/selectorArticulo';
 import { useCamara } from '../escaner/camara';
 import { anadirACesta, cambiarTalla, cesta, disponible, escanearEnCesta, fijarCantidad, fijarObra, irAPaso, paraEquipo, quitarDeCesta, sumarUno, vaciarCesta } from './cesta';
 import { abrirInformeEntregas, abrirRecibo, confirmarFirma, EtiquetaCopia, PanelFirma, Preparadas, type DatosFirma } from './Hojas';
+import { usePermisos } from '../../store/permisos';
 
 export { abrirRecibo };
 
 const PASOS = [{ n: 1, t: 'Para quién', i: 'person' }, { n: 2, t: 'Material', i: 'inventory_2' }, { n: 3, t: 'Firma', i: 'signature' }] as const;
 
 export default function EntregasView() {
-  const E = useAlmacen(), c = cesta(), paso = c.paso || 1;
+  const E = useAlmacen(), c = cesta(), paso = c.paso || 1, puede = usePermisos().mod('entregas');
   const eq = E.equipos.find(e => e.id === c.equipo);
   const puedePaso = (n: number) => n === 1 || (n === 2 && !!eq) || (n === 3 && !!eq && c.lineas.length > 0);
   return (
@@ -31,15 +32,17 @@ export default function EntregasView() {
         <div><span className={LBL}>Almacén → equipo</span><h1 className="text-headline-lg font-bold">Entrega de material</h1></div>
         <button onClick={abrirInformeEntregas} className={`${BTN_S} h-12 px-4`}><Icon n="summarize" className="ico-20" />Entregas por equipo</button>
       </div>
-      <Preparadas />
-      <nav className="grid grid-cols-3 gap-2" aria-label="Pasos de la entrega">{PASOS.map(p => (
+      {/* E-027: sin "Modificar entregas" se ven las entregas hechas y sus PDF, no el asistente para hacerlas */}
+      {!puede && <p className="text-body-sm text-secondary bg-surface-container-low rounded-xl p-3">Tu rol permite ver las entregas y sus justificantes, no prepararlas ni firmarlas.</p>}
+      {puede && <Preparadas />}
+      {puede && <nav className="grid grid-cols-3 gap-2" aria-label="Pasos de la entrega">{PASOS.map(p => (
         <button key={p.n} onClick={() => puedePaso(p.n) && irAPaso(p.n)} disabled={!puedePaso(p.n)} aria-current={paso === p.n ? 'step' : undefined}
           className={`h-14 rounded-xl flex items-center justify-center gap-2 font-semibold text-body-md disabled:opacity-40 ${paso === p.n ? 'bg-primary text-white' : 'bg-surface-container-low text-on-surface'}`}>
           <span className={`w-7 h-7 rounded-full grid place-items-center font-mono text-label-md ${paso === p.n ? 'bg-white/20' : 'bg-white'}`}>{p.n}</span>
-          <span className="truncate">{p.t}{p.n === 2 && c.lineas.length ? ` (${c.lineas.length})` : ''}</span></button>))}</nav>
-      {paso === 1 && <PasoQuien />}
-      {paso === 2 && <PasoMaterial />}
-      {paso === 3 && <PasoFirma />}
+          <span className="truncate">{p.t}{p.n === 2 && c.lineas.length ? ` (${c.lineas.length})` : ''}</span></button>))}</nav>}
+      {puede && paso === 1 && <PasoQuien />}
+      {puede && paso === 2 && <PasoMaterial />}
+      {puede && paso === 3 && <PasoFirma />}
       <Ultimas />
     </div>
   );

@@ -20,6 +20,7 @@ import { abrirDetalleAlbaran } from './DetalleAlbaran';
 import { abrirEscanerAlbaran, EscanerAlbaranRaiz } from './EscanerAlbaran';
 import { alLeerPendientes, cola, guardarPaginasAlbaran, lecturas, nombresPaginas, paginasDeLectura } from './colaLectura';
 import type { Lectura } from '../../domain/lecturaAlbaran';
+import { usePermisos } from '../../store/permisos';
 
 interface Linea { codigo: string; descripcion: string; cantidad: string; confianza: number; sku: string | null; how: string | null; include: boolean; series: string; nota: string }
 interface Doc { proveedor: string; delegacion?: string; numero: string; fecha: string; cif: string; bultos?: number }
@@ -137,7 +138,7 @@ function confirmar() {
 }
 
 export default function AlbaranesView() {
-  const E = useAlmacen(), a = albStore.use(), desk = useEsEscritorio(), input = useRef<HTMLInputElement>(null);
+  const E = useAlmacen(), a = albStore.use(), desk = useEsEscritorio(), input = useRef<HTMLInputElement>(null), puede = usePermisos().mod('albaranes');
   const [arrastrando, setArrastrando] = useState(false);
   const avg = E.albaranes.length ? E.albaranes.reduce((s, h) => s + (h.confianza || .95), 0) / E.albaranes.length : .98;
   const procesando = a.stage === 'processing';
@@ -155,7 +156,8 @@ export default function AlbaranesView() {
           <div className="bg-surface-container-low rounded-xl p-3 flex items-center gap-2"><Icon n="verified" className="text-tertiary" /><div><div className={LBL}>Confianza media</div><div className="font-mono text-label-lg">{(avg * 100).toFixed(1)}%</div></div></div></div>
       </section>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-space-lg">
+      {/* E-027: sin "Modificar albaranes" se ve el historial, no la recepción */}
+      {puede && <div className="grid grid-cols-1 lg:grid-cols-12 gap-space-lg">
         <section className={`lg:col-span-8 ${CARD} p-space-md flex flex-col gap-space-md`}>
           <button onClick={escanearAlbaran} disabled={procesando} className={`${BTN_P} h-16 text-body-lg w-full`}><Icon n="document_scanner" className="ico-28" />Escanear albarán con la cámara</button>
           <button onClick={() => input.current?.click()} disabled={procesando}
@@ -178,10 +180,10 @@ export default function AlbaranesView() {
               <div><div className="font-mono text-label-md font-semibold">{t}</div><div className="text-body-sm text-secondary">{d}</div></div></div>); })}
           <p className="text-body-sm text-secondary mt-1">{iaReal() ? 'Las fotos y los PDF se leen con Gemini desde el servidor.' : 'Ahora la lectura es simulada con albaranes de ejemplo. La lectura real con Gemini se activa al conectar la función del servidor (encargo E-003).'}</p>
         </section>
-      </div>
+      </div>}
 
-      <Lecturas />
-      {a.stage === 'review' && <Revision />}
+      {puede && <Lecturas />}
+      {puede && a.stage === 'review' && <Revision />}
       <EscanerAlbaranRaiz />
 
       <section className={`${CARD} overflow-hidden`}>

@@ -44,7 +44,7 @@ export default function DotacionView() {
     <div className="px-4 lg:px-gutter py-4 lg:py-space-lg flex flex-col gap-4 lg:gap-space-lg max-w-[1600px]">
       <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-3">
         <div><span className={LBL}>Herramientas · EPIs · ropa de trabajo</span><h1 className="text-headline-lg-mobile lg:text-headline-lg font-bold">Dotación de equipos y técnicos</h1></div>
-        <div className="flex flex-wrap gap-2">{perm.configurar && <button onClick={exportar} className={`${BTN_S} px-4 h-11`}><Icon n="file_download" className="ico-20" />CSV</button>}<button onClick={() => abrirAltaCamara({ origen: 'dotacion' })} className={`${BTN_P} px-4 h-14`}><Icon n="add_a_photo" className="ico-20" />Nuevo con la cámara</button>{perm.gestionarFlota && <button onClick={() => abrirAltaDotacion(clase === 'all' ? 'herramienta' : clase)} className={`${BTN_S} px-4 h-14`}><Icon n="add_circle" className="ico-20" />Nueva ficha</button>}</div>
+        <div className="flex flex-wrap gap-2">{perm.exportar && <button onClick={exportar} className={`${BTN_S} px-4 h-11`}><Icon n="file_download" className="ico-20" />CSV</button>}{perm.mod('dotacion') && <button onClick={() => abrirAltaCamara({ origen: 'dotacion' })} className={`${BTN_P} px-4 h-14`}><Icon n="add_a_photo" className="ico-20" />Nuevo con la cámara</button>}{perm.gestionarDotacion && <button onClick={() => abrirAltaDotacion(clase === 'all' ? 'herramienta' : clase)} className={`${BTN_S} px-4 h-14`}><Icon n="add_circle" className="ico-20" />Nueva ficha</button>}</div>
       </div>
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-space-md">
         <Kpi icon="inventory" iconC="bg-surface-container-low text-primary" badge={`${E.herramientas.length - activos.length} de baja`} badgeC="text-secondary bg-surface-container-high" value={activos.length} label="Fichas activas" foot="Asignadas" footVal={`${activos.filter(h => h.equipo || h.tecnico).length}`} bar={activos.filter(h => h.equipo || h.tecnico).length / (activos.length || 1) * 100} barC="bg-primary" onClick={() => setSoloAvisos(false)} />
@@ -62,7 +62,7 @@ export default function DotacionView() {
         </select>
         <label className="flex items-center gap-2 px-3 h-12 rounded-lg bg-surface-container-low whitespace-nowrap"><input type="checkbox" checked={soloAvisos} onChange={e => setSoloAvisos(e.target.checked)} className="w-5 h-5 accent-primary" />Solo avisos</label>
       </div>
-      {perm.gestionarFlota && (clase === 'all' || clase === 'herramienta') && <Repuestos />}
+      {perm.gestionarDotacion && (clase === 'all' || clase === 'herramienta') && <Repuestos />}
       <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-3">{lista.length ? lista.map(h => (
         <article key={h.id} className={`${CARD} p-4 flex flex-col gap-3 ${h.estado === 'baja' ? 'opacity-60' : ''} ${avisos.has(h.id) ? 'ring-1 ring-error/25' : ''}`}>
           <button onClick={() => abrirFichaDotacion(h.id)} className="flex gap-3 text-left">
@@ -72,9 +72,9 @@ export default function DotacionView() {
               <div className="text-body-sm text-secondary truncate">{h.marca}{h.serie && ` · ${h.serie}`}{h.talla && ` · Talla ${h.talla}`}</div></div>
           </button>
           <div className="flex flex-wrap items-center gap-2"><span className="inline-flex items-center gap-1 text-body-sm"><Icon n="badge" className="ico-18 text-secondary" />{quienTxt(h)}</span><Caducidad h={h} /></div>
-          {h.estado !== 'baja' && <div className={`grid gap-2 mt-auto ${perm.gestionarFlota ? 'grid-cols-2' : 'grid-cols-1'}`}>
-            <button onClick={() => abrirIncidencia(h.id)} className={`${BTN_T} h-12`}><Icon n="report" className="ico-20" />Incidencia</button>
-            {perm.gestionarFlota && <button onClick={() => abrirAsignar(h.id)} className={`${BTN_S} h-12`}><Icon n="assignment_ind" className="ico-20" />Asignar</button>}</div>}
+          {h.estado !== 'baja' && perm.mod('dotacion') && <div className={`grid gap-2 mt-auto ${perm.gestionarDotacion ? 'grid-cols-2' : 'grid-cols-1'}`}>
+            {perm.mod('dotacion') && <button onClick={() => abrirIncidencia(h.id)} className={`${BTN_T} h-12`}><Icon n="report" className="ico-20" />Incidencia</button>}
+            {perm.gestionarDotacion && <button onClick={() => abrirAsignar(h.id)} className={`${BTN_S} h-12`}><Icon n="assignment_ind" className="ico-20" />Asignar</button>}</div>}
         </article>)) : <div className={`${CARD} md:col-span-2 2xl:col-span-3`}><Vacio>No hay fichas con esos filtros.</Vacio></div>}</div>
     </div>
   );
@@ -83,7 +83,7 @@ export default function DotacionView() {
 /* ---------- Ficha con historial ---------- */
 export const abrirFichaDotacion = (id: string) => openModal(<FichaDotacion id={id} />);
 function FichaDotacion({ id }: { id: string }) {
-  const E = useAlmacen(), h = herramienta(E, id), { gestionarFlota } = usePermisos();
+  const E = useAlmacen(), h = herramienta(E, id), { gestionarDotacion: gestionarFlota, mod } = usePermisos();
   if (!h) return <SheetHead title="Ficha no encontrada" />;
   const datos: [string, string][] = [['Clase', CLASE[h.clase].t], ['Marca / modelo', h.marca || '—'], ['N.º serie / lote', h.serie || '—'], ['Talla', h.talla || '—'], ['Cantidad', num(h.cantidad)], ['Caducidad / revisión', h.caduca ? new Date(h.caduca + 'T00:00:00').toLocaleDateString('es-ES') : '—']];
   return (<>
@@ -100,7 +100,7 @@ function FichaDotacion({ id }: { id: string }) {
             <span className="font-mono text-label-sm text-secondary shrink-0" title={fechaHora(i.ts)}>{hace(i.ts)}</span>
           </li>))}</ol></div>
     </div>
-    {h.estado !== 'baja' && <SheetFoot className="grid grid-cols-2 gap-2">
+    {h.estado !== 'baja' && mod('dotacion') && <SheetFoot className="grid grid-cols-2 gap-2">
       <button onClick={() => abrirIncidencia(h.id)} className={`${BTN_T} h-12`}><Icon n="report" className="ico-20" />Registrar incidencia</button>
       {gestionarFlota && <button onClick={() => abrirAsignar(h.id)} className={`${BTN_P} h-12`}><Icon n="assignment_ind" className="ico-20" />Asignar</button>}</SheetFoot>}
   </>);
@@ -109,7 +109,7 @@ function FichaDotacion({ id }: { id: string }) {
 /* ---------- Incidencia: deterioro, rotura, pérdida, reparación, reposición, baja ---------- */
 export const abrirIncidencia = (id: string) => openModal(<Incidencia id={id} />);
 function Incidencia({ id }: { id: string }) {
-  const E = useAlmacen(), h = herramienta(E, id)!, { gestionarFlota } = usePermisos();
+  const E = useAlmacen(), h = herramienta(E, id)!, { gestionarDotacion: gestionarFlota } = usePermisos();
   // el almacén registra roturas, pérdidas y deterioro; reparar, reponer y dar de baja es del administrador
   const posibles = incidenciasPosibles(h).filter(t => gestionarFlota || ['deterioro', 'rotura', 'perdida'].includes(t));
   const [tipo, setTipo] = useState<TipoIncidencia>(posibles[0]), [nota, setNota] = useState(''), [serie, setSerie] = useState(''), [caduca, setCaduca] = useState('');
