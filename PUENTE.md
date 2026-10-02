@@ -758,9 +758,97 @@ Hoy el propietario Esmove existe en la tabla `propietarios`, pero **no se pueden
 - **Recuento de furgoneta:** ya admite cualquier artículo (el chat lo cambió en `16a6f1f`: botones "Añadir lo que descuentan los cierres" y "Añadir otro artículo…"). Revisarlo y mantenerlo coherente con lo anterior.
 - **Hecho cuando:** un artículo recién creado aparece con 0 ud en las 3 furgonetas, se asigna a Búfala 2 con "Asignar" y, tras la firma, consta a bordo.
 
+### E-026 · Cierres: una instalación = un cierre, cargadores entregados desde el 30/09 y corrección con la prefactura aprobada de Holded · PENDIENTE (antes del lunes 05/10)
+**Contexto (02/10).** La conexión con el wizard ya funciona:
+- `enviarAlAlmacen(datos)` va en `procesarEnvio_` del Apps Script, justo después de `escribirEnRegistro_`.
+- El chat ha añadido en `docs/apps-script-almacen.gs` dos cosas:
+  - **el modelo del cargador desde el calendario** (hoja "🔗 ESBRAIN": `Nº PRESUPUESTO` → `HARDWARE` y `MATERIAL ESPECIAL`);
+  - **la carga única del histórico** desde "📋 Registro de Obras", con cabeceras en la fila 2.
+- **El histórico NO se ha lanzado todavía:** espera a este encargo. Son 11 cierres desde el 30/09.
+
+**1. Una instalación es un solo cierre (evitar duplicados)**
+- **Hoy la clave es** `esbrainUuid` o `numInst + fechaCierreIso`. Un mismo cierre puede llegar **en directo** (con UUID y hora), **por el histórico** (sin UUID; "Registro" guarda la fecha y hora de su escritura) o **corregido por Holded**, y se contaría dos veces.
+- **Nueva regla:** el cierre se identifica por **`numInst`**, que es la instalación (el número de presupuesto). Lo que llegue después para el mismo `numInst` es una **nueva versión**: se aplica la diferencia y nunca se duplica. Si llega con otra `fechaCierreIso` o con UUID, se guardan, pero no cambian la identidad.
+- **Prueba:** directo + histórico + Holded del mismo `numInst` → un solo cierre con 3 versiones y el consumo neto correcto.
+
+**2. Cargadores: hasta el lunes, solo se descuentan los que entregó el almacén**
+- **Decisión del usuario:** hasta el 05/10 los técnicos tenían cargadores que **no salieron del almacén gestionado**. Desde el 30/09 solo deben descontarse los cargadores que él entregó con la app. Desde el lunes 05/10 entrega él todo.
+- **Configuración → Integraciones:** "Hasta esta fecha, descontar cargadores solo si constan a bordo", por defecto **05/10/2026 00:00 (Madrid)**.
+  - **Antes de esa fecha:**
+    - si el vehículo **tiene a bordo** ese modelo (por entregas), se descuenta 1 ud;
+    - si no, la línea queda como **"Cargador no entregado por el almacén: no se descuenta"**, sin movimiento de stock y sin discrepancia. Aparece en el informe de custodia como **"Instalado (antes de la gestión del almacén)"**, para que el socio tenga constancia de la instalación sin descuadrar el stock.
+  - **Desde esa fecha:** comportamiento normal (si no consta a bordo, discrepancia).
+- **Afecta solo a artículos de la categoría de cargadores o en custodia.** El resto del material se descuenta siempre (negativos y discrepancias, que se corrigen con el recuento del lunes).
+- **Hoy, en los datos reales,** el único cargador entregado e instalado desde el 30/09 es el **Trydan con Schuko de Búfala 1** (cierre E2632246). El Trydan 10 m entregado a Búfala 3 el 02/10 aún no consta instalado.
+
+**3. Reglas de cargadores según el texto real del calendario**
+- **Las reglas propuestas** (`trydan&7,4` y similares) **no casan** con el calendario. Textos reales:
+  - `V2C TRYDAN MONOFÁSICO PROTECCIONES M5`
+  - `V2C TRYDAN MONOFÁSICO PROTECCIONES M5 + SCHUKO`
+  - `POLICHARGER NW MONOFÁSICO PROTECCIÓN REARME M5`
+- **Sustituir las reglas de `hardware`**, en este orden (gana la primera que cumple), por:
+
+| Condición (`hardware~`) | Artículo |
+|---|---|
+| `trydan&schuko` | 8900500015 |
+| `trydan&trif&m10` | 8900500030 |
+| `trydan&trif` (o `22`) | 8900500025 |
+| `trydan&m10` | 8900500020 |
+| `trydan` | 8900590300 (Trydan 7,4 kW 5 m de Esmove, el más habitual) |
+| `policharger` | 8906000665 |
+
+- **Antes de cambiar la base real,** comprobar los SKU y nombres en la base y avisar si alguno no existe.
+- **Las reglas confirmadas por el usuario** se cambian **con migración**: se guarda la versión anterior (E-016) y se explica en la respuesta.
+- **El modelo que no case** sigue yendo a Pendientes.
+
+**4. Corrección con la prefactura aprobada de Holded**
+- **Por qué:** a veces los técnicos no ponen en el cierre algún material (por ejemplo, la **Caja registro 100x100**) y el usuario lo añade en la prefactura de Holded.
+- **Cuándo:** cuando el presupuesto de Holded pasa a **aprobado** (`accepted`), el Apps Script enviará la prefactura al almacén. Esa parte la escribe el chat cuando esté este encargo.
+- **Contrato** (nuevo modo de `registrar-cierre`):
+
+  `{ origen: 'holded', numInst, documento: '<nº Holded>', fechaAprobacion, lineas: { <campo del wizard>: cantidad, … } }`
+
+  - El servidor crea una **nueva versión** del cierre de ese `numInst`.
+  - **Los campos facturables** que vengan en `lineas` **sustituyen** a los de la versión anterior.
+  - **El resto** (`tipoLinea`, `seccion`, `fase`, `pvc32`, `hardware`, `equipo`, fecha) **se conservan**.
+  - Se aplica **la diferencia**, en positivo o negativo.
+- **Campos facturables:** `metrosLinea`, `metrosUtp`, `rj45`, `corr32`, `acero32`, `acero40`, `canaleta`, `sot50`, `sot90`, `bornasMono`, `bornasTrif`, `caja6`, `caja12`, `caja18`, `cerradura`, `cajaReg`, `mag1025`, `mag32`, `mag40`, `pica`, `preinst`.
+- **Las líneas de la tarifa** de `calcularPartidas_` del Apps Script ya se llaman así:
+  - Línea bajo tubo PVC / Manguera eléctrica
+  - Cable de datos UTP, Conector RJ45
+  - Tubo corrugado 32mm, Tubo acero 32 y 40mm, Canaleta eléctrica 35x20mm, Tubo soterrado 50 y 90mm
+  - Bornas MONO y TRIF (kit)
+  - Caja distribución 6, 12 y 18 módulos, Cerradura + llave, Caja registro 100x100
+  - Magnetotérmico DPN 10A-25A, 32A y 40A
+  - Kit toma de tierra, Kit pre-instalación nuevo suministro
+  - La traducción a campos la hará el Apps Script.
+- **Si llega una prefactura sin cierre previo,** se guarda como cierre de origen Holded (con equipo y fecha si vienen), y si falta el equipo, va a Pendientes.
+- **En la vista del cierre:** las versiones con su origen ("wizard", "histórico", "prefactura Holded nº …") y la diferencia aplicada ("+2 Caja registro 100x100").
+- **Equivalencias:**
+  - el campo `cajaReg` necesita un artículo; si no existe en el catálogo, queda "sin equivalencia" (en rojo) hasta que el usuario lo dé de alta;
+  - igual con `caja6`, `caja12`, `caja18`, `cerradura`, `mag*`, `pica`, `preinst`, `acero40` y `sot*`.
+
+**5. Material especial del calendario**
+`materialEspecial` (texto libre, por ejemplo "SÍ — 1× CUADRO PROTECCION VE MONOFÁSICO REARMABLE + SCHUKO") se guarda con el cierre y se muestra. Si no está vacío, el cierre queda marcado **"Revisar material especial"** en la bandeja, para que el administrador añada a mano lo que corresponda. No se descuenta solo.
+
+**6. Hecho cuando**
+- Hay pruebas de los puntos 1 a 4.
+- La guía explica que el histórico se lanza **una sola vez** (`cargarHistoricoRegistro`) y **después** de desplegar este encargo, y que el recuento de furgonetas del lunes va **después** del histórico.
+
 ---
 
 ## Revisión del chat
+
+### 02/10/2026 · Chat: conexión del wizard y siguiente paso
+- **Cierres en directo:** desde hoy, `procesarEnvio_` → `enviarAlAlmacen(datos)`. Los 2 cierres de hoy se procesaron antes de añadir la línea.
+- **`docs/apps-script-almacen.gs`:** versión completa, con el modelo del cargador desde el calendario y la carga única del histórico (11 cierres desde el 30/09, sin lanzar todavía).
+- **E-026 (nuevo, antes del lunes):**
+  - una instalación = un cierre;
+  - cargadores: hasta el 05/10 solo los entregados por el almacén;
+  - reglas de cargadores con el texto real del calendario;
+  - corrección con la prefactura aprobada de Holded;
+  - material especial.
+- **Orden: E-026 → E-025.** Después de E-026: lanzar el histórico y, el lunes, el recuento de las furgonetas.
 
 ### 02/10/2026 · Revisión de E-024 y cambios del chat
 Verificado sobre `51767e4`:
