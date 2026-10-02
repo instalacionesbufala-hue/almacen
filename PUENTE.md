@@ -893,7 +893,7 @@ Una tabla con una fila por apartado y casillas **Ver** y **Modificar**, en lengu
 - Hay pruebas de: solo lectura que intenta registrar un movimiento, una entrega, un ajuste, un recuento o editar un artículo, y el **servidor lo rechaza**; un rol propio con "Ver custodia" sin "Modificar"; quitar "Ver" oculta y bloquea la lectura; no se puede borrar un rol en uso; siempre queda un administrador.
 - El usuario de dirección entra y ve todo sin ningún botón de modificar.
 
-### E-028 · Permisos: denegar por defecto a los roles que no son de almacén · PENDIENTE (pequeño)
+### E-028 · Permisos: denegar por defecto a los roles que no son de almacén · HECHO
 **Revisión del chat de E-027.** Si una función que escribe **no está en `permisos_funcion`**, `perfil_actual()` la deja pasar (`v_perm is null`), también para **Solo lectura** y para los roles propios. La prueba de cobertura lo evita hoy, pero si algún día falta una, ese hueco permitiría escribir a dirección.
 - **Qué hacer:** si `v_perm is null` y el rol **no** es `admin` ni `almacen`, **rechazar**: "Esta acción no tiene permiso asignado: avisa al administrador". `almacen` mantiene su comportamiento actual.
 - **Comprobar** que ninguna lectura por RPC de Solo lectura se rompe; la prueba de cobertura ya exige que estén todas registradas.
@@ -2463,3 +2463,26 @@ En "Para el día a día" se explican el ajuste y el aviso.
 - `tsc -b`, `deno check` y build correctos.
 
 **Para el usuario:** Configuración → Usuarios y permisos → pon a tu usuario de dirección en **Solo lectura**. Si quieres comprobarlo antes, en la pestaña Roles tienes **"Probar como este rol"**.
+
+### 03/10/2026 · E-028 · HECHO
+**Aplicado en producción:** migración `20261018000100_e028_denegar_por_defecto.sql` (solo redefine `perfil_actual()`).
+
+**Comprobado en producción (solo lectura):** la función nueva está activa y el usuario de dirección ya figura como **Solo lectura**.
+
+**Qué cambia:**
+- Si la función de la API que se ejecuta **no está en `permisos_funcion`**:
+  - **Solo lectura y los roles propios:** se rechaza con "Esta acción no tiene permiso asignado: avisa al administrador (nombre de la función)".
+  - **Almacén y el administrador:** como antes.
+- **Las funciones de administrador sin registrar** (`encolar_envio`, `limpiar_demostracion`) no cambian: ya las rechazaba `exigir_admin()` para todos menos el administrador.
+
+**Decisión de Code (necesaria, no estaba en el encargo):**
+- La app llama a `perfil_actual()` **directamente** al entrar, para saber quién es (`sync.ts`). Esa función no está ni puede estar en `permisos_funcion`, porque es la propia comprobación.
+- Con el rechazo tal cual, **dirección no habría podido ni entrar**. Por eso la llamada directa a `perfil_actual()` sigue permitida a todos (solo devuelve el propio perfil).
+- **Lecturas por RPC de Solo lectura:** no se rompe ninguna. Las que comprueban al usuario están todas registradas (lo exige la prueba de cobertura) o pasan por `exigir_admin()`.
+
+**Pruebas: 430 en verde** (+3, `supabase/tests/e028.test.ts`):
+- una función de prueba sin registrar: Solo lectura y un rol propio se rechazan; Almacén y el administrador pasan;
+- `perfil_actual()` directo funciona para los cuatro roles;
+- lo registrado sigue igual.
+
+`tsc -b` sin errores.
