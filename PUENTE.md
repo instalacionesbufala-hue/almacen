@@ -899,6 +899,22 @@ Una tabla con una fila por apartado y casillas **Ver** y **Modificar**, en lengu
 - **Comprobar** que ninguna lectura por RPC de Solo lectura se rompe; la prueba de cobertura ya exige que estén todas registradas.
 - **Prueba:** una función de prueba sin registrar llamada por Solo lectura se rechaza, y por Almacén pasa.
 
+### E-029 · Cierres del 30/09 bloqueados como "Equipo sin vehículo" · PENDIENTE (urgente, antes del recuento del lunes)
+**Qué ha visto el chat en producción (03/10).** El usuario lanzó `cargarHistoricoRegistro`: **12 enviados y 0 errores**. Hay 12 cierres:
+- **8 del 01/10 y el 02/10:** "Discrepancia", que es lo esperado. Los Trydan de Esmove salen como "no entregado por el almacén: no se descuenta" y el Policharger de Búfala 2 se descontó. ✔
+- **Los 4 del 30/09** (E2632077 y E2631828 de Búfala 2, E2632246 de Búfala 1 y E2632105 de Búfala 3) están en **"Equipo sin vehículo"**. Las asignaciones vehículo → equipo se crearon el 30/09 **por la noche**, después del borrado de la demostración (20:03), y esos cierres son de las 12:15 a las 15:33. Por eso **el Trydan con Schuko de Búfala 1 (E2632246) no se ha descontado**, y sigue 1 ud a bordo de 2690NKC.
+
+**Qué hacer**
+1. **Editar la fecha de inicio de una asignación** (administrador), en Equipos → Historial: la de la asignación vehículo → equipo y la de técnico → equipo.
+   - Validación: que no se solape con otra asignación del mismo vehículo o equipo.
+   - El cambio queda en la auditoría.
+   - Al guardarlo, ofrecer **"Reprocesar los cierres afectados"**: los cierres de ese equipo en "Equipo sin vehículo" con fecha dentro del nuevo tramo.
+2. **Atajo en el cierre "Equipo sin vehículo"** (administrador): **"Usar el vehículo que el equipo tiene ahora"**, con confirmación. Procesa ese cierre con el vehículo actual y deja constancia en la versión ("vehículo asignado a mano por …"), sin tocar el historial de asignaciones. Opción para aplicarlo a **todos** los cierres en ese estado.
+3. **Caso real:** que el usuario pueda dejar los 4 cierres del 30/09 procesados con 2690NKC (Búfala 1), 4299NGK (Búfala 2) y 7463LVN (Búfala 3). **No tocar sus datos sin que él lo haga desde la app.** Explicar en la respuesta qué botón pulsar. Tras procesarlos, el Schuko de 2690NKC debe quedar en 0 a bordo.
+4. **"Consumo del periodo":** muestra "V2C TRYDAN 7,4KW 5M + PROT (ESMOVE): 2 ud", pero en esos cierres el Trydan de Esmove sale como "no entregado: no se descuenta". Revisar si el resumen suma las líneas `no_entregado`. Si es así, separarlas en "Instalados no entregados por el almacén", para que el consumo cuadre con lo descontado.
+5. **Filtro de fechas de la lista de cierres:** viene por defecto "desde ayer" y oculta los 4 del 30/09; el usuario pensaría que no llegaron. Que el filtro por defecto cubra **desde la fecha de apertura** (o los últimos 30 días) y muestre arriba "Mostrando X de Y cierres".
+6. **Hecho cuando:** hay pruebas de: editar la fecha de inicio con reproceso, el atajo de vehículo actual, el resumen sin `no_entregado`, y el filtro por defecto.
+
 ---
 
 ## Revisión del chat
@@ -931,7 +947,7 @@ Es la que tiene el usuario en su Apps Script.
 
 **Lo siguiente del chat:** la función del Apps Script que envía la prefactura al aprobarla en Holded (E-026 §4).
 
-**Orden: E-028.**
+**Orden: E-029 (urgente) → E-028.** Histórico lanzado el 03/10: 12 cierres, 4 bloqueados en "Equipo sin vehículo" (E-029).
 
 ### 02/10/2026 · Chat: conexión del wizard y siguiente paso
 - **Cierres en directo:** desde hoy, `procesarEnvio_` → `enviarAlAlmacen(datos)`. Los 2 cierres de hoy se procesaron antes de añadir la línea.
