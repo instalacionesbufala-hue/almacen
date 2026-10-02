@@ -101,24 +101,46 @@ function FilaCierre({ c, abierto, alternar, puede }: { c: CierreApp; abierto: bo
 export const abrirRecuentoVehiculo = (vehiculo: string) => openModal(<RecuentoVehiculo vehiculo={vehiculo} />, { ancha: true });
 function RecuentoVehiculo({ vehiculo }: { vehiculo: string }) {
   const E = useAlmacen(), v = E.vehiculos.find(x => x.id === vehiculo);
-  const skus = E.aBordo.filter(b => b.vehiculo === vehiculo && b.unidades !== 0).map(b => b.sku);
+  // Chat (02/10): el recuento debe poder incluir TODO lo que lleva la furgoneta, no solo lo que la app sabe que lleva
+  // (al empezar, las furgonetas tienen material que nunca se entregó desde la app).
+  const aBordo = E.aBordo.filter(b => b.vehiculo === vehiculo && b.unidades !== 0).map(b => b.sku);
+  const [extra, setExtra] = useState<string[]>([]);
   const [cont, setCont] = useState<Record<string, string>>({});
+  const skus = [...new Set([...aBordo, ...extra])].filter(sku => find(E, sku))
+    .sort((a, b) => find(E, a)!.name.localeCompare(find(E, b)!.name, 'es', { sensitivity: 'base' }));
+  const anadir = (lista: string[]) => { const n = lista.filter(x => !skus.includes(x)); if (n.length) setExtra(e => [...e, ...n]); return n.length; };
+  const deCierres = () => {
+    const set = new Set<string>();
+    E.equivalencias.filter(r => r.activa).forEach(r => {
+      r.articulos.forEach(a => { if (a.sku) set.add(a.sku); });
+      if (r.formula === 'fijaciones') Object.values(E.kits || {}).flat().forEach(a => { if (a.sku) set.add(a.sku); });
+    });
+    E.products.filter(p => p.propiedad === 'custodia' && !p.borrador).forEach(p => set.add(p.sku));   // cargadores y medidores
+    return [...set].filter(sku => { const p = find(E, sku); return p && !p.borrador; });
+  };
   if (!v) return <SheetHead title="Vehículo no encontrado" />;
   const guardar = () => {
     const lineas = Object.entries(cont).filter(([, x]) => x.trim() !== '').map(([sku, x]) => ({ sku, contado: toNum(x) }));
     if (!lineas.length) return toast('Escribe lo que has contado de al menos un artículo.', 'warn');
+    if (lineas.some(l => !(l.contado >= 0))) return toast('Revisa las cantidades: solo números de 0 en adelante (medio sobre: 0,5).', 'warn');
     if (ejecutar({ op: 'recuentoVehiculo', args: { id: nuevoId(), vehiculo, lineas } })) {
       closeModal(); toast(E.rol === 'admin' ? 'Recuento aplicado: el stock del vehículo queda ajustado.' : 'Recuento registrado: el administrador validará las diferencias.', 'ok', 6000);
     }
   };
   return (<>
-    <SheetHead title={`Recuento de ${v.matricula}`} sub="Cuenta lo que hay a bordo, en su formato (un sobre empezado: 0,5). Lo que no escribas no se toca." />
-    <div className="p-5 flex flex-col gap-2">
-      {!skus.length && <Vacio>No consta material a bordo.</Vacio>}
+    <SheetHead title={`Recuento de ${v.matricula}`} sub="Cuenta lo que hay a bordo, en su formato (un sobre empezado: 0,5). Puedes añadir cualquier artículo aunque no conste en la furgoneta. Lo que dejes en blanco no se toca." />
+    <div className="p-5 flex flex-col gap-3">
+      <div className="flex flex-col sm:flex-row gap-2">
+        <button onClick={() => { const n = anadir(deCierres()); toast(n ? `Añadidos ${n} artículos que descuentan los cierres.` : 'Ya están todos en la lista.', 'ok'); }} className={`${BTN_S} h-12 px-4`}>
+          <Icon n="playlist_add" className="ico-20" />Añadir lo que descuentan los cierres</button>
+        <SelectorArticulo valor={null} onChange={sku => { if (sku) anadir([sku]); }} filtro={x => !skus.includes(x.sku)} placeholder="Añadir otro artículo…" ariaLabel="Añadir un artículo al recuento" className="flex-1" />
+      </div>
+      {!skus.length && <Vacio>No consta material a bordo. Añade lo que lleva la furgoneta con los botones de arriba.</Vacio>}
       {skus.map(sku => { const p = find(E, sku)!, teorico = redondea(unidadesABordo(E, vehiculo, sku) / contenidoDe(p)); return (
         <div key={sku} className="flex items-center gap-3 py-2 border-b border-surface-container">
-          <span className="flex-1 min-w-0"><span className="block font-medium truncate">{p.name}</span><span className="text-body-sm text-secondary">Teórico: <b className={teorico < 0 ? 'text-error' : ''}>{num(teorico)} {unidadTxt(p.unit, teorico)}</b></span></span>
+          <span className="flex-1 min-w-0"><span className="block font-medium truncate">{p.name}</span><span className="text-body-sm text-secondary">Consta: <b className={teorico < 0 ? 'text-error' : ''}>{num(teorico)} {unidadTxt(p.unit, teorico)}</b></span></span>
           <input value={cont[sku] ?? ''} onChange={e => setCont({ ...cont, [sku]: e.target.value })} inputMode="decimal" placeholder={num(Math.max(0, teorico))} className={`${INP} h-12 !w-28 text-right`} aria-label={`Contado de ${p.name}`} />
+          {extra.includes(sku) && !aBordo.includes(sku) && <button onClick={() => { setExtra(e => e.filter(x => x !== sku)); setCont(c => { const n = { ...c }; delete n[sku]; return n; }); }} className={`${BTN_S} h-12 w-12 shrink-0`} aria-label={`Quitar ${p.name} del recuento`}><Icon n="close" className="ico-20" /></button>}
         </div>); })}
     </div>
     <SheetFoot><button onClick={guardar} className={`${BTN_P} h-14 w-full`}><Icon n="fact_check" className="ico-fill" />{E.rol === 'admin' ? 'Aplicar el recuento' : 'Enviar el recuento'}</button></SheetFoot>
