@@ -779,7 +779,12 @@ Hoy el propietario Esmove existe en la tabla `propietarios`, pero **no se pueden
     - si no, la línea queda como **"Cargador no entregado por el almacén: no se descuenta"**, sin movimiento de stock y sin discrepancia. Aparece en el informe de custodia como **"Instalado (antes de la gestión del almacén)"**, para que el socio tenga constancia de la instalación sin descuadrar el stock.
   - **Desde esa fecha:** comportamiento normal (si no consta a bordo, discrepancia).
 - **Afecta solo a artículos de la categoría de cargadores o en custodia.** El resto del material se descuenta siempre (negativos y discrepancias, que se corrigen con el recuento del lunes).
-- **Hoy, en los datos reales,** el único cargador entregado e instalado desde el 30/09 es el **Trydan con Schuko de Búfala 1** (cierre E2632246). El Trydan 10 m entregado a Búfala 3 el 02/10 aún no consta instalado.
+- **Hoy, en los datos reales, se deben descontar dos cargadores entregados con la app e instalados desde el 30/09:**
+  - el **Trydan 7,4 kW 5 m + Schuko** (8900500015), entregado a **Búfala 1 (2690NKC)** el 30/09 a las 23:24, para el cierre **E2632246**;
+  - el **Policharger NW T2** (8906000665), entregado a **Búfala 2 (4299NGK)** el 01/10 (ENT-2026-0001), para el cierre **E2632096** (José Miguel Romero García; el calendario dice "POLICHARGER NW MONOFÁSICO PROTECCIÓN REARME M5").
+  - El Trydan 10 m entregado a Búfala 3 el 02/10 (ENT-2026-0002) aún no consta instalado.
+- **"Consta a bordo" se comprueba en el momento de procesar el cierre, no en su fecha.** La entrega del Schuko quedó registrada (23:24) **después** de la hora del cierre E2632246 (11:29) del mismo día; con la comprobación "en la fecha del cierre" no se descontaría, y el usuario quiere que se descuente.
+- **Prueba:** estos dos casos reales (fixture) se descuentan, y un cierre de un Trydan M5 de otra furgoneta sin entrega queda "instalado, no entregado por el almacén".
 
 **3. Reglas de cargadores según el texto real del calendario**
 - **Las reglas propuestas** (`trydan&7,4` y similares) **no casan** con el calendario. Textos reales:
