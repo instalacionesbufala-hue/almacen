@@ -6,7 +6,7 @@
  *      ALMACEN_URL    https://<tu-referencia>.supabase.co/functions/v1/registrar-cierre
  *      ALMACEN_TOKEN  (el token que da la app en Configuración → Integraciones; se enseña una sola vez)
  *    El token NUNCA va en el HTML del wizard ni en el código: solo en estas propiedades.
- * 2) En tu doPost, justo DESPUÉS de escribir la fila en "Registro", añade:   enviarAlAlmacen(datos);
+ * 2) En este proyecto la llamada va en procesarEnvio_(datos), justo después de escribirEnRegistro_ (doPost solo encola):   enviarAlAlmacen(datos);
  *    (datos = el objeto del cierre que ya recibes del wizard). Si el envío falla, el cierre se guarda igual
  *    en "Registro" y el error queda en la hoja "Almacén-log" para reintentarlo con reintentarAlmacen().
  * 3) Histórico: ejecuta una vez cargarHistoricoAlAlmacen() desde el editor (menú Ejecutar). Lee "Registro" y envía los
@@ -19,6 +19,12 @@ var ALMACEN_CAMPOS = ['numInst', 'esbrainUuid', 'cliente', 'direccion', 'fechaCi
   'tipoLinea', 'fase', 'seccion', 'cableDatos', 'metrosLinea', 'metrosUtp', 'rj45', 'bornasMono', 'bornasTrif',
   'pvc32', 'corr32', 'acero32', 'acero40', 'canaleta', 'sot50', 'sot90',
   'cajaReg', 'caja6', 'caja12', 'caja18', 'cerradura', 'perfTab', 'perfForj', 'pica', 'preinst', 'mag1025', 'mag32', 'mag40'];
+
+/** Chat (02/10): este proyecto NO está unido a la hoja (usa SpreadsheetApp.openById(SHEETS_ID)), así que no vale
+    getActiveSpreadsheet(). Se usa la misma hoja que el resto del backend. */
+function almacenLibro_() {
+  return (typeof SHEETS_ID !== 'undefined' && SHEETS_ID) ? SpreadsheetApp.openById(SHEETS_ID) : SpreadsheetApp.getActiveSpreadsheet();
+}
 
 function almacenRecortar_(datos) {
   var out = {};
@@ -48,10 +54,12 @@ function almacenLlamar_(cuerpo) {
 }
 
 function almacenLog_(estado, numInst, detalle, datos) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var hoja = ss.getSheetByName('Almacén-log') || ss.insertSheet('Almacén-log');
-  if (hoja.getLastRow() === 0) hoja.appendRow(['Fecha', 'Estado', 'numInst', 'Detalle', 'Datos (para reintentar)']);
-  hoja.appendRow([new Date(), estado, numInst || '', String(detalle).slice(0, 500), datos ? JSON.stringify(datos) : '']);
+  try {
+    var ss = almacenLibro_();
+    var hoja = ss.getSheetByName('Almacén-log') || ss.insertSheet('Almacén-log');
+    if (hoja.getLastRow() === 0) hoja.appendRow(['Fecha', 'Estado', 'numInst', 'Detalle', 'Datos (para reintentar)']);
+    hoja.appendRow([new Date(), estado, numInst || '', String(detalle).slice(0, 500), datos ? JSON.stringify(datos) : '']);
+  } catch (eLog) { Logger.log('Almacén-log no disponible: ' + eLog); }
 }
 
 /** Llamar desde doPost después de guardar la fila en "Registro". Nunca rompe el guardado del cierre. */
@@ -69,7 +77,7 @@ function enviarAlAlmacen(datos) {
 
 /** Reintenta los envíos que fallaron (filas "ERROR" del log con sus datos) */
 function reintentarAlmacen() {
-  var hoja = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Almacén-log');
+  var hoja = almacenLibro_().getSheetByName('Almacén-log');
   if (!hoja || hoja.getLastRow() < 2) return;
   var filas = hoja.getRange(2, 1, hoja.getLastRow() - 1, 5).getValues();
   filas.forEach(function (f, i) {
@@ -82,7 +90,7 @@ function reintentarAlmacen() {
 /** Carga inicial: envía los cierres de la hoja "Registro" en lotes de 100. Las cabeceras deben llamarse como los campos del wizard
     (numInst, esbrainUuid, fechaCierreIso, equipo, hardware, metrosLinea, pvc32…). Las columnas que no reconoce se ignoran. */
 function cargarHistoricoAlAlmacen() {
-  var hoja = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Registro');
+  var hoja = almacenLibro_().getSheetByName(typeof REGISTRO_SHEET_NAME !== 'undefined' && REGISTRO_SHEET_NAME ? REGISTRO_SHEET_NAME : 'Registro');
   var valores = hoja.getDataRange().getValues();
   var cab = valores.shift().map(function (h) { return String(h).trim(); });
   var mapa = {};
