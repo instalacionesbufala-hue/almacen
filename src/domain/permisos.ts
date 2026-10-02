@@ -49,7 +49,7 @@ const OPS: Record<string, string> = {
   recuento: 'recuentos', recuentoVehiculo: 'recuentos',
   altaDotacion: 'dotacion', asignarDotacion: 'dotacion', incidencia: 'dotacion', minimoHerramienta: 'dotacion', pedidoHerramienta: 'dotacion', tallas: 'dotacion',
   acta: 'custodia', envio: 'custodia',
-  recalcularCierre: 'cierres', revisarMaterialEspecial: 'cierres', resolverLinea: 'cierres', reprocesarCierre: 'cierres', cierreHistorico: 'cierres',
+  recalcularCierre: 'cierres', revisarMaterialEspecial: 'cierres', resolverLinea: 'cierres', reprocesarCierre: 'cierres', reprocesarCierres: 'cierres', usarVehiculoActual: 'cierres', editarInicioAsignacion: 'equipos', cierreHistorico: 'cierres',
   validarPendiente: 'bandeja', mermaVista: 'bandeja',
   categoria: 'configuracion', desactivarCategoria: 'configuracion', borrarEquivalencia: 'configuracion', configAvisos: 'configuracion', propietario: 'configuracion',
   equivalencia: 'configuracion', cargarPropuesta: 'configuracion', confirmarEquivalencias: 'configuracion', kitFijacion: 'configuracion', configCierres: 'configuracion',

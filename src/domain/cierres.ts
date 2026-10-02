@@ -117,16 +117,28 @@ export const ORIGEN_VERSION: Record<string, string> = { wizard: 'wizard (directo
 export const lineasDe = (S: Pick<Estado, 'lineasCierre'>, cierre: string) => S.lineasCierre.filter(l => l.cierre === cierre);
 
 /** Consumo por artículo de un conjunto de cierres (equipo y periodo), en unidades de contenido y en formatos */
-export function consumoPorArticulo(S: Estado, cierres: CierreApp[]) {
-  const ids = new Set(cierres.filter(c => c.estado !== 'fallido' && c.estado !== 'ignorado').map(c => c.id));
+/** Lo que los cierres han descontado de verdad, por artículo. E-029: sin los cierres "sin vehículo" (aún no descuentan nada)
+    ni las líneas no_entregado (cargadores que no salieron del almacén: van en noEntregadosPorArticulo) */
+export const consumoPorArticulo = (S: Estado, cierres: CierreApp[]) => resumenLineas(S, cierres, ['aplicada', 'discrepancia', 'resuelta']);
+/** E-029 · Instalados que no entregó el almacén (antes de la fecha de los cargadores): se ven aparte, no se descuentan */
+export const noEntregadosPorArticulo = (S: Estado, cierres: CierreApp[]) => resumenLineas(S, cierres, ['no_entregado']);
+function resumenLineas(S: Estado, cierres: CierreApp[], estados: string[]) {
+  const ids = new Set(cierres.filter(c => c.estado !== 'fallido' && c.estado !== 'ignorado' && c.estado !== 'sin_vehiculo').map(c => c.id));
   const m = new Map<string, { sku: string; unidades: number; estimada: boolean }>();
   for (const l of S.lineasCierre) {
-    if (!ids.has(l.cierre) || !l.sku || !['aplicada', 'discrepancia', 'resuelta'].includes(l.estado)) continue;
+    if (!ids.has(l.cierre) || !l.sku || !estados.includes(l.estado)) continue;
     const x = m.get(l.sku) || { sku: l.sku, unidades: 0, estimada: false };
     x.unidades = redondea(x.unidades + l.cantidad); x.estimada ||= l.estimada; m.set(l.sku, x);
   }
   return [...m.values()].map(x => { const p = find(S, x.sku); return { ...x, nombre: p?.name || x.sku, formatos: p ? redondea(x.unidades / contenidoDe(p)) : x.unidades, unidad: p?.unit || 'ud' }; })
     .sort((a, b) => a.nombre.localeCompare(b.nombre));
+}
+
+/** E-029 · Desde qué día enseña la lista de cierres por defecto: la apertura del inventario, o hace 30 días si es anterior o no hay */
+export function desdeCierresPorDefecto(S: Pick<Estado, 'configApp'>, ahora = Date.now()): string {
+  const hace30 = ahora - 30 * 864e5, ap = S.configApp.aperturaCierres ?? S.configApp.demoBorrada;
+  const d = new Date(ap && ap > hace30 ? ap : hace30);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 /** Artículos con stock negativo en algún vehículo (discrepancias a revisar con un recuento) */

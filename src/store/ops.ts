@@ -2,6 +2,8 @@
    - aplicarse en local (validación previa con src/domain y respuesta inmediata en pantalla), y
    - traducirse a su función SQL del servidor (la fuente de verdad en modo nube).
    En modo nube la operación se guarda en la cola y se reaplica en local hasta que el servidor la confirma. */
+import { editarInicioAsignacionLocal, reprocesarCierresLocal, usarVehiculoActualLocal } from '../domain/asignaciones';
+import { gestiona } from '../domain/permisos';
 import type { OrigenFoto, Tallas, ConfigAvisos, Propietario, Rol, RolApp, CatId, EstadoEquipo, Estado, Herramienta, LineaEntrega, Producto, TipoIncidencia, TipoMov, Equivalencia, ArticuloRegla, Categoria } from '../data/tipos';
 import { applyMovement, find, delta, disponibleReal, formatoEntero, vehiculoDeEquipo, unidadesABordo, contenidoDe } from '../domain/reglas';
 import { emailValido, herramientasLibres } from '../domain/entregas';
@@ -93,6 +95,9 @@ export type Op =
   | { op: 'revisarMaterialEspecial'; args: { id: string; nota: string } }
   | { op: 'resolverLinea'; args: { linea: string; sku: string; cantidad?: number } }
   | { op: 'reprocesarCierre'; args: { id: string } }
+  | { op: 'reprocesarCierres'; args: { ids: string[] } }
+  | { op: 'usarVehiculoActual'; args: { ids: string[] } }
+  | { op: 'editarInicioAsignacion'; args: { clave: string; id?: string; tipo: 'tecnico' | 'vehiculo'; desde: number } }
   | { op: 'recuentoVehiculo'; args: { id: string; vehiculo: string; lineas: { sku: string; contado: number }[] } }
   | { op: 'cierreHistorico'; args: EnvioCierre }
   | { op: 'revocarIntegracion'; args: { id: string } }
@@ -441,6 +446,25 @@ export const OPS: Defs = {
     },
     rpc: a => ['reprocesar_cierre', { p_cierre: a.id }],
     desc: () => 'Reprocesar un cierre',
+  },
+  /* ---------- E-029 · Cierres "sin vehículo": corregir el historial o usar el vehículo actual ---------- */
+  reprocesarCierres: {
+    local: (S, a) => { if (!gestiona(S, 'cierres')) throw new Error('Solo el administrador'); reprocesarCierresLocal(S, a.ids, S.operator); },
+    rpc: a => ['reprocesar_cierres', { p_ids: a.ids }],
+    desc: (_S, a) => `Reprocesar ${a.ids.length} cierre${a.ids.length === 1 ? '' : 's'}`,
+  },
+  usarVehiculoActual: {
+    local: (S, a) => { if (!gestiona(S, 'cierres')) throw new Error('Solo el administrador'); usarVehiculoActualLocal(S, a.ids, S.operator); },
+    rpc: a => ['usar_vehiculo_actual', { p_ids: a.ids }],
+    desc: (_S, a) => `Usar el vehículo actual en ${a.ids.length} cierre${a.ids.length === 1 ? '' : 's'}`,
+  },
+  editarInicioAsignacion: {
+    local: (S, a) => {
+      if (!gestiona(S, 'equipos')) throw new Error('Solo el administrador cambia el historial de asignaciones');
+      editarInicioAsignacionLocal(S, a.clave, a.desde);
+    },
+    rpc: a => ['editar_inicio_asignacion', { p_tipo: a.tipo, p_id: a.id, p_desde: new Date(a.desde).toISOString() }],
+    desc: (_S, a) => `Fecha de inicio de una asignación (${a.tipo === 'tecnico' ? 'técnico' : 'vehículo'})`,
   },
   recuentoVehiculo: {
     local: (S, a) => {

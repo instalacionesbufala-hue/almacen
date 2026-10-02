@@ -1,8 +1,9 @@
 /* E-012 · Cierres de instalación recibidos del wizard: estado, líneas traducidas, pendientes que resuelve el administrador,
    consumo por equipo y periodo, discrepancias (vehículos en negativo) y recuento de vehículo. */
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import type { CierreApp, EstadoCierre, Unidad } from '../../data/tipos';
-import { consumoPorArticulo, discrepancias, lineasDe, ORIGEN_VERSION, textoDiferencia } from '../../domain/cierres';
+import { consumoPorArticulo, desdeCierresPorDefecto, discrepancias, lineasDe, noEntregadosPorArticulo, ORIGEN_VERSION, textoDiferencia } from '../../domain/cierres';
+import { vehiculoActualDeCierre, vehiculoHistorialDeCierre } from '../../domain/asignaciones';
 import { descargarCsv } from '../../domain/csv';
 import { fechaHora, hoyISO, num, redondea, toNum } from '../../domain/formato';
 import { contenidoDe, find, nombreVehiculo, unidadTxt, unidadesABordo } from '../../domain/reglas';
@@ -22,16 +23,18 @@ const ESTADO: Record<EstadoCierre, { t: string; c: string }> = {
   ignorado: { t: 'Anterior a la apertura', c: 'bg-surface-container-high text-secondary' }, sin_vehiculo: { t: 'Equipo sin vehículo', c: 'bg-amber-100 text-amber-800' },
 };
 const cant = (u: number, unidad: string, contenido: number) => `${num(redondea(u / contenido))} ${unidadTxt(unidad as Unidad, u / contenido)}${contenido > 1 ? ` (${num(u)} ud)` : ''}`;
-const inicioMes = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`; };
 
 export default function CierresView() {
   const E = useAlmacen(), { gestionarCierres: validar, exportar: puedeExportar } = usePermisos();
-  const [f, setF] = useState({ equipo: 'all', desde: inicioMes(), hasta: hoyISO(), estado: 'all' });
+  // E-029: por defecto desde la apertura del inventario (o los últimos 30 días), para que no se queden fuera cierres recién llegados del histórico
+  const [f, setF] = useState(() => ({ equipo: 'all', desde: desdeCierresPorDefecto(E), hasta: hoyISO(), estado: 'all' }));
   const [abierto, setAbierto] = useState<string | null>(null);
   const equipos = [...new Set(E.cierres.map(c => c.equipoWizard).filter(Boolean))].sort();
-  const lista = useMemo(() => E.cierres.filter(c => (f.equipo === 'all' || c.equipoWizard === f.equipo) && (f.estado === 'all' || c.estado === f.estado)
-    && c.fecha >= Date.parse(f.desde) && c.fecha < Date.parse(f.hasta) + 864e5), [E.cierres, f]);
-  const consumo = useMemo(() => consumoPorArticulo(E, lista), [E, lista]);
+  // sin useMemo: el estado se modifica en el sitio (misma referencia), y la lista y el consumo se quedarían viejos tras procesar un cierre
+  const lista = E.cierres.filter(c => (f.equipo === 'all' || c.equipoWizard === f.equipo) && (f.estado === 'all' || c.estado === f.estado)
+    && c.fecha >= Date.parse(f.desde) && c.fecha < Date.parse(f.hasta) + 864e5);
+  const consumo = consumoPorArticulo(E, lista), noEntregados = noEntregadosPorArticulo(E, lista);
+  const sinVehiculo = E.cierres.filter(c => c.estado === 'sin_vehiculo'), sinVehiculoLista = lista.filter(c => c.estado === 'sin_vehiculo').length;
   const [n, mas] = useMas(100, JSON.stringify(f));
   const disc = discrepancias(E);
   const pendientes = E.lineasCierre.filter(l => l.estado === 'pendiente' || l.estado === 'sin_equivalencia').length;
@@ -45,8 +48,9 @@ export default function CierresView() {
       <label className="flex flex-col gap-1"><span className={LBL}>Desde</span><input type="date" value={f.desde} onChange={e => setF({ ...f, desde: e.target.value })} className={`${INP} h-12`} /></label>
       <label className="flex flex-col gap-1"><span className={LBL}>Hasta</span><input type="date" value={f.hasta} onChange={e => setF({ ...f, hasta: e.target.value })} className={`${INP} h-12`} /></label>
       <label className="flex flex-col gap-1"><span className={LBL}>Estado</span><select value={f.estado} onChange={e => setF({ ...f, estado: e.target.value })} className={`${INP} h-12`}><option value="all">Todos</option>{Object.entries(ESTADO).map(([k, v]) => <option key={k} value={k}>{v.t}</option>)}</select></label>
-      <p className="col-span-2 lg:col-span-1 text-body-sm text-secondary">{lista.length} cierre{lista.length === 1 ? '' : 's'}{pendientes ? <> · <b className="text-amber-800">{pendientes} líneas por resolver</b></> : ''}</p>
+      <p className="col-span-2 lg:col-span-1 text-body-sm text-secondary">Mostrando <b>{lista.length}</b> de {E.cierres.length} cierre{E.cierres.length === 1 ? '' : 's'}{pendientes ? <> · <b className="text-amber-800">{pendientes} líneas por resolver</b></> : ''}</p>
     </section>
+    {validar && sinVehiculo.length > 0 && <SinVehiculo cierres={sinVehiculo} />}
     <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
       <section className="xl:col-span-2 flex flex-col gap-2">
         {lista.length ? lista.slice(0, n).map(c => <FilaCierre key={c.id} c={c} abierto={abierto === c.id} alternar={() => setAbierto(abierto === c.id ? null : c.id)} puede={validar} />) : <Vacio>No hay cierres con estos filtros.</Vacio>}
@@ -57,6 +61,10 @@ export default function CierresView() {
           <div className="flex items-center justify-between gap-2"><h2 className="font-semibold">Consumo del periodo</h2>{puedeExportar && <button onClick={exportar} disabled={!consumo.length} className={`${BTN_S} h-10 px-3 disabled:opacity-40`}><Icon n="file_download" className="ico-18" />CSV</button>}</div>
           {consumo.length ? consumo.map(x => <div key={x.sku} className="flex justify-between gap-2 py-1.5 border-b border-surface-container text-body-sm"><span className="min-w-0 truncate">{x.nombre}{x.estimada && <Tag c="bg-amber-100 text-amber-800 ml-1">estimado</Tag>}</span><b className="whitespace-nowrap">{num(x.formatos)} {unidadTxt(x.unidad as Unidad, x.formatos)}</b></div>)
             : <p className="text-body-sm text-secondary">Sin consumos en el periodo.</p>}
+          {sinVehiculoLista > 0 && <p className="text-body-sm text-amber-800">{sinVehiculoLista} cierre{sinVehiculoLista === 1 ? '' : 's'} sin vehículo: no cuenta{sinVehiculoLista === 1 ? '' : 'n'} hasta procesarlo{sinVehiculoLista === 1 ? '' : 's'}.</p>}
+          {noEntregados.length > 0 && <div className="flex flex-col pt-2"><h3 className="font-semibold text-body-md">Instalados no entregados por el almacén</h3>
+            <p className="text-body-sm text-secondary mb-1">Cargadores que el equipo ya llevaba: se instalaron, pero no se descuentan.</p>
+            {noEntregados.map(x => <div key={x.sku} className="flex justify-between gap-2 py-1.5 border-b border-surface-container text-body-sm"><span className="min-w-0 truncate">{x.nombre}</span><b className="whitespace-nowrap text-violet-800">{num(x.formatos)} {unidadTxt(x.unidad as Unidad, x.formatos)}</b></div>)}</div>}
         </section>
         <section className={`${CARD} p-4 flex flex-col gap-2`}>
           <h2 className="font-semibold flex items-center gap-2"><Icon n="report" className="text-error" />Discrepancias</h2>
@@ -84,9 +92,9 @@ function FilaCierre({ c, abierto, alternar, puede }: { c: CierreApp; abierto: bo
         <span className="flex-1 min-w-[200px]"><b>Material especial:</b> {c.materialEspecial}{c.materialRevisado ? ' · revisado' : ' · añade a mano lo que corresponda (no se descuenta solo)'}</span>
         {!c.materialRevisado && puede && <button onClick={() => { if (ejecutar({ op: 'revisarMaterialEspecial', args: { id: c.id, nota: '' } })) toast('Marcado como revisado.', 'ok'); }} className={`${BTN_S} h-10 px-3`}>Revisado</button>}</div>}
       {(c.versiones?.length || 0) > 1 && <div className="text-body-sm"><div className={LBL}>Versiones</div>
-        {c.versiones!.map(v => <div key={v.n} className="flex flex-wrap gap-x-2 py-0.5"><b>{v.n}.</b><span>{ORIGEN_VERSION[v.origen] || v.origen}{v.documento ? ` nº ${v.documento}` : ''}</span><span className="text-secondary">{fechaHora(v.recibido)}</span>
+        {c.versiones!.map(v => <div key={v.n} className="flex flex-wrap gap-x-2 py-0.5"><b>{v.n}.</b><span>{v.origen === 'admin' && v.documento ? v.documento : `${ORIGEN_VERSION[v.origen] || v.origen}${v.documento ? ` nº ${v.documento}` : ''}`}</span><span className="text-secondary">{fechaHora(v.recibido)}</span>
           <span className={v.diferencia.length ? 'font-semibold' : 'text-secondary'}>{v.n === 1 ? (v.diferencia.length ? textoDiferencia(E, v.diferencia) : 'alta del cierre') : textoDiferencia(E, v.diferencia)}</span></div>)}</div>}
-      {c.estado === 'sin_vehiculo' && puede && <button onClick={() => { if (ejecutar({ op: 'reprocesarCierre', args: { id: c.id } })) toast('Cierre reprocesado.', 'ok'); }} className={`${BTN_S} h-12 self-start px-4`}><Icon n="refresh" className="ico-20" />Reprocesar (tras asignar el vehículo al equipo)</button>}
+      {c.estado === 'sin_vehiculo' && puede && <AccionesSinVehiculo c={c} />}
       {!lineas.length ? <p className="text-body-sm text-secondary">{c.despFallido ? 'Desplazamiento fallido: sin consumo.' : 'Sin material declarado.'}</p> :
         <table className="w-full text-body-sm"><thead><tr className={`text-left ${LBL}`}><th className="py-1">Partida</th><th>Artículo</th><th className="text-right">Cantidad</th><th /></tr></thead>
           <tbody>{lineas.map(l => { const p = l.sku ? find(E, l.sku) : undefined; const resolver = puede && (l.estado === 'pendiente' || l.estado === 'sin_equivalencia'); return (
@@ -103,6 +111,35 @@ function FilaCierre({ c, abierto, alternar, puede }: { c: CierreApp; abierto: bo
             </tr>); })}</tbody></table>}
     </div>}
   </article>);
+}
+
+/* ---------- E-029 · Cierres "Equipo sin vehículo" ---------- */
+const confirmarVehiculoActual = (E: ReturnType<typeof useAlmacen>, cierres: CierreApp[]) => {
+  const con = cierres.filter(c => vehiculoActualDeCierre(E, c)), sin = cierres.filter(c => !vehiculoActualDeCierre(E, c));
+  if (!con.length) { toast(`${sin.map(c => c.equipoWizard || 'sin equipo').filter((x, i, a) => a.indexOf(x) === i).join(', ')}: el equipo no tiene vehículo ahora. Asígnaselo en Equipos.`, 'err'); return; }
+  const lista = con.map(c => `· ${c.numInst || '—'} (${c.equipoWizard}) → ${vehiculoActualDeCierre(E, c)!.matricula}`).join('\n');
+  if (!confirm(`¿Procesar ${con.length === 1 ? 'este cierre' : `estos ${con.length} cierres`} con el vehículo que su equipo tiene ahora?\n\n${lista}\n\nSe descuenta el material de ese vehículo y queda anotado en la versión del cierre. El historial de asignaciones no cambia.${sin.length ? `\n\n${sin.length} sin vehículo actual se quedan como están.` : ''}`)) return;
+  if (ejecutar({ op: 'usarVehiculoActual', args: { ids: con.map(c => c.id) } })) toast(`${con.length === 1 ? 'Cierre procesado' : `${con.length} cierres procesados`} con el vehículo actual.`, 'ok');
+};
+function SinVehiculo({ cierres }: { cierres: CierreApp[] }) {
+  const E = useAlmacen();
+  return (<section className={`${CARD} p-4 flex flex-wrap items-center gap-3 border border-amber-300 bg-amber-50`}>
+    <Icon n="local_shipping" className="text-amber-800" />
+    <div className="flex-1 min-w-[240px] text-body-sm"><b>{cierres.length} cierre{cierres.length === 1 ? '' : 's'} en "Equipo sin vehículo"</b>: no descuenta{cierres.length === 1 ? '' : 'n'} nada hasta procesarlo{cierres.length === 1 ? '' : 's'}.
+      <span className="text-secondary"> Si el equipo llevaba otra furgoneta ese día, corrige antes la fecha de inicio en Equipos → Historial.</span></div>
+    <button onClick={() => confirmarVehiculoActual(E, cierres)} className={`${BTN_P} h-12 px-4`}><Icon n="done_all" className="ico-20" />Usar el vehículo actual{cierres.length === 1 ? '' : ' en todos'}</button>
+  </section>);
+}
+function AccionesSinVehiculo({ c }: { c: CierreApp }) {
+  const E = useAlmacen(), actual = vehiculoActualDeCierre(E, c), historial = vehiculoHistorialDeCierre(E, c);
+  return (<div className="flex flex-col gap-2 rounded-lg bg-amber-50 p-3">
+    <p className="text-body-sm text-amber-900">{c.equipoWizard ? `El equipo "${c.equipoWizard}" no tenía vehículo asignado el ${fechaHora(c.fecha)}.` : 'El cierre no trae equipo.'} No descuenta nada hasta procesarlo.</p>
+    <div className="flex flex-wrap gap-2">
+      {actual && <button onClick={() => confirmarVehiculoActual(E, [c])} className={`${BTN_P} h-12 px-4`}><Icon n="local_shipping" className="ico-20" />Usar el vehículo que el equipo tiene ahora ({actual.matricula})</button>}
+      <button onClick={() => { if (ejecutar({ op: 'reprocesarCierres', args: { ids: [c.id] } })) toast(historial ? 'Cierre reprocesado.' : 'Sigue sin vehículo: corrige la fecha de inicio en Equipos → Historial.', historial ? 'ok' : 'err'); }} className={`${BTN_S} h-12 px-4`}><Icon n="refresh" className="ico-20" />Reprocesar con el historial</button>
+    </div>
+    {!actual && <p className="text-body-sm text-secondary">El equipo tampoco tiene vehículo ahora: asígnaselo en Equipos → Vehículos.</p>}
+  </div>);
 }
 
 /* ---------- Recuento de un vehículo ---------- */

@@ -5,7 +5,9 @@ import { useState } from 'react';
 import type { Equipo, EstadoEquipo, Tecnico, Vehiculo } from '../../data/tipos';
 import { catDe } from '../../data/catalogo';
 import { find, nombreVehiculo, numEntrega, qtyTxt, stockDeVehiculo } from '../../domain/reglas';
-import { fechaHora, hace, hoyISO, num, uid } from '../../domain/formato';
+import { fechaHora, fechaHoraInput, hace, hoyISO, num, uid } from '../../domain/formato';
+import { cierresAfectados, claveAsignacion, validarInicioAsignacion } from '../../domain/asignaciones';
+import type { Asignacion } from '../../data/tipos';
 import { hashEntrega } from '../../domain/hash';
 import { descargarCsv } from '../../domain/csv';
 import { avisosDotacion, herramientasDe } from '../../domain/herramientas';
@@ -140,7 +142,7 @@ function FilaTecnico({ t }: { t: Tecnico }) {
 }
 
 function Historial() {
-  const E = useAlmacen();
+  const E = useAlmacen(), { gestionarFlota } = usePermisos();
   const filas = [...E.asignaciones].sort((a, b) => (b.hasta ?? b.desde) - (a.hasta ?? a.desde));
   const quien = (a: typeof filas[0]) => a.tipo === 'tecnico' ? (E.tecnicos.find(t => t.id === a.sujeto)?.nombre || a.sujeto) : `Vehículo ${E.vehiculos.find(v => v.id === a.sujeto)?.matricula || a.sujeto}`;
   const csv = () => descargarCsv(`asignaciones-${hoyISO()}.csv`, [['Tipo', 'Quién', 'Equipo', 'Desde', 'Hasta'], ...filas.map(a => [a.tipo === 'tecnico' ? 'Técnico' : 'Vehículo', quien(a), E.equipos.find(e => e.id === a.equipo)?.nombre || a.equipo, fechaHora(a.desde), a.hasta ? fechaHora(a.hasta) : 'actual'])]);
@@ -150,10 +152,49 @@ function Historial() {
       {filas.length ? filas.map((a, i) => <div key={i} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5 border-t border-surface-container text-body-sm">
         <Icon n={a.tipo === 'tecnico' ? 'engineering' : 'local_shipping'} className="text-secondary ico-20" />
         <span className="flex-1 min-w-[200px]"><b>{quien(a)}</b> en <b>{E.equipos.find(e => e.id === a.equipo)?.nombre || a.equipo}</b></span>
-        <span className="font-mono text-label-sm text-secondary">{fechaHora(a.desde)} → {a.hasta ? fechaHora(a.hasta) : <span className="text-tertiary">actual</span>}</span></div>)
+        <span className="font-mono text-label-sm text-secondary">{fechaHora(a.desde)} → {a.hasta ? fechaHora(a.hasta) : <span className="text-tertiary">actual</span>}</span>
+        {gestionarFlota && (!modoNube || a.id) && <button onClick={() => abrirInicioAsignacion(a)} className={`${BTN_S} h-10 px-3 text-body-sm`} aria-label="Cambiar la fecha de inicio"><Icon n="edit_calendar" className="ico-18" />Inicio</button>}</div>)
         : <Vacio>Sin asignaciones todavía.</Vacio>}
     </section>
   );
+}
+
+/* ---------- E-029 · Corregir la fecha de inicio de una asignación (y desbloquear los cierres que caen en el nuevo tramo) ---------- */
+const abrirInicioAsignacion = (a: Asignacion) => openModal(<InicioAsignacion a={a} />);
+function InicioAsignacion({ a }: { a: Asignacion }) {
+  const E = useAlmacen();
+  const [v, setV] = useState(fechaHoraInput(a.desde));
+  const [afectados, setAfectados] = useState<string[] | null>(null);
+  const ts = v ? new Date(v).getTime() : NaN;
+  const error = ts === a.desde ? null : validarInicioAsignacion(E, a, ts);
+  const previstos = !error && Number.isFinite(ts) ? cierresAfectados(E, a, ts) : [];
+  const quien = a.tipo === 'tecnico' ? (E.tecnicos.find(t => t.id === a.sujeto)?.nombre || a.sujeto) : `Vehículo ${E.vehiculos.find(x => x.id === a.sujeto)?.matricula || a.sujeto}`;
+  const equipo = E.equipos.find(e => e.id === a.equipo)?.nombre || a.equipo;
+  const guardar = () => {
+    if (error || ts === a.desde) return;
+    if (!ejecutar({ op: 'editarInicioAsignacion', args: { clave: claveAsignacion(a), id: a.id, tipo: a.tipo, desde: ts } })) return;
+    toast('Fecha de inicio guardada (queda en la auditoría).', 'ok');
+    if (previstos.length) setAfectados(previstos); else closeModal();
+  };
+  if (afectados) {
+    const cs = E.cierres.filter(c => afectados.includes(c.id));
+    return (<>
+      <SheetHead title="Cierres que se pueden procesar" sub={`Con la nueva fecha, ${equipo} ya tenía vehículo cuando se hicieron.`} />
+      <div className="p-5 flex flex-col gap-1 text-body-sm">{cs.map(c => <div key={c.id} className="flex justify-between gap-2 py-1.5 border-b border-surface-container"><span>{c.numInst || '—'} · {c.cliente || 'sin cliente'}</span><span className="text-secondary">{fechaHora(c.fecha)}</span></div>)}</div>
+      <SheetFoot className="flex gap-2"><button onClick={closeModal} className={`${BTN_S} h-12 px-5`}>Ahora no</button>
+        <button onClick={() => { if (ejecutar({ op: 'reprocesarCierres', args: { ids: afectados } })) { closeModal(); toast(`${afectados.length === 1 ? 'Cierre reprocesado' : `${afectados.length} cierres reprocesados`}: se ha descontado su material.`, 'ok'); } }} className={`${BTN_P} h-12 flex-1`}><Icon n="refresh" className="ico-20" />Reprocesar {afectados.length === 1 ? 'el cierre afectado' : `los ${afectados.length} cierres afectados`}</button></SheetFoot>
+    </>);
+  }
+  return (<>
+    <SheetHead title="Cambiar la fecha de inicio" sub={`${quien} en ${equipo}${a.hasta ? ` · hasta ${fechaHora(a.hasta)}` : ' · asignación actual'}`} />
+    <div className="p-5 flex flex-col gap-3">
+      <Campo label="Desde"><input type="datetime-local" value={v} max={fechaHoraInput(Date.now())} onChange={x => setV(x.target.value)} className={`${INP} h-12`} /></Campo>
+      <p className="text-body-sm text-secondary">Para cuando la asignación se registró más tarde de lo que empezó de verdad (p. ej., se dio de alta por la noche, pero la furgoneta ya llevaba todo el día con el equipo). No mueve material; el cambio queda en la auditoría.</p>
+      {error && <p className="text-body-sm text-error font-semibold">{error}</p>}
+      {previstos.length > 0 && <p className="text-body-sm text-amber-900 bg-amber-50 rounded-lg p-3">Con esta fecha, <b>{previstos.length} cierre{previstos.length === 1 ? '' : 's'} "sin vehículo"</b> de {equipo} se podrá{previstos.length === 1 ? '' : 'n'} procesar: al guardar te lo ofrezco.</p>}
+    </div>
+    <SheetFoot className="flex gap-2"><button onClick={closeModal} className={`${BTN_S} h-12 px-5`}>Cancelar</button><button disabled={!!error || ts === a.desde || !Number.isFinite(ts)} onClick={guardar} className={`${BTN_P} h-12 flex-1 disabled:opacity-40`}><Icon n="save" className="ico-20" />Guardar fecha</button></SheetFoot>
+  </>);
 }
 
 export function AuditoriaEntregas() {

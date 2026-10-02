@@ -173,7 +173,7 @@ export interface Equipo {
 }
 export interface Vehiculo { id: string; matricula: string; modelo: string; equipo?: string }
 /** Historial: técnico → equipo y vehículo → equipo, con fechas */
-export interface Asignacion { tipo: 'tecnico' | 'vehiculo'; sujeto: string; equipo: string; desde: number; hasta?: number }
+export interface Asignacion { id?: string; tipo: 'tecnico' | 'vehiculo'; sujeto: string; equipo: string; desde: number; hasta?: number }
 /** Stock a bordo de un vehículo, en UNIDADES de contenido (puede ser negativo: discrepancia) */
 export interface StockVehiculo { vehiculo: string; sku: string; unidades: number }
 

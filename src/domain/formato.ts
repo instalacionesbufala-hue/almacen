@@ -24,4 +24,6 @@ export function hace(ts: number, ahora = Date.now()): string {
 }
 export const fechaHora = (ts: number) => new Date(ts).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 export const esHoy = (ts: number) => new Date(ts).toDateString() === new Date().toDateString();
+/** "2026-10-05T00:00" en la hora de este dispositivo (para <input type=datetime-local>) */
+export const fechaHoraInput = (ts: number) => new Date(ts - new Date(ts).getTimezoneOffset() * 60e3).toISOString().slice(0, 16);
 export const hoyISO = () => new Date().toISOString().slice(0, 10);

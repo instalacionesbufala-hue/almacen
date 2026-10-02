@@ -899,7 +899,7 @@ Una tabla con una fila por apartado y casillas **Ver** y **Modificar**, en lengu
 - **Comprobar** que ninguna lectura por RPC de Solo lectura se rompe; la prueba de cobertura ya exige que estén todas registradas.
 - **Prueba:** una función de prueba sin registrar llamada por Solo lectura se rechaza, y por Almacén pasa.
 
-### E-029 · Cierres del 30/09 bloqueados como "Equipo sin vehículo" · PENDIENTE (urgente, antes del recuento del lunes)
+### E-029 · Cierres del 30/09 bloqueados como "Equipo sin vehículo" · HECHO
 **Qué ha visto el chat en producción (03/10).** El usuario lanzó `cargarHistoricoRegistro`: **12 enviados y 0 errores**. Hay 12 cierres:
 - **8 del 01/10 y el 02/10:** "Discrepancia", que es lo esperado. Los Trydan de Esmove salen como "no entregado por el almacén: no se descuenta" y el Policharger de Búfala 2 se descontó. ✔
 - **Los 4 del 30/09** (E2632077 y E2631828 de Búfala 2, E2632246 de Búfala 1 y E2632105 de Búfala 3) están en **"Equipo sin vehículo"**. Las asignaciones vehículo → equipo se crearon el 30/09 **por la noche**, después del borrado de la demostración (20:03), y esos cierres son de las 12:15 a las 15:33. Por eso **el Trydan con Schuko de Búfala 1 (E2632246) no se ha descontado**, y sigue 1 ud a bordo de 2690NKC.
@@ -2486,3 +2486,56 @@ En "Para el día a día" se explican el ajuste y el aviso.
 - lo registrado sigue igual.
 
 `tsc -b` sin errores.
+
+### 03/10/2026 · E-029 · HECHO
+**Orden:** E-028 ya estaba hecho y subido (`6e6881b`) cuando llegó E-029, así que E-029 va después.
+
+**Aplicado en producción:** migración `20261019000100_e029_asignaciones_cierres_sin_vehiculo.sql`.
+
+**Comprobado en producción (solo lectura):**
+- las 3 funciones nuevas tienen su permiso asignado;
+- los **4 cierres del 30/09 siguen en "Equipo sin vehículo"**: no he tocado datos, los procesa el usuario desde la app.
+
+**Para el usuario: cómo dejar procesados los 4 cierres del 30/09.** Equipos → pestaña **Cierres**. Arriba sale el aviso amarillo "4 cierres en Equipo sin vehículo".
+- Pulsa **"Usar el vehículo actual en todos"**.
+- La confirmación lista cada cierre con su furgoneta: E2632077 y E2631828 → 4299NGK, E2632246 → 2690NKC, E2632105 → 7463LVN. Acepta.
+- **Resultado:** el Trydan con Schuko de 2690NKC se descuenta y queda en 0 a bordo. Los Trydan de Esmove quedan como "no entregado por el almacén" y no se descuentan (no constan a bordo). Cada cierre gana una versión "Vehículo asignado a mano por …: matrícula".
+
+(Alternativa, si prefieres que el historial quede exacto: Equipos → Historial → **Inicio** en cada vehículo, pon el 30/09 a primera hora y, al guardar, **"Reprocesar el cierre afectado"**. El resultado en stock es el mismo.)
+
+**1. Fecha de inicio de una asignación** (Equipos → Historial → botón **Inicio**, administrador)
+- Vale para vehículo → equipo y para técnico → equipo.
+- **Validación:**
+  - no puede ser futura ni posterior a la fecha de fin;
+  - **sin solapes**: vehículo con otra asignación del mismo vehículo o del mismo equipo; técnico con otra del mismo técnico.
+  - Tocarse en el borde (una acaba cuando empieza la otra) sí vale.
+- **Auditoría:** acción `editar_inicio_asignacion`, con la fecha de antes y la de después.
+- **Al guardar** dice cuántos cierres "sin vehículo" de ese equipo caen en el nuevo tramo (ya lo avisa antes de guardar) y ofrece **"Reprocesar los cierres afectados"**. Cada uno se procesa con el vehículo que le da el historial en su fecha, y gana una versión "Reprocesado por … con matrícula (historial de asignaciones)".
+- **Funciones:** `editar_inicio_asignacion(tipo, id, desde)` (devuelve `afectados`) y `reprocesar_cierres(ids)`.
+- **Decisión de Code:** `asignaciones_*` no tenían id en la app. Ahora lo traen de la nube. En modo nube, una asignación recién creada que aún no ha vuelto del servidor no enseña el botón hasta sincronizar.
+
+**2. Atajo "Usar el vehículo que el equipo tiene ahora"** (administrador, con confirmación)
+- **En cada cierre "sin vehículo":** botón con la matrícula, junto a "Reprocesar con el historial".
+- **Para todos:** el aviso amarillo de arriba ("Usar el vehículo actual en todos").
+- Procesa con el vehículo actual, deja la versión "Vehículo asignado a mano por …: matrícula (el que el equipo tiene ahora)" y **no toca el historial**.
+- **Equipo que hoy no tiene vehículo:** su cierre sigue bloqueado y la confirmación dice cuántos.
+- **Función:** `usar_vehiculo_actual(ids)`.
+- Las 3 funciones están en `permisos_funcion`: `equipos.modificar` y `cierres.modificar`, solo para el administrador o un rol propio con ese permiso. Prueba de cobertura en verde.
+
+**3. "Consumo del periodo"**
+- **Causa del "2 ud" de Trydan de Esmove:** no eran líneas `no_entregado`. El resumen ya las excluía. Venían de los **2 cierres "sin vehículo"** del 30/09 (E2631828 y E2632105): sin vehículo no se aplica la regla de los cargadores, sus líneas seguían "aplicada" y se sumaban sin haberse descontado nada.
+- **Arreglo:**
+  - el consumo **no cuenta los cierres sin vehículo** (aviso "N cierres sin vehículo: no cuentan hasta procesarlos");
+  - las líneas `no_entregado` van aparte en **"Instalados no entregados por el almacén"**.
+- Ahora el consumo cuadra con lo descontado.
+- **Fallo que ya existía:** la lista y el consumo de cierres usaban `useMemo` sobre el estado, que se modifica en el sitio. No se refrescaban tras procesar un cierre hasta cambiar de pestaña. Quitado.
+
+**4. Filtro de fechas**
+- Por defecto, **desde la apertura del inventario** si es de los últimos 30 días; si no, hace 30 días. Antes era "desde el día 1 del mes", que el 03/10 escondía los del 30/09.
+- Arriba sale **"Mostrando X de Y cierres"**.
+
+**Pruebas: 440 en verde** (+10):
+- `supabase/tests/e029.test.ts` (5): caso real de 4 cierres sin vehículo; editar el inicio con reproceso (Schuko a 0, versión con la diferencia, auditoría); solapes, fecha futura y borde; solo administrador; atajo para todos sin tocar el historial; equipo sin vehículo actual.
+- `src/domain/e029.test.ts` (5): lo mismo en la app, más el consumo sin `no_entregado` ni cierres sin vehículo y el filtro por defecto.
+- `tsc -b` y build correctos.
+- **En el navegador (demo con el caso del 30/09):** editar el inicio → "Reprocesar el cierre afectado" → cuadro a 0 y versión 2. El atajo en todos procesa el resto y la sección de no entregados muestra 2 ud. Comprobado también a 375 px.

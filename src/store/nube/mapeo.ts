@@ -50,8 +50,8 @@ export function aEstado(t: Tablas, base: Pick<Estado, 'cesta' | 'seq'>, operador
     tecnicos: t.tecnicos.filter(x => x.activo && x.equipo_id === e.id).map(x => x.id), vehiculo: vehiculosActivos.find(v => v.equipo_id === e.id)?.id }));
   const vehiculos: Vehiculo[] = vehiculosActivos.map(v => ({ id: v.id, matricula: v.matricula, modelo: v.modelo || '', equipo: v.equipo_id ?? undefined }));
   const asignaciones: Asignacion[] = [
-    ...t.asignaciones_tecnico.map((a): Asignacion => ({ tipo: 'tecnico', sujeto: a.tecnico_id, equipo: a.equipo_id, desde: ms(a.desde), hasta: a.hasta ? ms(a.hasta) : undefined })),
-    ...t.asignaciones_vehiculo.map((a): Asignacion => ({ tipo: 'vehiculo', sujeto: a.vehiculo_id, equipo: a.equipo_id, desde: ms(a.desde), hasta: a.hasta ? ms(a.hasta) : undefined }))];
+    ...t.asignaciones_tecnico.map((a): Asignacion => ({ id: a.id, tipo: 'tecnico', sujeto: a.tecnico_id, equipo: a.equipo_id, desde: ms(a.desde), hasta: a.hasta ? ms(a.hasta) : undefined })),
+    ...t.asignaciones_vehiculo.map((a): Asignacion => ({ id: a.id, tipo: 'vehiculo', sujeto: a.vehiculo_id, equipo: a.equipo_id, desde: ms(a.desde), hasta: a.hasta ? ms(a.hasta) : undefined }))];
   const aBordo: StockVehiculo[] = t.stock_vehiculo.map(x => ({ vehiculo: x.vehiculo_id, sku: x.sku, unidades: n(x.unidades) }));
   const ca = t.config_app[0];
   const portalEnlaces: EnlacePortal[] = (t.portal_enlaces || []).map(e => ({ tecnico: e.tecnico_id, entrega: e.entrega_id ?? undefined, creado: ms(e.creado), creadoPor: e.creado_por, revocado: e.revocado ? ms(e.revocado) : undefined }));
