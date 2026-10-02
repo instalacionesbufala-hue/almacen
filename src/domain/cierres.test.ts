@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { fresh } from '../data/semilla';
 import type { Equivalencia } from '../data/tipos';
 import { aplicarLocal } from '../store/ops';
-import { articulosTexto, cierresDeCsv, condicionesTexto, consumoPorArticulo, discrepancias, normalizarCierre, parseArticulos, parseCondiciones, registrarCierreLocal, traducirEnApp } from './cierres';
+import { articulosTexto, cierresDeCsv, condicionesTexto, consumoPorArticulo, discrepancias, normalizarCierre, parseArticulos, parseCondiciones, registrarCierreLocal } from './cierres';
 import { unidadesABordo } from './reglas';
 
 const REGLAS: Equivalencia[] = [
@@ -13,7 +13,7 @@ const REGLAS: Equivalencia[] = [
 ];
 const base = { numInst: 'I-1', esbrainUuid: 'u-1', cliente: 'Cliente', direccion: 'Calle', fechaCierreIso: new Date().toISOString(), equipo: 'Búfala 1' };
 const estado = () => { const S = fresh(); S.rol = 'admin'; S.equivalencias = REGLAS.map(r => ({ ...r })); S.configApp.demoBorrada = undefined; return S; };
-const enviar = (S: ReturnType<typeof fresh>, x: Record<string, unknown>) => { const c = normalizarCierre({ ...base, ...x }); return registrarCierreLocal(S, c, traducirEnApp(S, c)); };
+const enviar = (S: ReturnType<typeof fresh>, x: Record<string, unknown>) => registrarCierreLocal(S, { ...base, ...x }, 'wizard');
 
 describe('cierres en la app', () => {
   it('consume del vehículo del equipo, con formatos fraccionados; solo reglas confirmadas', () => {
@@ -41,7 +41,7 @@ describe('cierres en la app', () => {
     const S = estado(); S.configApp.aperturaCierres = Date.now() + 864e5;
     expect(enviar(S, { tipoLinea: 'manguera', metrosLinea: 5 }).estado).toBe('ignorado');
     S.configApp.aperturaCierres = undefined;
-    expect(enviar(S, { esbrainUuid: 'u-2', equipo: 'Búfala 7', tipoLinea: 'manguera', metrosLinea: 5 }).estado).toBe('sin_vehiculo');
+    expect(enviar(S, { numInst: 'I-2', esbrainUuid: 'u-2', equipo: 'Búfala 7', tipoLinea: 'manguera', metrosLinea: 5 }).estado).toBe('sin_vehiculo');
   });
   it('el administrador resuelve una línea pendiente y se descuenta', () => {
     const S = estado();
@@ -55,7 +55,7 @@ describe('cierres en la app', () => {
   it('consumo por artículo del periodo', () => {
     const S = estado();
     enviar(S, { tipoLinea: 'manguera', metrosLinea: 20, rj45: 5 });
-    enviar(S, { esbrainUuid: 'u-2', tipoLinea: 'manguera', metrosLinea: 10, rj45: 20 });
+    enviar(S, { numInst: 'I-2', esbrainUuid: 'u-2', tipoLinea: 'manguera', metrosLinea: 10, rj45: 20 });
     const c = consumoPorArticulo(S, S.cierres);
     expect(c.find(x => x.sku === 'CAB-RZ1K-5G6')).toMatchObject({ unidades: 30, formatos: 30 });
     expect(c.find(x => x.sku === '7280040020')).toMatchObject({ unidades: 25, formatos: 1 });          // 25 RJ45 = 1 sobre

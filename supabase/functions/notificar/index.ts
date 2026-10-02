@@ -138,11 +138,17 @@ async function encolarInformes(db: SupabaseClient, cuerpo: Record<string, unknow
     const { data: movs } = await db.from('movimientos').select('ts, sku, tipo, cantidad, motivo, referencia, operario, equipo_id, vehiculo_id')
       .in('sku', skus.length ? skus : ['-']).gte('ts', new Date(periodo.desde).toISOString()).lt('ts', new Date(periodo.hasta).toISOString());
     const { data: actas } = await db.from('actas_custodia').select('numero, ts, representante, lineas').eq('propietario_id', o.id);
+    // E-026: cargadores instalados antes de la gestión del almacén (cierres con la línea "no_entregado")
+    const { data: sinGestion } = await db.from('cierre_lineas').select('sku, cantidad, cierres!inner(fecha_cierre, num_inst, cliente, equipo_wizard)')
+      .eq('estado', 'no_entregado').in('sku', skus.length ? skus : ['-']);
     const datos: DatosInforme = {
       propietario: o.nombre, ...periodo,
       productos: (productos || []).map(p => ({ sku: p.sku, nombre: p.nombre, unidad: p.unidad, stock: Number(p.stock), enVehiculos: Math.round((enVeh.get(p.sku) || 0) / Number(p.contenido || 1) * 1000) / 1000, minimo: Number(p.minimo), codigoModelo: p.ref_proveedor ?? undefined })),
       movimientos: (movs || []).map(m => ({ ts: new Date(m.ts).getTime(), sku: m.sku, tipo: m.tipo, cantidad: Number(m.cantidad), motivo: m.motivo, referencia: m.referencia, series: [], operario: m.operario, equipo: m.equipo_id ?? undefined, vehiculo: m.vehiculo_id ? matricula.get(m.vehiculo_id) || m.vehiculo_id : undefined })),
       actas: (actas || []).map(a => ({ numero: a.numero, ts: new Date(a.ts).getTime(), representante: a.representante, lineas: a.lineas })),
+      instaladosSinGestion: (sinGestion || []).map(l => { const c = l.cierres as unknown as { fecha_cierre: string; num_inst: string; cliente: string; equipo_wizard: string };
+        const p = (productos || []).find(x => x.sku === l.sku);
+        return { ts: new Date(c.fecha_cierre).getTime(), sku: l.sku as string, cantidad: Number(l.cantidad) / Number(p?.contenido || 1), referencia: [c.num_inst, c.cliente].filter(Boolean).join(' · '), equipo: c.equipo_wizard }; }),
     };
     const inf = construirInforme(datos);
     // E-009: miniaturas con URL firmadas de 30 días (el bucket es privado; el correo no lleva sesión)

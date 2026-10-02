@@ -31,6 +31,12 @@ export interface LineaTraducida {
   estado: 'aplicable' | 'sin_equivalencia' | 'pendiente'; regla: string | null; nota: string;
 }
 
+/** E-026 · Partidas que vienen en la prefactura de Holded: sustituyen a las del cierre; las demás (tipoLinea, seccion, fase, pvc32, hardware, equipo, fecha) se conservan */
+export const CAMPOS_FACTURABLES = ['metrosLinea', 'metrosUtp', 'rj45', 'corr32', 'acero32', 'acero40', 'canaleta', 'sot50', 'sot90', 'bornasMono', 'bornasTrif',
+  'caja6', 'caja12', 'caja18', 'cerradura', 'cajaReg', 'mag1025', 'mag32', 'mag40', 'pica', 'preinst'] as const;
+/** Lo que identifica qué material lleva un cierre (si no cambia nada de esto, la versión no trae cambios) */
+const CAMPOS_IDENTICOS = [...CAMPOS_MATERIAL, 'hardware', 'equipo', 'despFallido', 'tipoLinea', 'fase', 'seccion', 'cableDatos', 'materialEspecial'];
+
 const txt = (v: unknown) => String(v ?? '').trim();
 const norm = (v: unknown) => txt(v).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 const numero = (v: unknown) => { const n = typeof v === 'number' ? v : Number(txt(v).replace(',', '.')); return Number.isFinite(n) ? n : 0; };
@@ -40,18 +46,79 @@ export function normalizarCierre(raw: Record<string, unknown>): Cierre {
   const c: Cierre = {
     ...raw,
     numInst: txt(raw.numInst), esbrainUuid: txt(raw.esbrainUuid), cliente: txt(raw.cliente), direccion: txt(raw.direccion),
-    fechaCierreIso: txt(raw.fechaCierreIso || raw.fechaIso), equipo: txt(raw.equipo), hardware: txt(raw.hardware),
+    fechaCierreIso: txt(raw.fechaCierreIso || raw.fechaIso), equipo: txt(raw.equipo), hardware: txt(raw.hardware), materialEspecial: materialEspecial(raw.materialEspecial),
     despFallido: raw.despFallido === true || raw.despFallido === 'true' || raw.despFallido === 1, version: Math.max(1, Math.trunc(numero(raw.version)) || 1),
   };
   for (const k of CAMPOS_MATERIAL) c[k] = Math.max(0, numero(raw[k]));
   return c;
 }
 
-/** Clave de idempotencia: esbrainUuid o, si falta, numInst + fechaCierreIso */
-export function claveCierre(c: Pick<Cierre, 'esbrainUuid' | 'numInst' | 'fechaCierreIso'>): string {
+/** "SÍ — 1× CUADRO…" se guarda; "", "no", "-" o "NO" = sin material especial */
+export function materialEspecial(v: unknown): string {
+  const t = txt(v);
+  return /^(no|-|—|ninguno|n\/a|false|0)?$/i.test(t) ? '' : t;
+}
+
+/** E-026 · Una instalación = un cierre: la identidad es numInst (el n.º de presupuesto). Sin numInst, el esbrainUuid. */
+export const normInst = (v: unknown) => txt(v).toUpperCase().replace(/\s+/g, '');
+export function claveCierre(c: Pick<Cierre, 'esbrainUuid' | 'numInst'>): string {
+  if (normInst(c.numInst)) return 'inst:' + normInst(c.numInst);
   if (c.esbrainUuid) return 'uuid:' + c.esbrainUuid;
-  if (c.numInst && c.fechaCierreIso) return `inst:${c.numInst}|${c.fechaCierreIso}`;
-  throw new Error('El cierre no trae esbrainUuid ni numInst + fechaCierreIso');
+  throw new Error('El cierre no trae numInst (n.º de instalación)');
+}
+
+/* ---------- E-026 · Versiones de un cierre: directo (wizard), histórico y prefactura aprobada de Holded ---------- */
+export type OrigenVersion = 'wizard' | 'historico' | 'holded' | 'admin';
+export interface PrefacturaHolded { documento: string; fechaAprobacion: string; lineas: Record<string, number> }
+/** Lo que ya se sabe del cierre: los últimos datos del wizard (o del histórico), la última prefactura y qué orígenes han llegado */
+export interface PrevioCierre { version: number; wizard: Record<string, unknown> | null; holded: PrefacturaHolded | null; origenes: string[] }
+export interface Version { accion: 'nueva' | 'duplicado' | 'obsoleto'; origen: OrigenVersion; documento: string; wizard: Cierre | null; holded: PrefacturaHolded | null; efectivo: Cierre; avisos: string[] }
+
+/** Prefactura de Holded tal como la manda el Apps Script → solo campos facturables, como números */
+export function normalizarPrefactura(raw: Record<string, unknown>): PrefacturaHolded & { ignorados: string[] } {
+  const lineas: Record<string, number> = {}, ignorados: string[] = [];
+  for (const [k, v] of Object.entries((raw.lineas as Record<string, unknown>) || {})) {
+    if ((CAMPOS_FACTURABLES as readonly string[]).includes(k)) lineas[k] = Math.max(0, numero(v)); else ignorados.push(k);
+  }
+  return { documento: txt(raw.documento), fechaAprobacion: txt(raw.fechaAprobacion), lineas, ignorados };
+}
+
+/** Los datos con los que se calcula el consumo: los del wizard con las partidas de la prefactura encima */
+export function cierreEfectivo(wizard: Record<string, unknown> | null, holded: PrefacturaHolded | null, extra: Record<string, unknown> = {}): Cierre {
+  return normalizarCierre({ ...extra, ...(wizard || {}), ...(holded?.lineas || {}) });
+}
+
+const mismoMaterial = (a: Record<string, unknown>, b: Record<string, unknown>) => CAMPOS_IDENTICOS.every(k => norm(a[k]) === norm(b[k]) || (numero(a[k]) === numero(b[k]) && (CAMPOS_MATERIAL as readonly string[]).includes(k)));
+
+/** Decide qué hacer con lo que llega para una instalación que ya puede existir:
+    - wizard / histórico: una versión del wizard más antigua que la guardada es "obsoleto"; los mismos datos por el mismo camino, "duplicado";
+      los mismos datos por otro camino (p. ej. el histórico de un cierre que llegó en directo), una versión nueva sin cambios.
+    - holded: la misma prefactura otra vez es "duplicado"; si no, versión nueva cuyas partidas facturables sustituyen a las anteriores.
+    El UUID y la fecha que lleguen después se guardan, pero no cambian la identidad (la da numInst). */
+export function prepararVersion(previo: PrevioCierre | null, origen: OrigenVersion, raw: Record<string, unknown>): Version {
+  const avisos: string[] = [];
+  let wizard = previo?.wizard ? normalizarCierre(previo.wizard) : null, holded = previo?.holded || null, accion: Version['accion'] = 'nueva', documento = '';
+  if (origen === 'holded') {
+    const pf = normalizarPrefactura(raw);
+    if (!normInst(raw.numInst)) throw new Error('La prefactura no trae numInst');
+    if (pf.ignorados.length) avisos.push(`Partidas de la prefactura que no se usan: ${pf.ignorados.join(', ')}`);
+    documento = pf.documento;
+    const nueva: PrefacturaHolded = { documento: pf.documento, fechaAprobacion: pf.fechaAprobacion, lineas: { ...(holded?.lineas || {}), ...pf.lineas } };
+    if (holded && JSON.stringify(nueva.lineas) === JSON.stringify(holded.lineas) && (previo?.origenes || []).includes('holded')) accion = 'duplicado';
+    holded = nueva;
+    // prefactura sin cierre previo: se guarda con lo que traiga (equipo y fecha, si vienen)
+    if (!wizard) wizard = normalizarCierre({ numInst: raw.numInst, equipo: raw.equipo, fechaCierreIso: raw.fechaCierreIso || raw.fecha || pf.fechaAprobacion, cliente: raw.cliente, direccion: raw.direccion, hardware: raw.hardware });
+  } else {
+    const c = normalizarCierre(raw);
+    if (wizard) {
+      if (c.version < wizard.version) accion = 'obsoleto';
+      else if (c.version === wizard.version && mismoMaterial(c, wizard) && (previo?.origenes || []).includes(origen)) accion = 'duplicado';
+      // lo que no traiga (el histórico no lleva UUID) se conserva; la fecha de la primera llegada no cambia la identidad
+      if (accion === 'nueva') wizard = { ...wizard, ...Object.fromEntries(Object.entries(c).filter(([, v]) => v !== '' && v !== undefined && v !== null)), esbrainUuid: c.esbrainUuid || wizard.esbrainUuid } as Cierre;
+    } else wizard = c;
+  }
+  const efectivo = cierreEfectivo(wizard, holded);
+  return { accion, origen, documento, wizard, holded, efectivo, avisos };
 }
 
 /** Valor de un campo o de una suma de campos ("pvc32+acero32") */
@@ -129,9 +196,13 @@ export const EQUIVALENCIAS_PROPUESTA: Regla[] = [
   R('pvc32', 'manguitos', {}, [['6201025023', 1]], { estimada: true, nota: 'manguito M-32: floor(m/3)+1' }),
   R('acero32', 'manguitos', {}, [[null, 1, 'manguito de acero M-32']], { estimada: true }),
   R('pvc32+acero32', 'fijaciones', {}, [], { estimada: true, kit: null, nota: '1 cada 0,50 m; el corrugado no cuenta' }),
-  R('hardware', 'unidad', { 'hardware~': 'trydan&schuko' }, [['8900500015', 1]], { nota: 'Trydan 7,4 kW + Schuko (custodia Esmove)' }),
-  R('hardware', 'unidad', { 'hardware~': 'trydan&22' }, [['8900500025', 1]], { nota: 'Trydan 22 kW (custodia Esmove)' }),
-  R('hardware', 'unidad', { 'hardware~': ['trydan&7,4', 'trydan&7.4'] }, [['8900590300', 1]], { nota: 'Trydan 7,4 kW (custodia Esmove)' }),
+  // E-026: texto real del calendario ("V2C TRYDAN MONOFÁSICO PROTECCIONES M5 + SCHUKO", "POLICHARGER NW MONOFÁSICO PROTECCIÓN REARME M5"…)
+  R('hardware', 'unidad', { 'hardware~': 'trydan&schuko' }, [['8900500015', 1]], { nota: 'Trydan 7,4 kW 5 m + Schuko' }),
+  R('hardware', 'unidad', { 'hardware~': ['trydan&trif&m10', 'trydan&22&m10'] }, [['8900500030', 1]], { nota: 'Trydan 22 kW 10 m' }),
+  R('hardware', 'unidad', { 'hardware~': ['trydan&trif', 'trydan&22'] }, [['8900500025', 1]], { nota: 'Trydan 22 kW 5 m' }),
+  R('hardware', 'unidad', { 'hardware~': 'trydan&m10' }, [['8900500020', 1]], { nota: 'Trydan 7,4 kW 10 m' }),
+  R('hardware', 'unidad', { 'hardware~': 'trydan' }, [['8900590300', 1]], { nota: 'Trydan 7,4 kW 5 m (el más habitual)' }),
+  R('hardware', 'unidad', { 'hardware~': 'policharger' }, [['8906000665', 1]], { nota: 'Policharger NW T2' }),
 ];
 
 export const KITS_PROPUESTA: Kits = {

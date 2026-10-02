@@ -758,7 +758,7 @@ Hoy el propietario Esmove existe en la tabla `propietarios`, pero **no se pueden
 - **Recuento de furgoneta:** ya admite cualquier artículo (el chat lo cambió en `16a6f1f`: botones "Añadir lo que descuentan los cierres" y "Añadir otro artículo…"). Revisarlo y mantenerlo coherente con lo anterior.
 - **Hecho cuando:** un artículo recién creado aparece con 0 ud en las 3 furgonetas, se asigna a Búfala 2 con "Asignar" y, tras la firma, consta a bordo.
 
-### E-026 · Cierres: una instalación = un cierre, cargadores entregados desde el 30/09 y corrección con la prefactura aprobada de Holded · PENDIENTE (antes del lunes 05/10)
+### E-026 · Cierres: una instalación = un cierre, cargadores entregados desde el 30/09 y corrección con la prefactura aprobada de Holded · HECHO
 **Contexto (02/10).** La conexión con el wizard ya funciona:
 - `enviarAlAlmacen(datos)` va en `procesarEnvio_` del Apps Script, justo después de `escribirEnRegistro_`.
 - El chat ha añadido en `docs/apps-script-almacen.gs` dos cosas:
@@ -2237,3 +2237,84 @@ En "Para el día a día" se explican el ajuste y el aviso.
 - **La cámara en vivo no se puede probar desde aquí** (el navegador de Code la bloquea).
 
 **Pendiente del usuario:** escanear en su iPhone un **albarán Saltoki de 2 hojas** y comprobar que sale una sola revisión con todas sus líneas.
+
+### 02/10/2026 · E-026 · HECHO
+**Aplicado en producción:**
+- migración `20261016000100_e026_cierres_versiones.sql`;
+- **`registrar-cierre`** y **`notificar`** desplegadas.
+
+**Comprobado en producción (solo lectura):**
+- había **0 cierres**, así que no hubo duplicados que unir;
+- los 6 SKU de cargadores existen;
+- la fecha de los cargadores queda en **05/10/2026 00:00 (Madrid)**;
+- **constan a bordo** el Schuko (8900500015) en 2690NKC, el Policharger (8906000665) en 4299NGK y el Trydan 10 m (8900500020) en 7463LVN.
+
+**El histórico ya se puede lanzar.**
+
+**1. Una instalación = un cierre**
+- **La clave es `inst:<numInst>`** (mayúsculas y sin espacios). Sin `numInst`, el `esbrainUuid`.
+- **Cada llegada es una versión** (tabla `cierre_versiones`) con su origen, documento y **diferencia** aplicada (`[{sku, unidades}]`). Orígenes: `wizard`, `historico`, `holded` o `admin` (recalcular).
+- **`prepararVersion`** (módulo compartido, el mismo en el servidor y en la app) decide:
+  - **Duplicado:** los mismos datos por el mismo camino (un reintento).
+  - **Obsoleto:** una versión del wizard más antigua que la guardada (el histórico puede traer la v1 de un cierre corregido a v2).
+  - **Nueva:** cualquier otro caso. Los mismos datos por otro camino (el histórico de un cierre llegado en directo) crean una versión **sin cambios**, que deja constancia de que llegó.
+- **Lo que no cambia la identidad:** el UUID y la fecha que lleguen después se guardan, pero el cierre conserva la fecha de su primera llegada para elegir el vehículo.
+- **Concurrencia:** la función prepara la versión con lo que hay (`previo_cierre`). Si entretanto otra llamada cambió el cierre, la base lo rechaza con "vuelve a enviarlo".
+- **El Apps Script** marca el histórico con `origen: 'historico'` y envía `materialEspecial` (`docs/apps-script-almacen.gs`).
+
+**2. Cargadores hasta el 05/10**
+- **Configuración → Integraciones y cierres:** "Hasta esta fecha, descontar cargadores solo si constan a bordo" (`config_app.cargadores_a_bordo_hasta`).
+- **Se comprueba al procesar** (`_sincronizar_cierre`), con lo que hay a bordo más lo que ese cierre ya consumió.
+- **Si no consta:** la línea queda **`no_entregado`**, sin movimiento, sin discrepancia y sin dejar el cierre "parcial".
+  - Sale en el informe del socio como **"Instalado (antes de la gestión del almacén)"**, en la app y en el correo de `notificar`.
+  - Si luego se entrega y se reprocesa, se descuenta.
+- **Solo afecta** a la categoría "cargadores" o al material en custodia.
+- **Las líneas que el administrador resuelve a mano** se descuentan siempre.
+
+**3. Reglas de cargadores**
+- **SKU comprobados en la base; todos existen.** Las reglas P16-P18 se guardaron en `equivalencias_historial` y quedan **desactivadas**.
+- **Nuevas H1-H6, confirmadas,** en el orden pedido: `trydan&schuko`, `trydan&trif&m10`, `trydan&trif`, `trydan&m10`, `trydan` y `policharger`.
+  - **Añadido mío:** `trydan&22&m10` y `trydan&22` además de `trif`, por si el texto pone "22 kW".
+- **La propuesta del código** (bases nuevas y demostración) lleva las mismas reglas.
+- **Lo que no casa** sigue yendo a Pendientes.
+- **Probado** con los textos reales del calendario.
+
+**4. Prefactura aprobada de Holded**
+- **Llega por el mismo `registrar-cierre`:**
+  `{ origen: 'holded', numInst, documento, fechaAprobacion, lineas: {campo: cantidad}, equipo?, fecha? }`
+- **Solo cuentan los campos facturables.** Los demás se ignoran y se devuelven en `avisos`.
+- **Sustituyen** a los del cierre y se aplica la diferencia, en positivo o negativo. El resto de los datos se conserva.
+  - Los datos del wizard y la prefactura se guardan por separado (`datos_wizard`, `holded`). Así **un cierre del wizard que llegue después de la prefactura no deshace la corrección de Holded**.
+- **Sin cierre previo:** se crea un cierre de origen Holded. Sin equipo, queda "Equipo sin vehículo" y aparece en la bandeja.
+- **Partidas sin artículo** (`cajaReg`, `caja6`…): "sin equivalencia" hasta que se dé de alta el artículo.
+
+**5. Material especial**
+- **Se guarda** (`cierres.material_especial`). "NO", "-" y similares cuentan como vacío.
+- **Se muestra** en el cierre.
+- **Si no está vacío,** el cierre sale en la **bandeja** como *Revisar material especial*, con el botón **Revisado** (`revisar_material_especial`, queda en la auditoría). No se descuenta solo.
+
+**Vista del cierre:**
+- versiones con su origen ("wizard (directo)", "histórico de Registro", "prefactura Holded nº …", "recalculado") y la diferencia legible ("+2 Caja registro 100x100");
+- la etiqueta "no entregado por el almacén" en esas líneas.
+- **Recalcular** también deja su versión (origen administrador) cuando cambia el consumo.
+
+**Pruebas: 409 en verde** (+16):
+- `e026.test.ts` de base de datos (10):
+  - directo + histórico + Holded = 1 cierre con 3 versiones y consumo neto correcto;
+  - duplicado y obsoleto;
+  - el wizard que llega después de Holded;
+  - Holded sin cierre previo;
+  - material especial;
+  - **casos reales**: el Schuko de Búfala 1 entregado después de la hora del cierre y el Policharger de Búfala 2 se descuentan; un Trydan M5 de otra furgoneta queda "no entregado"; desde la fecha, discrepancia;
+  - la migración de reglas sobre una base en uso.
+- Las reglas con los textos del calendario, en `cierres.test.ts`.
+- `e026.test.ts` local (5), con el informe del socio.
+- Adaptadas las de E-012: cada cierre de prueba con su propio `numInst`, y la clave nueva.
+- `tsc -b`, `deno check` y build correctos.
+- En el navegador: un histórico en CSV con dos filas de la misma instalación da un cierre con 2 versiones y el material especial en la bandeja.
+
+**Aviso: `docs/apps-script-almacen.gs` del repositorio no tiene lo que el chat dice haber añadido.** Falta el modelo del cargador desde la hoja "🔗 ESBRAIN" y `cargarHistoricoRegistro` con cabeceras en la fila 2; solo está `cargarHistoricoAlAlmacen`. El chat debería subir su versión. He añadido `materialEspecial` y `origen: 'historico'`, que son compatibles con ella.
+- **La guía** (paso 14.9 a 14.13) explica:
+  - una instalación = un cierre;
+  - el orden: **E-026 desplegado → histórico una sola vez → recuento de furgonetas el lunes**;
+  - los cargadores hasta el 05/10, el material especial y Holded.

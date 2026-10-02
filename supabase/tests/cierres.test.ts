@@ -71,6 +71,16 @@ describe('equivalencias con condiciones', () => {
     expect(x.find(l => l.campo === 'hardware')).toMatchObject({ estado: 'pendiente' });
     expect(JSON.stringify(x)).not.toMatch(/serie/i);
   });
+  it('E-026: cargadores con el texto real del calendario (gana la primera regla que cumple)', () => {
+    const sku = (hardware: string) => traducirCierre(cierre({ hardware }), REGLAS, KITS).filter(l => l.campo === 'hardware').map(l => l.sku);
+    expect(sku('V2C TRYDAN MONOFÁSICO PROTECCIONES M5')).toEqual(['8900590300']);
+    expect(sku('V2C TRYDAN MONOFÁSICO PROTECCIONES M5 + SCHUKO')).toEqual(['8900500015']);
+    expect(sku('POLICHARGER NW MONOFÁSICO PROTECCIÓN REARME M5')).toEqual(['8906000665']);
+    expect(sku('V2C TRYDAN MONOFÁSICO PROTECCIONES M10')).toEqual(['8900500020']);
+    expect(sku('V2C TRYDAN TRIFÁSICO PROTECCIONES M5')).toEqual(['8900500025']);
+    expect(sku('V2C TRYDAN TRIFÁSICO PROTECCIONES M10')).toEqual(['8900500030']);
+    expect(traducirCierre(cierre({ hardware: 'WALLBOX PULSAR' }), REGLAS, KITS).find(l => l.campo === 'hardware')).toMatchObject({ estado: 'pendiente' });
+  });
   it('desplazamiento fallido: sin consumo', () => {
     expect(traducirCierre(cierre({ despFallido: true, pvc32: 5, hardware: 'Trydan 22 kW' }), REGLAS, KITS)).toEqual([]);
     expect(normalizarCierre({ ...base, despFallido: 'true' }).despFallido).toBe(true);
@@ -81,9 +91,11 @@ describe('equivalencias con condiciones', () => {
     const l = traducirCierre(cierre({ canaleta: 3 }), REGLAS, KITS, 'A', new Set(['otra']));
     expect(l[0]).toMatchObject({ estado: 'sin_equivalencia', nota: expect.stringMatching(/no está en el catálogo/) });
   });
-  it('clave de idempotencia: esbrainUuid o numInst + fecha', () => {
-    expect(claveCierre(cierre({}))).toBe('uuid:uuid-1');
-    expect(claveCierre(cierre({ esbrainUuid: '' }))).toBe('inst:INST-0001|2026-10-02T10:00:00Z');
-    expect(() => claveCierre(cierre({ esbrainUuid: '', numInst: '' }))).toThrow();
+  it('E-026: la clave es la instalación (numInst), con o sin UUID y con cualquier fecha', () => {
+    expect(claveCierre(cierre({}))).toBe('inst:INST-0001');
+    expect(claveCierre(cierre({ esbrainUuid: '', fechaCierreIso: '2026-10-03T08:00:00Z' }))).toBe('inst:INST-0001');
+    expect(claveCierre(cierre({ numInst: ' inst-0001 ' }))).toBe('inst:INST-0001');
+    expect(claveCierre(cierre({ numInst: '' }))).toBe('uuid:uuid-1');
+    expect(() => claveCierre(cierre({ esbrainUuid: '', numInst: '' }))).toThrow(/numInst/);
   });
 });

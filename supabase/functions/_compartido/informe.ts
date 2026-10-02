@@ -5,7 +5,9 @@
 export interface ProductoInforme { sku: string; nombre: string; unidad: string; stock: number; enVehiculos?: number; minimo: number; codigoModelo?: string; conSerie?: boolean }
 export interface MovimientoInforme { ts: number; sku: string; tipo: 'entrada' | 'salida' | 'merma' | 'ajuste' | 'traspaso' | 'devolucion' | 'consumo'; cantidad: number; motivo: string; referencia: string; series: string[]; operario: string; equipo?: string; vehiculo?: string }
 export interface ActaInforme { numero: string; ts: number; representante: string; lineas: { sku: string; sistema: number; contado: number }[] }
-export interface DatosInforme { propietario: string; desde: number; hasta: number; productos: ProductoInforme[]; movimientos: MovimientoInforme[]; actas: ActaInforme[]; generado?: number }
+/** E-026: cargadores instalados que no salieron del almacén gestionado (antes del 05/10): constancia para el socio, sin mover el stock */
+export interface InstaladoSinGestion { ts: number; sku: string; cantidad: number; referencia: string; equipo?: string }
+export interface DatosInforme { propietario: string; desde: number; hasta: number; productos: ProductoInforme[]; movimientos: MovimientoInforme[]; actas: ActaInforme[]; instaladosSinGestion?: InstaladoSinGestion[]; generado?: number }
 
 export interface Seccion { titulo: string; columnas: string[]; filas: (string | number)[][] }
 export interface Informe { titulo: string; periodo: string; secciones: Seccion[]; resumen: { referencias: number; unidades: number; entradas: number; salidas: number; incidencias: number; bajoMinimo: number } }
@@ -25,6 +27,7 @@ export function construirInforme(d: DatosInforme): Informe {
   const incidencias = mov.filter(m => m.tipo === 'merma');
   const ajustes = mov.filter(m => m.tipo === 'ajuste');
   const actas = d.actas.filter(a => a.ts >= d.desde && a.ts < d.hasta);
+  const sinGestion = (d.instaladosSinGestion || []).filter(x => skus.has(x.sku) && x.ts >= d.desde && x.ts < d.hasta).sort((a, b) => a.ts - b.ts);
   const fila = (m: MovimientoInforme, destino: string) => [fechaHora(m.ts), m.sku, nombre.get(m.sku) || m.sku, numero(Math.abs(m.cantidad)), destino, m.operario];
   const secciones: Seccion[] = [
     { titulo: 'Stock actual por referencia', columnas: ['Referencia', 'Descripción', 'Código modelo', 'En almacén', 'En vehículos', 'Unidad', 'Mínimo', 'Situación'],
@@ -34,6 +37,8 @@ export function construirInforme(d: DatosInforme): Informe {
       filas: entradas.map(m => fila(m, m.referencia || m.motivo)) },
     { titulo: 'Instalado en obra', columnas: ['Fecha', 'Referencia', 'Descripción', 'Cantidad', 'Obra o destino', 'Registrado por'],
       filas: salidas.map(m => fila(m, [m.referencia, m.vehiculo ? `vehículo ${m.vehiculo}` : ''].filter(Boolean).join(' · ') || m.motivo)) },
+    ...(sinGestion.length ? [{ titulo: 'Instalado (antes de la gestión del almacén)', columnas: ['Fecha', 'Referencia', 'Descripción', 'Cantidad', 'Obra', 'Equipo'],
+      filas: sinGestion.map(x => [fechaHora(x.ts), x.sku, nombre.get(x.sku) || x.sku, numero(x.cantidad), x.referencia, x.equipo || '']) }] : []),
     { titulo: 'Incidencias (daños y pérdidas)', columnas: ['Fecha', 'Referencia', 'Descripción', 'Cantidad', 'Motivo', 'Registrado por'],
       filas: incidencias.map(m => fila(m, [m.motivo, m.referencia].filter(Boolean).join(' · '))) },
     { titulo: 'Entregado a equipos y devuelto', columnas: ['Fecha', 'Referencia', 'Descripción', 'Cantidad', 'Movimiento', 'Registrado por'],

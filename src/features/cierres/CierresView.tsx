@@ -2,7 +2,7 @@
    consumo por equipo y periodo, discrepancias (vehículos en negativo) y recuento de vehículo. */
 import { useMemo, useState } from 'react';
 import type { CierreApp, EstadoCierre, Unidad } from '../../data/tipos';
-import { consumoPorArticulo, discrepancias, lineasDe } from '../../domain/cierres';
+import { consumoPorArticulo, discrepancias, lineasDe, ORIGEN_VERSION, textoDiferencia } from '../../domain/cierres';
 import { descargarCsv } from '../../domain/csv';
 import { fechaHora, hoyISO, num, redondea, toNum } from '../../domain/formato';
 import { contenidoDe, find, nombreVehiculo, unidadTxt, unidadesABordo } from '../../domain/reglas';
@@ -74,11 +74,17 @@ function FilaCierre({ c, abierto, alternar, puede }: { c: CierreApp; abierto: bo
   return (<article className={`${CARD} overflow-hidden`}>
     <button onClick={alternar} className="w-full text-left p-4 flex flex-wrap items-center gap-3">
       <div className="flex-1 min-w-[220px]"><div className="font-semibold">{c.numInst || '—'} · {c.cliente || 'sin cliente'}</div>
-        <div className="text-body-sm text-secondary">{fechaHora(c.fecha)} · {c.equipoWizard || 'sin equipo'}{c.vehiculo ? ` · ${nombreVehiculo(E, c.vehiculo).split(' · ').pop()}` : ''}{c.direccion ? ` · ${c.direccion}` : ''}{c.version > 1 ? ` · versión ${c.version}` : ''}</div></div>
+        <div className="text-body-sm text-secondary">{fechaHora(c.fecha)} · {c.equipoWizard || 'sin equipo'}{c.vehiculo ? ` · ${nombreVehiculo(E, c.vehiculo).split(' · ').pop()}` : ''}{c.direccion ? ` · ${c.direccion}` : ''}{c.version > 1 ? ` · ${c.version} versiones` : ''}{c.origen === 'holded' ? ' · desde la prefactura' : ''}</div></div>
       <Tag c={ESTADO[c.estado].c}>{ESTADO[c.estado].t}</Tag><Icon n={abierto ? 'expand_less' : 'expand_more'} className="text-secondary" />
     </button>
     {abierto && <div className="px-4 pb-4 flex flex-col gap-2">
       {c.hardware && <p className="text-body-sm">Cargador: <b>{c.hardware}</b> (sin n.º de serie: lo registra Esbrain)</p>}
+      {c.materialEspecial && <div className={`text-body-sm rounded-lg p-3 flex flex-wrap items-center gap-2 ${c.materialRevisado ? 'bg-surface-container-low' : 'bg-amber-50'}`}>
+        <span className="flex-1 min-w-[200px]"><b>Material especial:</b> {c.materialEspecial}{c.materialRevisado ? ' · revisado' : ' · añade a mano lo que corresponda (no se descuenta solo)'}</span>
+        {!c.materialRevisado && puede && <button onClick={() => { if (ejecutar({ op: 'revisarMaterialEspecial', args: { id: c.id, nota: '' } })) toast('Marcado como revisado.', 'ok'); }} className={`${BTN_S} h-10 px-3`}>Revisado</button>}</div>}
+      {(c.versiones?.length || 0) > 1 && <div className="text-body-sm"><div className={LBL}>Versiones</div>
+        {c.versiones!.map(v => <div key={v.n} className="flex flex-wrap gap-x-2 py-0.5"><b>{v.n}.</b><span>{ORIGEN_VERSION[v.origen] || v.origen}{v.documento ? ` nº ${v.documento}` : ''}</span><span className="text-secondary">{fechaHora(v.recibido)}</span>
+          <span className={v.diferencia.length ? 'font-semibold' : 'text-secondary'}>{v.n === 1 ? (v.diferencia.length ? textoDiferencia(E, v.diferencia) : 'alta del cierre') : textoDiferencia(E, v.diferencia)}</span></div>)}</div>}
       {c.estado === 'sin_vehiculo' && puede && <button onClick={() => { if (ejecutar({ op: 'reprocesarCierre', args: { id: c.id } })) toast('Cierre reprocesado.', 'ok'); }} className={`${BTN_S} h-12 self-start px-4`}><Icon n="refresh" className="ico-20" />Reprocesar (tras asignar el vehículo al equipo)</button>}
       {!lineas.length ? <p className="text-body-sm text-secondary">{c.despFallido ? 'Desplazamiento fallido: sin consumo.' : 'Sin material declarado.'}</p> :
         <table className="w-full text-body-sm"><thead><tr className={`text-left ${LBL}`}><th className="py-1">Partida</th><th>Artículo</th><th className="text-right">Cantidad</th><th /></tr></thead>
@@ -86,6 +92,7 @@ function FilaCierre({ c, abierto, alternar, puede }: { c: CierreApp; abierto: bo
             <tr key={l.id} className="border-t border-surface-container align-top">
               <td className="py-1.5 font-mono text-label-sm">{l.campo}{l.formula !== 'directa' && l.formula !== 'unidad' ? ` (${l.formula})` : ''}<div className="text-secondary">{num(l.valor)}</div></td>
               <td className="py-1.5">{p ? p.name : <span className="text-amber-800">{l.estado === 'pendiente' ? 'Por elegir' : 'Sin equivalencia'}</span>}
+                {l.estado === 'no_entregado' && <Tag c="bg-violet-100 text-violet-800 ml-1">no entregado por el almacén: no se descuenta</Tag>}
                 {l.estimada && <Tag c="bg-amber-100 text-amber-800 ml-1">estimado</Tag>}{l.estado === 'discrepancia' && <Tag c="bg-error-container text-error ml-1">deja el vehículo en negativo</Tag>}
                 {l.nota && <div className="text-label-sm text-secondary">{l.nota}</div>}
                 {resolver && <div className="flex gap-2 mt-1 items-start"><SelectorArticulo valor={elegido[l.id] || null} onChange={sku => setElegido({ ...elegido, [l.id]: sku || '' })} className="flex-1" alto="h-11" />

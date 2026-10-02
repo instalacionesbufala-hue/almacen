@@ -1,11 +1,15 @@
-// Función de servidor "registrar-cierre" (Supabase Edge Function, Deno) · E-012
-// La llama el Google Apps Script del wizard de cierres (servidor a servidor, UrlFetchApp) justo después de guardar la fila en "Registro".
+// Función de servidor "registrar-cierre" (Supabase Edge Function, Deno) · E-012 / E-026
+// La llama el Google Apps Script del wizard de cierres (servidor a servidor, UrlFetchApp).
 // Cabecera X-Integracion: <token>. Del token solo se guarda el hash (Configuración → Integraciones); si se revoca, se rechaza.
-// Cuerpo: un cierre { numInst, esbrainUuid, fechaCierreIso, equipo, hardware, despFallido, version?, metrosLinea, pvc32… }
-//         o varios { cierres: [...] } (carga del histórico). El token solo puede registrar cierres: no lee nada.
+// Cuerpo:
+//   - un cierre del wizard { numInst, esbrainUuid, fechaCierreIso, equipo, hardware, materialEspecial, despFallido, version?, metrosLinea, pvc32… }
+//   - varios { cierres: [...], origen?: 'historico' } (carga única del histórico de "Registro")
+//   - E-026: la prefactura aprobada de Holded { origen: 'holded', numInst, documento, fechaAprobacion, lineas: { cajaReg: 2, … }, equipo?, fecha? }
+// E-026: una instalación (numInst) = un cierre. Lo que llega después es una versión nueva: se aplica solo la diferencia.
+// El token solo puede registrar cierres: no lee nada.
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { json } from '../_compartido/validar.ts';
-import { normalizarCierre, traducirCierre, type Kits, type Regla } from '../_compartido/cierres.ts';
+import { claveCierre, normInst, prepararVersion, traducirCierre, type Kits, type OrigenVersion, type PrevioCierre, type Regla } from '../_compartido/cierres.ts';
 import { hashToken, TOKEN_RE } from '../_compartido/portal.ts';
 
 const URL = Deno.env.get('SUPABASE_URL')!;
@@ -31,7 +35,7 @@ Deno.serve(async (req) => {
     db.from('equivalencias_cierre').select('*').eq('confirmada', true).eq('activa', true),
     db.from('kits_fijacion').select('*'),
     db.from('config_app').select('kit_fijacion').eq('id', 1).single(),
-    db.from('productos').select('sku').eq('borrador', false),
+    db.from('productos').select('sku').eq('borrador', false).eq('archivado', false),
   ]);
   const reglas: Regla[] = (filas || []).map(r => ({ id: r.id, campo: r.campo, formula: r.formula, condiciones: r.condiciones || {}, articulos: r.articulos || [], kit: r.kit, estimada: r.estimada, activa: r.activa, orden: r.orden, nota: r.nota }));
   const kits: Kits = Object.fromEntries((kitsF || []).map(k => [k.kit, k.articulos || []]));
@@ -39,12 +43,18 @@ Deno.serve(async (req) => {
 
   const resultados = [];
   for (const raw of lista) {
+    const numInst = normInst(raw?.numInst);
     try {
-      const c = normalizarCierre(raw);
-      const lineas = traducirCierre(c, reglas, kits, conf?.kit_fijacion || 'A', catalogo);
-      const { data, error } = await db.rpc('aplicar_cierre', { p_hash: hash, p: c, p_lineas: lineas });
-      resultados.push(error ? { numInst: c.numInst, error: error.message } : { numInst: c.numInst, ...data });
-    } catch (e) { resultados.push({ numInst: String(raw?.numInst ?? ''), error: (e as Error).message }); }
+      const origen: OrigenVersion = raw.origen === 'holded' ? 'holded' : (raw.origen === 'historico' || cuerpo.origen === 'historico') ? 'historico' : 'wizard';
+      const clave = claveCierre({ numInst: String(raw.numInst ?? ''), esbrainUuid: String(raw.esbrainUuid ?? '') });
+      const { data: previo, error: e1 } = await db.rpc('previo_cierre', { p_clave: clave });
+      if (e1) throw new Error(e1.message);
+      const v = prepararVersion(previo as PrevioCierre | null, origen, raw);
+      const lineas = v.accion === 'nueva' ? traducirCierre(v.efectivo, reglas, kits, conf?.kit_fijacion || 'A', catalogo) : [];
+      const meta = { clave, accion: v.accion, origen, documento: v.documento, base: (previo as PrevioCierre | null)?.version || 0, wizard: v.wizard, holded: v.holded, entrada: raw };
+      const { data, error } = await db.rpc('aplicar_cierre', { p_hash: hash, p: v.efectivo, p_lineas: lineas, p_meta: meta });
+      resultados.push(error ? { numInst, error: error.message } : { numInst, ...data, ...(v.avisos.length ? { avisos: v.avisos } : {}) });
+    } catch (e) { resultados.push({ numInst, error: (e as Error).message }); }
   }
   const errores = resultados.filter(r => 'error' in r).length;
   return json(Array.isArray(cuerpo.cierres) ? { resultados, errores } : resultados[0], errores && !Array.isArray(cuerpo.cierres) ? 422 : 200);

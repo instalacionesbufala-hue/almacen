@@ -9,7 +9,7 @@ import { redondea } from '../domain/formato';
 import { asignarHerramienta, registrarIncidencia } from '../domain/herramientas';
 import { fotoDe, grupoFoto } from '../domain/fotos';
 import { normalizarTelefono } from '../domain/whatsapp';
-import { EQUIVALENCIAS_PROPUESTA, KITS_PROPUESTA, registrarCierreLocal, sincronizarCierreLocal, type Cierre, type LineaTraducida } from '../domain/cierres';
+import { EQUIVALENCIAS_PROPUESTA, KITS_PROPUESTA, registrarVersionLocal, sincronizarCierreLocal, type EnvioCierre, type LineaTraducida } from '../domain/cierres';
 import { cambiarCodigoLocal, fusionarLocal, reasignarLineaLocal } from '../domain/fichas';
 import { ajustarLocal, previsionAjuste } from '../domain/ajuste';
 import { asociarLocal, motivoSkuNoValido, quitarCodigoLocal, type TipoCodigo } from '../domain/codigos';
@@ -85,11 +85,12 @@ export type Op =
   | { op: 'cargarPropuesta'; args: Record<string, never> }
   | { op: 'confirmarEquivalencias'; args: Record<string, never> }
   | { op: 'kitFijacion'; args: { kit: 'A' | 'B' | 'C'; articulos: ArticuloRegla[] } }
-  | { op: 'configCierres'; args: { kit: 'A' | 'B' | 'C'; apertura?: number } }
+  | { op: 'configCierres'; args: { kit: 'A' | 'B' | 'C'; apertura?: number; cargadoresHasta?: number } }
+  | { op: 'revisarMaterialEspecial'; args: { id: string; nota: string } }
   | { op: 'resolverLinea'; args: { linea: string; sku: string; cantidad?: number } }
   | { op: 'reprocesarCierre'; args: { id: string } }
   | { op: 'recuentoVehiculo'; args: { id: string; vehiculo: string; lineas: { sku: string; contado: number }[] } }
-  | { op: 'cierreHistorico'; args: { cierre: Cierre; lineas: LineaTraducida[] } }
+  | { op: 'cierreHistorico'; args: EnvioCierre }
   | { op: 'revocarIntegracion'; args: { id: string } }
   | { op: 'enlacePortal'; args: { tecnico: string; hash: string; entrega?: string } }
   | { op: 'revocarPortal'; args: { tecnico: string } }
@@ -361,6 +362,7 @@ export const OPS: Defs = {
     local: (S, a) => {
       if (S.rol !== 'admin') throw new Error('Solo el administrador');
       const ci = S.cierres.find(c => c.id === a.id); if (!ci || ci.estado === 'ignorado') return;
+      const antes = new Map<string, number>(); for (const m of S.movements) if (m.cierre === a.id) antes.set(m.sku, (antes.get(m.sku) || 0) - (m.unidades || 0));
       const resueltos = new Set(S.lineasCierre.filter(l => l.cierre === a.id && l.estado === 'resuelta').map(l => l.campo));
       S.lineasCierre = S.lineasCierre.filter(l => l.cierre !== a.id || l.estado === 'resuelta');
       for (const l of a.lineas) {
@@ -370,6 +372,9 @@ export const OPS: Defs = {
           estado: l.estado === 'aplicable' && sku ? 'aplicada' : l.estado === 'pendiente' ? 'pendiente' : 'sin_equivalencia', nota: l.nota });
       }
       sincronizarCierreLocal(S, a.id);
+      const despues = new Map<string, number>(); for (const m of S.movements) if (m.cierre === a.id) despues.set(m.sku, (despues.get(m.sku) || 0) - (m.unidades || 0));
+      const diferencia = [...new Set([...antes.keys(), ...despues.keys()])].sort().map(sku => ({ sku, unidades: redondea((despues.get(sku) || 0) - (antes.get(sku) || 0)) })).filter(d => d.unidades);
+      if (diferencia.length) { ci.version++; (ci.versiones ||= []).push({ n: ci.version, origen: 'admin', documento: `Recalculado por ${S.operator}`, recibido: Date.now(), diferencia }); }
     },
     rpc: a => ['recalcular_cierre_admin', { p_cierre: a.id, p_lineas: a.lineas }],
     desc: () => 'Recalcular un cierre',
@@ -407,8 +412,8 @@ export const OPS: Defs = {
     desc: (_S, a) => `Kit de fijación ${a.kit}`,
   },
   configCierres: {
-    local: (S, a) => { if (S.rol !== 'admin') throw new Error('Solo el administrador'); S.configApp.kitFijacion = a.kit; S.configApp.aperturaCierres = a.apertura; },
-    rpc: a => ['config_cierres', { p_kit: a.kit, p_apertura: a.apertura ? new Date(a.apertura).toISOString() : null }],
+    local: (S, a) => { if (S.rol !== 'admin') throw new Error('Solo el administrador'); S.configApp.kitFijacion = a.kit; S.configApp.aperturaCierres = a.apertura; S.configApp.cargadoresABordoHasta = a.cargadoresHasta; },
+    rpc: a => ['config_cierres', { p_kit: a.kit, p_apertura: a.apertura ? new Date(a.apertura).toISOString() : null, p_cargadores_hasta: a.cargadoresHasta ? new Date(a.cargadoresHasta).toISOString() : null }],
     desc: () => 'Configuración de los cierres',
   },
   resolverLinea: {
@@ -448,9 +453,14 @@ export const OPS: Defs = {
     desc: (S, a) => `Recuento del vehículo ${S.vehiculos.find(v => v.id === a.vehiculo)?.matricula || a.vehiculo}`,
   },
   cierreHistorico: {
-    local: (S, a) => { if (S.rol !== 'admin') throw new Error('Solo el administrador carga el histórico'); registrarCierreLocal(S, a.cierre, a.lineas, 'historico'); },
-    rpc: a => ['aplicar_cierre_admin', { p: a.cierre, p_lineas: a.lineas }],
-    desc: (_S, a) => `Cierre ${a.cierre.numInst || a.cierre.esbrainUuid}`,
+    local: (S, a) => { if (S.rol !== 'admin') throw new Error('Solo el administrador carga el histórico'); registrarVersionLocal(S, a); },
+    rpc: a => ['aplicar_cierre_admin', { p: a.efectivo, p_lineas: a.lineas, p_meta: a.meta }],
+    desc: (_S, a) => `Cierre ${a.efectivo.numInst || a.efectivo.esbrainUuid}`,
+  },
+  revisarMaterialEspecial: {
+    local: (S, a) => { if (S.rol !== 'admin') throw new Error('Solo el administrador'); const c = S.cierres.find(x => x.id === a.id); if (!c) throw new Error('Cierre no encontrado'); c.materialRevisado = true; },
+    rpc: a => ['revisar_material_especial', { p_cierre: a.id, p_nota: a.nota }],
+    desc: () => 'Material especial revisado',
   },
   revocarIntegracion: {
     local: (S, a) => { if (S.rol !== 'admin') throw new Error('Solo el administrador'); const i = S.integraciones.find(x => x.id === a.id); if (i && !i.revocado) i.revocado = Date.now(); },

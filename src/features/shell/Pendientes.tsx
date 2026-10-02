@@ -11,7 +11,8 @@ import { motivoSkuNoValido, skuValido } from '../../domain/codigos';
 import { Rechazadas } from '../inventario/archivo';
 import { cola } from '../../store/nube/sync';
 import { usePermisos } from '../../store/permisos';
-import { openModal, SheetHead } from '../../ui/modal';
+import { closeModal, openModal, SheetHead } from '../../ui/modal';
+import { ir, setUI } from '../../store/ui';
 import { toast } from '../../ui/toast';
 import { BTN_P, BTN_S, Icon, INP, Tag, Vacio } from '../../ui/base';
 
@@ -19,11 +20,15 @@ export function BotonPendientes() {
   const E = useAlmacen(), { validar } = usePermisos();
   // E-013: también las mermas registradas (aplicadas al momento) que el administrador aún no ha visto
   // E-015: y los artículos en borrador que ha creado el almacén
-  const n = E.pendientes.filter(p => p.estado === 'pendiente' || p.estado === 'aplicada').length + E.products.filter(p => p.borrador).length + E.propuestas.filter(p => p.estado === 'pendiente').length + E.products.filter(p => !skuValido(p.sku)).length + cola.use().filter(i => i.estado === 'rechazada').length;
+  const n = E.pendientes.filter(p => p.estado === 'pendiente' || p.estado === 'aplicada').length + E.products.filter(p => p.borrador).length + E.propuestas.filter(p => p.estado === 'pendiente').length + E.products.filter(p => !skuValido(p.sku)).length + cola.use().filter(i => i.estado === 'rechazada').length + cierresPorRevisar(E).length;
   if (!validar || !n) return null;
   return <button onClick={abrirPendientes} className="relative p-2 rounded-lg text-amber-800 hover:bg-amber-100" aria-label={`${n} avisos en la bandeja`} title="Mermas y pendientes de validar">
     <Icon n="pending_actions" /><span className="absolute top-1 right-1 min-w-4 h-4 px-1 rounded-full bg-amber-500 text-black font-mono text-[10px] leading-4">{n}</span></button>;
 }
+
+/** E-026: cierres con material especial sin revisar, o sin vehículo (p. ej. una prefactura de Holded sin equipo) */
+const cierresPorRevisar = (E: ReturnType<typeof useAlmacen>) => E.cierres.filter(c => c.estado !== 'ignorado' && ((c.materialEspecial && !c.materialRevisado) || c.estado === 'sin_vehiculo'));
+const verCierres = () => { closeModal(); setUI({ eqTab: 'cierres' }); ir('equipos'); };
 
 export const abrirPendientes = () => openModal(<Bandeja />, { ancha: true });
 function Bandeja() {
@@ -35,6 +40,7 @@ function Bandeja() {
     <SheetHead title="Bandeja del administrador" sub="Mermas registradas (ya aplicadas: solo para que lo sepas), diferencias de recuento y ajustes de inventario propuestos por el almacén, pendientes de validar." />
     <div className="p-5 flex flex-col gap-3">
       <Rechazadas />
+      <CierresPorRevisar />
       {noValidos.length > 0 && <div className="flex flex-col gap-2"><div className="font-mono text-label-sm uppercase tracking-wider text-secondary">Código no válido: cámbialo ({noValidos.length})</div>
         {noValidos.map(p => <div key={p.sku} className="rounded-xl bg-error-container/30 p-3 flex flex-wrap items-center gap-3">
           <div className="flex-1 min-w-[200px]"><div className="font-semibold">{p.name}</div>
@@ -86,4 +92,18 @@ function Fila({ id, puede }: { id: string; puede: boolean }) {
         <button onClick={() => resolver(true)} className={`${BTN_P} h-11 px-4`}><Icon n="check" className="ico-20" />Aprobar</button></div>}
     </div>
   );
+}
+
+/** E-026 · Cierres que necesitan al administrador: material especial del calendario (no se descuenta solo) y cierres sin vehículo */
+function CierresPorRevisar() {
+  const E = useAlmacen(), lista = cierresPorRevisar(E);
+  if (!lista.length) return null;
+  return <div className="flex flex-col gap-2"><div className="font-mono text-label-sm uppercase tracking-wider text-secondary">Cierres por revisar ({lista.length})</div>
+    {lista.map(c => <div key={c.id} className="rounded-xl bg-amber-50 p-3 flex flex-wrap items-center gap-3">
+      <div className="flex-1 min-w-[200px]"><div className="font-semibold">{c.numInst} · {c.cliente || 'sin cliente'}</div>
+        {c.materialEspecial && !c.materialRevisado && <div className="text-body-sm"><b>Revisar material especial:</b> {c.materialEspecial}. Añade a mano lo que corresponda (no se descuenta solo).</div>}
+        {c.estado === 'sin_vehiculo' && <div className="text-body-sm text-amber-900">Sin vehículo{c.equipoWizard ? `: el equipo "${c.equipoWizard}" no tiene vehículo asignado` : ': no trae equipo'}. No descuenta hasta reprocesarlo.</div>}</div>
+      <button onClick={verCierres} className="h-12 px-4 rounded-lg bg-white font-semibold text-primary">Ver cierre</button>
+      {c.materialEspecial && !c.materialRevisado && <button onClick={() => { if (ejecutar({ op: 'revisarMaterialEspecial', args: { id: c.id, nota: '' } })) toast('Material especial marcado como revisado.', 'ok'); }} className="h-12 px-4 rounded-lg bg-primary text-white font-semibold">Revisado</button>}
+    </div>)}</div>;
 }

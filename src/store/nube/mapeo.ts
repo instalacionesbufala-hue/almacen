@@ -7,7 +7,7 @@ export interface Tablas {
   productos: Fila[]; equipos: Fila[]; tecnicos: Fila[]; movimientos: Fila[];
   albaranes: Fila[]; entregas: Fila[]; entrega_lineas: Fila[]; dotacion: Fila[];
   dotacion_historial: Fila[]; avisos_reposicion: Fila[]; propietarios: Fila[];
-  vehiculos: Fila[]; asignaciones_tecnico: Fila[]; asignaciones_vehiculo: Fila[]; stock_vehiculo: Fila[]; config_app: Fila[]; portal_enlaces: Fila[]; copias_entrega: Fila[]; categorias: Fila[]; propuestas_ficha: Fila[]; cierres: Fila[]; cierre_lineas: Fila[]; equivalencias_cierre: Fila[]; kits_fijacion: Fila[]; integraciones: Fila[]; codigos_articulo: Fila[];
+  vehiculos: Fila[]; asignaciones_tecnico: Fila[]; asignaciones_vehiculo: Fila[]; stock_vehiculo: Fila[]; config_app: Fila[]; portal_enlaces: Fila[]; copias_entrega: Fila[]; categorias: Fila[]; propuestas_ficha: Fila[]; cierres: Fila[]; cierre_lineas: Fila[]; cierre_versiones: Fila[]; equivalencias_cierre: Fila[]; kits_fijacion: Fila[]; integraciones: Fila[]; codigos_articulo: Fila[];
   minimos_herramienta: Fila[]; config_avisos: Fila[]; envios_aviso: Fila[]; actas_custodia: Fila[];
   tallas_tecnico: Fila[];
   perfiles: Fila[]; pendientes: Fila[]; valores_pendientes?: Fila[];
@@ -16,12 +16,13 @@ export interface Tablas {
 export const TABLAS: (keyof Tablas)[] = ['productos', 'equipos', 'tecnicos', 'movimientos', 'albaranes', 'entregas',
   'entrega_lineas', 'dotacion', 'dotacion_historial', 'avisos_reposicion', 'propietarios', 'perfiles', 'pendientes',
   'minimos_herramienta', 'config_avisos', 'envios_aviso', 'actas_custodia', 'tallas_tecnico',
-  'vehiculos', 'asignaciones_tecnico', 'asignaciones_vehiculo', 'stock_vehiculo', 'config_app', 'categorias', 'propuestas_ficha', 'portal_enlaces', 'copias_entrega', 'cierres', 'cierre_lineas', 'equivalencias_cierre', 'kits_fijacion', 'integraciones', 'codigos_articulo'];
+  'vehiculos', 'asignaciones_tecnico', 'asignaciones_vehiculo', 'stock_vehiculo', 'config_app', 'categorias', 'propuestas_ficha', 'portal_enlaces', 'copias_entrega', 'cierres', 'cierre_lineas', 'cierre_versiones', 'equivalencias_cierre', 'kits_fijacion', 'integraciones', 'codigos_articulo'];
 /** Columnas legibles por cada rol (en pendientes el importe se lee aparte, solo el administrador) */
 export const COLUMNAS: Partial<Record<keyof Tablas, string>> = {
   portal_enlaces: 'tecnico_id, entrega_id, creado, creado_por, revocado',
   integraciones: 'id, nombre, creado, creado_por, revocado, ultimo_uso',
-  cierres: 'id, clave, version, num_inst, cliente, direccion, fecha_cierre, equipo_wizard, equipo_id, vehiculo_id, hardware, desp_fallido, estado, origen, recibido',
+  cierres: 'id, clave, version, num_inst, cliente, direccion, fecha_cierre, equipo_wizard, equipo_id, vehiculo_id, hardware, desp_fallido, estado, origen, recibido, datos_wizard, holded, material_especial, material_revisado',
+  cierre_versiones: 'id, cierre_id, n, origen, documento, recibido, diferencia',
   pendientes: 'id, ts, tipo, sku, cantidad, motivo, referencia, series, operario, estado, resuelto_por, nota_resolucion, vehiculo_id',
 };
 
@@ -56,7 +57,9 @@ export function aEstado(t: Tablas, base: Pick<Estado, 'cesta' | 'seq'>, operador
   const portalEnlaces: EnlacePortal[] = (t.portal_enlaces || []).map(e => ({ tecnico: e.tecnico_id, entrega: e.entrega_id ?? undefined, creado: ms(e.creado), creadoPor: e.creado_por, revocado: e.revocado ? ms(e.revocado) : undefined }));
   const copias: CopiaEntrega[] = (t.copias_entrega || []).map(c => ({ id: c.id, entrega: c.entrega_id, canal: c.canal, destino: c.destino || '', ts: ms(c.ts), operator: c.operario }));
   const cierres: CierreApp[] = (t.cierres || []).map(c => ({ id: c.id, clave: c.clave, version: c.version, numInst: c.num_inst, cliente: c.cliente, direccion: c.direccion, fecha: ms(c.fecha_cierre),
-    equipoWizard: c.equipo_wizard, equipo: c.equipo_id ?? undefined, vehiculo: c.vehiculo_id ?? undefined, hardware: c.hardware, despFallido: !!c.desp_fallido, estado: c.estado, origen: c.origen, recibido: ms(c.recibido) }))
+    equipoWizard: c.equipo_wizard, equipo: c.equipo_id ?? undefined, vehiculo: c.vehiculo_id ?? undefined, hardware: c.hardware, despFallido: !!c.desp_fallido, estado: c.estado, origen: c.origen, recibido: ms(c.recibido),
+    datosWizard: c.datos_wizard ?? undefined, holded: c.holded ?? undefined, materialEspecial: c.material_especial || '', materialRevisado: c.material_revisado !== false,
+    versiones: (t.cierre_versiones || []).filter(v => v.cierre_id === c.id).map(v => ({ n: v.n, origen: v.origen, documento: v.documento || '', recibido: ms(v.recibido), diferencia: (v.diferencia || []).map((d: Fila) => ({ sku: d.sku, unidades: n(d.unidades) })) })).sort((x, y) => x.n - y.n) }))
     .sort((a, b) => b.fecha - a.fecha);
   const lineasCierre: LineaCierre[] = (t.cierre_lineas || []).map(l => ({ id: l.id, cierre: l.cierre_id, campo: l.campo, formula: l.formula, valor: n(l.valor), sku: l.sku ?? undefined, cantidad: n(l.cantidad), estimada: !!l.estimada, estado: l.estado, nota: l.nota || '' }));
   const equivalencias: Equivalencia[] = (t.equivalencias_cierre || []).map(r => ({ id: r.id, campo: r.campo, formula: r.formula, condiciones: r.condiciones || {}, articulos: r.articulos || [], kit: r.kit, estimada: !!r.estimada, activa: !!r.activa, orden: r.orden, nota: r.nota || '', confirmada: !!r.confirmada }))
@@ -64,7 +67,7 @@ export function aEstado(t: Tablas, base: Pick<Estado, 'cesta' | 'seq'>, operador
   const kits: Record<string, ArticuloRegla[]> = Object.fromEntries((t.kits_fijacion || []).map(k => [k.kit, k.articulos || []]));
   const integraciones: Integracion[] = (t.integraciones || []).map(i => ({ id: i.id, nombre: i.nombre, creado: ms(i.creado), creadoPor: i.creado_por, revocado: i.revocado ? ms(i.revocado) : undefined, ultimoUso: i.ultimo_uso ? ms(i.ultimo_uso) : undefined }));
   const configApp = { modoDemo: ca ? !!ca.modo_demo : false, demoBorrada: ca?.demo_borrada ? ms(ca.demo_borrada) : undefined, demoBorradaPor: ca?.demo_borrada_por ?? undefined,
-    kitFijacion: (ca?.kit_fijacion || 'A') as 'A' | 'B' | 'C', aperturaCierres: ca?.apertura_cierres ? ms(ca.apertura_cierres) : undefined };
+    kitFijacion: (ca?.kit_fijacion || 'A') as 'A' | 'B' | 'C', aperturaCierres: ca?.apertura_cierres ? ms(ca.apertura_cierres) : undefined, cargadoresABordoHasta: ca?.cargadores_a_bordo_hasta ? ms(ca.cargadores_a_bordo_hasta) : undefined };
   const tallas = new Map(t.tallas_tecnico.map(x => [x.tecnico_id, { camiseta: x.camiseta ?? undefined, pantalon: x.pantalon ?? undefined, calzado: x.calzado ?? undefined, guantes: x.guantes ?? undefined }]));
   const tecnicos: Tecnico[] = t.tecnicos.filter(x => x.activo).map(x => ({ id: x.id, nombre: x.nombre, rol: x.rol, dni: x.dni_mascara, tallas: tallas.get(x.id), email: x.email ?? undefined, codigo: x.codigo ?? undefined, telefono: x.telefono ?? undefined }));
   const movements: Movimiento[] = t.movimientos.map(m => ({ id: m.id, ts: ms(m.ts), sku: m.sku, type: m.tipo as TipoMov, qty: n(m.cantidad), reason: m.motivo,

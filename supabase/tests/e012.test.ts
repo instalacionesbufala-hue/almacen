@@ -1,6 +1,7 @@
 /* E-012 · Cierres del wizard → consumos del vehículo: token, idempotencia, versión, formatos fraccionados, discrepancias, cargador, fallido */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { normalizarCierre, traducirCierre, type Kits, type Regla } from '../functions/_compartido/cierres';
+import { type Kits, type Regla } from '../functions/_compartido/cierres';
+import { enviarCierre } from './cierreEnvio';
 import { hashToken } from '../functions/_compartido/portal';
 import { ADMIN, ALMACEN, como, falla, nuevaBD, superusuario, uuid, valor, type BD } from './pg';
 
@@ -14,16 +15,11 @@ const REGLAS: Regla[] = [
 ];
 const KITS: Kits = { A: [{ sku: 'BF-FIX-SX6', factor: 1 }] };                 // 1 taco por fijación (bote de 1000)
 const base = { numInst: 'INST-1', esbrainUuid: 'e-1', cliente: 'Cliente inventado', direccion: 'C/ Falsa 1', fechaCierreIso: new Date().toISOString(), equipo: 'Búfala 1', hardware: 'Wallbox Pulsar Plus 22 kW' };
-const lineas = (c: ReturnType<typeof normalizarCierre>) => traducirCierre(c, REGLAS, KITS, 'A');
 const abordo = async (db: BD, veh: string, sku: string) => (await superusuario(db), valor<string | null>(db, 'select unidades::text from stock_vehiculo where vehiculo_id = $1 and sku = $2', [veh, sku]).then(v => Number(v ?? 0)));
 
 describe('cierres del wizard', () => {
   let db: BD, token = '', hash = '';
-  const enviar = async (x: Record<string, unknown>, h = hash) => {
-    const c = normalizarCierre({ ...base, ...x });
-    await db.exec('reset role; set role service_role;');
-    return valor<{ estado: string; cierre: string; version?: number; pendientes?: number }>(db, 'select aplicar_cierre($1, $2::jsonb, $3::jsonb) as r', [h, JSON.stringify(c), JSON.stringify(lineas(c))]);
-  };
+  const enviar = (x: Record<string, unknown>, h = hash) => enviarCierre(db, h, { ...base, ...x }, { reglas: REGLAS, kits: KITS });
   beforeAll(async () => {
     db = await nuevaBD(); await como(db, ADMIN);
     token = (await valor<{ token: string }>(db, 'select crear_integracion($1) as r', ['Wizard de cierres'])).token;
@@ -36,7 +32,7 @@ describe('cierres del wizard', () => {
     expect(await valor(db, 'select token_hash from integraciones')).toBe(hash);
     await como(db, ALMACEN);
     expect(await falla(db, 'select crear_integracion($1)', ['x'])).toMatch(/Solo el administrador/);
-    expect(await falla(db, 'select aplicar_cierre($1, $2::jsonb, $3::jsonb)', [hash, '{}', '[]'])).toMatch(/permission denied/);
+    expect(await falla(db, 'select aplicar_cierre($1, $2::jsonb, $3::jsonb, $4::jsonb)', [hash, '{}', '[]', '{}'])).toMatch(/permission denied/);
   });
   it('consume del VEHÍCULO del equipo (nunca del almacén), con formatos fraccionados y el cargador sin serie', async () => {
     const almacenAntes = await valor<string>(db, "select stock::text from productos where sku = 'CAB-RZ1K-5G6'");
@@ -54,13 +50,13 @@ describe('cierres del wizard', () => {
   });
   it('lo que deja el vehículo en negativo se registra igual y se marca como discrepancia', async () => {
     await superusuario(db);
-    expect(await valor(db, "select estado from cierres where clave = 'uuid:e-1'")).toBe('discrepancia');
-    expect(await valor(db, "select count(*)::int from cierre_lineas l join cierres c on c.id = l.cierre_id where c.clave = 'uuid:e-1' and l.estado = 'discrepancia'")).toBe(3);
+    expect(await valor(db, "select estado from cierres where clave = 'inst:INST-1'")).toBe('discrepancia');
+    expect(await valor(db, "select count(*)::int from cierre_lineas l join cierres c on c.id = l.cierre_id where c.clave = 'inst:INST-1' and l.estado = 'discrepancia'")).toBe(3);
   });
   it('idempotente: reenviar el mismo cierre no descuenta dos veces', async () => {
     expect((await enviar({ tipoLinea: 'manguera', metrosLinea: 20, rj45: 2, pvc32: 3 })).estado).toBe('duplicado');
     expect(await abordo(db, 'V-F01', 'CAB-RZ1K-5G6')).toBe(130);
-    // sin esbrainUuid, la clave es numInst + fecha
+    // E-026: la clave es la instalación (numInst), venga o no con UUID
     const f = '2030-01-01T10:00:00Z';
     await enviar({ esbrainUuid: '', numInst: 'INST-2', fechaCierreIso: f, tipoLinea: 'manguera', metrosLinea: 5, hardware: '' });
     expect((await enviar({ esbrainUuid: '', numInst: 'INST-2', fechaCierreIso: f, tipoLinea: 'manguera', metrosLinea: 5, hardware: '' })).estado).toBe('duplicado');
@@ -73,16 +69,16 @@ describe('cierres del wizard', () => {
     expect(await abordo(db, 'V-F01', 'WBX-PULSAR-22')).toBe(1);                   // el cargador no se descuenta otra vez
     await superusuario(db);
     expect(await valor(db, "select count(*)::int from movimientos where motivo = 'Corrección de cierre' and sku = 'CAB-RZ1K-5G6'")).toBe(1);
-    expect((await enviar({ version: 1, tipoLinea: 'manguera', metrosLinea: 99 })).estado).toBe('duplicado');   // una versión vieja no cambia nada
+    expect((await enviar({ version: 1, tipoLinea: 'manguera', metrosLinea: 99 })).estado).toBe('obsoleto');    // una versión vieja no cambia nada
   });
   it('desplazamiento fallido: queda registrado, sin consumo', async () => {
-    const r = await enviar({ esbrainUuid: 'e-fallido', despFallido: true, tipoLinea: 'manguera', metrosLinea: 50 });
+    const r = await enviar({ numInst: 'INST-F', esbrainUuid: 'e-fallido', despFallido: true, tipoLinea: 'manguera', metrosLinea: 50 });
     expect(r.estado).toBe('fallido');
     await superusuario(db);
     expect(await valor(db, 'select count(*)::int from movimientos where cierre_id = $1', [r.cierre])).toBe(0);
   });
   it('cargador no reconocido y partidas sin equivalencia: el cierre queda parcial y el administrador resuelve', async () => {
-    const r = await enviar({ esbrainUuid: 'e-3', hardware: 'Marca desconocida', canaleta: 4 });
+    const r = await enviar({ numInst: 'INST-3', esbrainUuid: 'e-3', hardware: 'Marca desconocida', canaleta: 4 });
     expect(r).toMatchObject({ estado: 'parcial', pendientes: 2 });
     await como(db, ADMIN);
     const id = await valor<string>(db, "select id from cierre_lineas where cierre_id = $1 and campo = 'hardware'", [r.cierre]);
@@ -93,7 +89,7 @@ describe('cierres del wizard', () => {
   it('equipo sin vehículo: se guarda sin consumir; al asignarle vehículo se reprocesa', async () => {
     await como(db, ADMIN);
     await db.query('select guardar_equipo($1::jsonb)', [JSON.stringify({ id: 'F09', nombre: 'Búfala 9' })]);
-    const r = await enviar({ esbrainUuid: 'e-9', equipo: 'Búfala 9', tipoLinea: 'manguera', metrosLinea: 5, hardware: '' });
+    const r = await enviar({ numInst: 'INST-9', esbrainUuid: 'e-9', equipo: 'Búfala 9', tipoLinea: 'manguera', metrosLinea: 5, hardware: '' });
     expect(r.estado).toBe('sin_vehiculo');
     await como(db, ADMIN);
     await db.query('select asignar_vehiculo($1, $2)', ['V-F03', 'F09']);
@@ -106,7 +102,7 @@ describe('cierres del wizard', () => {
   it('los cierres anteriores a la apertura del inventario se ignoran', async () => {
     await como(db, ADMIN);
     await db.query('select config_cierres($1, $2)', ['A', new Date().toISOString()]);
-    const r = await enviar({ esbrainUuid: 'e-viejo', fechaCierreIso: '2025-01-01T10:00:00Z', tipoLinea: 'manguera', metrosLinea: 5 });
+    const r = await enviar({ numInst: 'INST-VIEJO', esbrainUuid: 'e-viejo', fechaCierreIso: '2025-01-01T10:00:00Z', tipoLinea: 'manguera', metrosLinea: 5 });
     expect(r.estado).toBe('ignorado');
   });
   it('token revocado: rechazado', async () => {
@@ -114,8 +110,8 @@ describe('cierres del wizard', () => {
     const id = await valor<string>(db, 'select id from integraciones limit 1');
     await db.query('select revocar_integracion($1)', [id]);
     await db.exec('reset role; set role service_role;');
-    expect(await falla(db, 'select aplicar_cierre($1, $2::jsonb, $3::jsonb)', [hash, JSON.stringify({ ...base, esbrainUuid: 'e-x' }), '[]'])).toMatch(/revocada/);
-    expect(await falla(db, 'select aplicar_cierre($1, $2::jsonb, $3::jsonb)', ['0'.repeat(64), JSON.stringify(base), '[]'])).toMatch(/no válida/);
+    expect(await falla(db, 'select aplicar_cierre($1, $2::jsonb, $3::jsonb, $4::jsonb)', [hash, JSON.stringify({ ...base, esbrainUuid: 'e-x' }), '[]', '{}'])).toMatch(/revocada/);
+    expect(await falla(db, 'select aplicar_cierre($1, $2::jsonb, $3::jsonb, $4::jsonb)', ['0'.repeat(64), JSON.stringify(base), '[]', '{}'])).toMatch(/no válida/);
   });
 });
 

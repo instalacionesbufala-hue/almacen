@@ -179,13 +179,18 @@ export interface StockVehiculo { vehiculo: string; sku: string; unidades: number
 export type EstadoCierre = 'aplicado' | 'parcial' | 'discrepancia' | 'fallido' | 'ignorado' | 'sin_vehiculo';
 export interface CierreApp {
   id: string; clave: string; version: number; numInst: string; cliente: string; direccion: string; fecha: number; equipoWizard: string;
-  equipo?: string; vehiculo?: string; hardware: string; despFallido: boolean; estado: EstadoCierre; origen: 'integracion' | 'historico'; recibido: number;
-  /** datos originales del wizard (en local; en la nube se piden al servidor cuando hacen falta: probar o recalcular) */
+  equipo?: string; vehiculo?: string; hardware: string; despFallido: boolean; estado: EstadoCierre; origen: 'integracion' | 'historico' | 'holded'; recibido: number;
+  /** datos EFECTIVOS (wizard + partidas de la prefactura; en local; en la nube se piden al servidor cuando hacen falta: probar o recalcular) */
   datos?: Record<string, unknown>;
+  /** E-026: últimos datos del wizard o del histórico, última prefactura de Holded, material especial y versiones */
+  datosWizard?: Record<string, unknown>; holded?: { documento: string; fechaAprobacion: string; lineas: Record<string, number> };
+  materialEspecial?: string; materialRevisado?: boolean; versiones?: VersionCierre[];
 }
+export interface VersionCierre { n: number; origen: string; documento: string; recibido: number; diferencia: { sku: string; unidades: number }[] }
 export interface LineaCierre {
   id: string; cierre: string; campo: string; formula: string; valor: number; sku?: string; cantidad: number; estimada: boolean;
-  estado: 'aplicada' | 'discrepancia' | 'sin_equivalencia' | 'pendiente' | 'resuelta'; nota: string;
+  /** E-026: no_entregado = cargador instalado que no salió del almacén gestionado (antes del 05/10): no se descuenta */
+  estado: 'aplicada' | 'discrepancia' | 'sin_equivalencia' | 'pendiente' | 'resuelta' | 'no_entregado'; nota: string;
 }
 export interface ArticuloRegla { sku: string | null; factor: number; nombre?: string }
 export interface Equivalencia {
@@ -302,7 +307,8 @@ export interface Estado {
   vehiculos: Vehiculo[];
   asignaciones: Asignacion[];
   aBordo: StockVehiculo[];
-  configApp: { modoDemo: boolean; demoBorrada?: number; demoBorradaPor?: string; kitFijacion?: 'A' | 'B' | 'C'; aperturaCierres?: number };
+  configApp: { modoDemo: boolean; demoBorrada?: number; demoBorradaPor?: string; kitFijacion?: 'A' | 'B' | 'C'; aperturaCierres?: number;
+    /** E-026: hasta esta fecha, los cargadores solo se descuentan si constan a bordo */ cargadoresABordoHasta?: number };
   /** E-012: cierres del wizard, sus líneas traducidas, equivalencias, kits de fijación e integraciones (token del Apps Script) */
   cierres: CierreApp[];
   /** E-016: categorías configurables, artículos archivados (fusionados en otro) y propuestas de cambio de ficha del almacén */

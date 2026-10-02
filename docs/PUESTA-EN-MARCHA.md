@@ -334,6 +334,15 @@ Cada cierre que un equipo hace con el wizard (`cierre-esbrain.html`) descuenta d
   - Las líneas **por elegir** (cable de datos con un cargador que no es V2C ni Policharger, o un cargador no reconocido) las resuelves ahí mismo eligiendo el artículo.
   - **Vehículos → Recontar**: el almacén cuenta lo que hay a bordo y tú validas las diferencias en tu bandeja.
 - [ ] 14.8. Si el token se filtra, **Revocar** en Integraciones y crea otro (paso 14.3 y 14.4.1).
+- [ ] 14.9. **Una instalación = un cierre (E-026).** El cierre se identifica por el **n.º de instalación** (`numInst`, el n.º de presupuesto). Si la misma instalación llega en directo, por el histórico o con la prefactura de Holded, es **un solo cierre con varias versiones** y solo se aplica la diferencia. En **Cierres** se ven las versiones con su origen y lo que cambió cada una ("+2 Caja registro 100x100").
+- [ ] 14.10. **Orden de los pasos de esta semana (importante):**
+  1. **Primero** se despliega E-026 (ya hecho).
+  2. **Después**, una sola vez, el histórico: en el editor de Apps Script ejecuta **`cargarHistoricoRegistro`** (o `cargarHistoricoAlAlmacen` si tu proyecto aún tiene esa versión). Reenviarlo no duplica nada, pero no hace falta repetirlo.
+  3. **Después del histórico**, el lunes 05/10: el **recuento de las furgonetas** (Vehículos → Recontar). Si se hace antes, los cierres del histórico descontarían sobre lo ya contado.
+- [ ] 14.11. **Cargadores hasta el 05/10:** en **Configuración → Integraciones y cierres**, *Hasta esta fecha, descontar cargadores solo si constan a bordo* (por defecto **05/10/2026 00:00**). Antes de esa fecha, un cargador (o material en custodia) que el almacén no entregó a esa furgoneta **no se descuenta**: la línea queda como *no entregado por el almacén* y el informe del socio lo recoge en **"Instalado (antes de la gestión del almacén)"**. Se comprueba al procesar el cierre: si lo entregaste después de la hora del cierre, se descuenta igual. El resto del material se descuenta siempre.
+- [ ] 14.12. **Material especial:** si el calendario trae *MATERIAL ESPECIAL* (p. ej. "SÍ — 1× CUADRO PROTECCION VE…"), el cierre sale en tu **bandeja** como *Revisar material especial*. No se descuenta solo: añade a mano lo que corresponda y pulsa **Revisado**.
+- [ ] 14.13. **Prefactura de Holded:** cuando un presupuesto pasa a **aprobado**, el Apps Script enviará su prefactura (el chat prepara esa parte). Sus partidas (`cajaReg`, `metrosLinea`…) **sustituyen** a las del cierre y se aplica la diferencia; tipo de línea, sección, cargador, equipo y fecha se conservan. Si una partida no tiene artículo (por ejemplo la caja de registro), queda **sin equivalencia** hasta que lo des de alta y le pongas uno.
+
 
 ## 15. Corregir la primera carga (E-016)
 

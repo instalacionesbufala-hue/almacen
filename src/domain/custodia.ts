@@ -68,5 +68,10 @@ export function datosInformeCustodia(S: Estado, propietario: string, desde: numb
     productos: prods.map(p => ({ sku: p.sku, nombre: p.name, unidad: UNIT[p.unit], stock: p.stock, enVehiculos: redondea(stockTotal(S, p) - p.stock), minimo: p.min, codigoModelo: p.supplierRef, conSerie: false })),
     movimientos: S.movements.filter(m => skus.has(m.sku)).map(m => ({ ts: m.ts, sku: m.sku, tipo: m.type, cantidad: m.qty, motivo: m.reason, referencia: m.ref, series: [], operario: m.operator, equipo: m.equipo, vehiculo: m.vehiculo ? nombreVehiculo(S, m.vehiculo) : undefined })),
     actas: S.actas.filter(a => a.propietario === propietario).map(a => ({ numero: a.numero || 'pendiente', ts: a.ts, representante: a.representante, lineas: a.lineas })),
+    // E-026: instalados por un cierre sin haber salido del almacén gestionado (no se descontaron)
+    instaladosSinGestion: S.lineasCierre.filter(l => l.estado === 'no_entregado' && l.sku && skus.has(l.sku)).flatMap(l => {
+      const c = S.cierres.find(x => x.id === l.cierre); if (!c) return [];
+      return [{ ts: c.fecha, sku: l.sku!, cantidad: redondea(l.cantidad / (S.products.find(p => p.sku === l.sku)?.contenido || 1)), referencia: [c.numInst, c.cliente].filter(Boolean).join(' · '), equipo: c.equipoWizard }];
+    }),
   };
 }

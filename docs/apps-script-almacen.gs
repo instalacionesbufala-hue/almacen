@@ -15,7 +15,7 @@
  */
 
 // Solo lo que el almacén necesita (sin fotos, vídeos ni actas)
-var ALMACEN_CAMPOS = ['numInst', 'esbrainUuid', 'cliente', 'direccion', 'fechaCierreIso', 'fechaIso', 'equipo', 'hardware', 'despFallido', 'version',
+var ALMACEN_CAMPOS = ['numInst', 'esbrainUuid', 'cliente', 'direccion', 'fechaCierreIso', 'fechaIso', 'equipo', 'hardware', 'materialEspecial', 'despFallido', 'version',
   'tipoLinea', 'fase', 'seccion', 'cableDatos', 'metrosLinea', 'metrosUtp', 'rj45', 'bornasMono', 'bornasTrif',
   'pvc32', 'corr32', 'acero32', 'acero40', 'canaleta', 'sot50', 'sot90',
   'cajaReg', 'caja6', 'caja12', 'caja18', 'cerradura', 'perfTab', 'perfForj', 'pica', 'preinst', 'mag1025', 'mag32', 'mag40'];
@@ -105,7 +105,7 @@ function cargarHistoricoAlAlmacen() {
   for (var i = 0; i < cierres.length; i += 100) {
     var lote = cierres.slice(i, i + 100);
     try {
-      var r = almacenLlamar_({ cierres: lote });
+      var r = almacenLlamar_({ cierres: lote, origen: 'historico' });   // E-026: misma instalación = mismo cierre (no duplica lo llegado en directo)
       total.enviados += lote.length; total.errores += r.errores || 0;
       (r.resultados || []).filter(function (x) { return x.error; }).forEach(function (x) { almacenLog_('ERROR', x.numInst, x.error, null); });
     } catch (e) { total.errores += lote.length; almacenLog_('ERROR', 'lote ' + (i / 100 + 1), e.message || e, null); }

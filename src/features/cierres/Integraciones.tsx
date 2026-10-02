@@ -2,7 +2,7 @@
    apertura, kit de fijación por defecto, tabla de equivalencias (propuesta → confirmar), kits y carga del histórico. */
 import { useRef, useState } from 'react';
 import type { ArticuloRegla } from '../../data/tipos';
-import { cierresDeCsv, condicionesTexto, normalizarCierre, traducirEnApp } from '../../domain/cierres';
+import { cierresDeCsv, condicionesTexto, prepararEnvio } from '../../domain/cierres';
 import { abrirProbar, abrirRegla, ArticulosEditor, FORMULAS, Recalcular } from './Reglas';
 import { fechaHora } from '../../domain/formato';
 import { find, nombreVehiculo, vehiculoDeEquipo } from '../../domain/reglas';
@@ -17,10 +17,14 @@ const URL_CIERRE = modoNube ? `${urlSupabase}/functions/v1/registrar-cierre` : '
 const URL_SCRIPT = 'https://github.com/instalacionesbufala-hue/almacen/blob/main/docs/apps-script-almacen.gs';
 const FORMULA = FORMULAS;
 
+/** "2026-10-05T00:00" en la hora de este dispositivo (para <input type=datetime-local>) */
+const fechaLocal = (ts: number) => { const d = new Date(ts - new Date(ts).getTimezoneOffset() * 60e3); return d.toISOString().slice(0, 16); };
+
 export function Integraciones() {
   const E = useAlmacen(), archivo = useRef<HTMLInputElement>(null);
   const [token, setToken] = useState('');
-  const [conf, setConf] = useState({ kit: E.configApp.kitFijacion || 'A', apertura: E.configApp.aperturaCierres ? new Date(E.configApp.aperturaCierres).toISOString().slice(0, 10) : '' });
+  const [conf, setConf] = useState({ kit: E.configApp.kitFijacion || 'A', apertura: E.configApp.aperturaCierres ? new Date(E.configApp.aperturaCierres).toISOString().slice(0, 10) : '',
+    cargadores: E.configApp.cargadoresABordoHasta ? fechaLocal(E.configApp.cargadoresABordoHasta) : '' });
   const sinConfirmar = E.equivalencias.filter(r => !r.confirmada).length;
   const crearToken = async () => {
     if (!supabase) return;
@@ -33,9 +37,13 @@ export function Integraciones() {
     const filas = cierresDeCsv(await f.text());
     if (!filas.length) return toast('El CSV no tiene cierres (cabeceras con numInst o esbrainUuid).', 'err');
     if (!confirm(`Se enviarán ${filas.length} cierres. Los anteriores a la apertura se ignoran y los repetidos no descuentan dos veces. ¿Seguir?`)) return;
-    let ok = 0;
-    for (const raw of filas) { const c = normalizarCierre(raw); if (ejecutar({ op: 'cierreHistorico', args: { cierre: c, lineas: traducirEnApp(S(), c) } })) ok++; }
-    toast(`${ok} cierres enviados.`, 'ok', 6000);
+    let ok = 0, sin = 0;
+    // E-026: una instalación = un cierre; lo que ya estaba igual no crea versión
+    for (const raw of filas) {
+      try { const env = prepararEnvio(S(), raw, 'historico'); if (env.meta.accion !== 'nueva') { sin++; continue; } if (ejecutar({ op: 'cierreHistorico', args: env })) ok++; }
+      catch (e) { toast(`${String(raw.numInst || '')}: ${(e as Error).message}`, 'err'); }
+    }
+    toast(`${ok} cierres enviados${sin ? ` · ${sin} ya estaban (sin cambios)` : ''}.`, 'ok', 6000);
   };
   return (<div className="flex flex-col gap-4">
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -63,7 +71,9 @@ export function Integraciones() {
           <Campo label="Cierres desde (apertura)"><input type="date" value={conf.apertura} onChange={e => setConf({ ...conf, apertura: e.target.value })} className={`${INP} h-12`} /></Campo>
           <Campo label="Kit de fijación por defecto"><select value={conf.kit} onChange={e => setConf({ ...conf, kit: e.target.value as 'A' })} className={`${INP} h-12`}><option value="A">A · clip + clavo</option><option value="B">B · clip + tornillo + taco</option><option value="C">C · abrazadera + tirafondo + taco</option></select></Campo>
         </div>
-        <button onClick={() => { if (ejecutar({ op: 'configCierres', args: { kit: conf.kit as 'A', apertura: conf.apertura ? Date.parse(conf.apertura) : undefined } })) toast('Guardado.', 'ok'); }} className={`${BTN_S} h-11 self-start px-4`}><Icon n="save" className="ico-18" />Guardar</button>
+        <Campo label="Hasta esta fecha, descontar cargadores solo si constan a bordo"><input type="datetime-local" value={conf.cargadores} onChange={e => setConf({ ...conf, cargadores: e.target.value })} className={`${INP} h-12`} /></Campo>
+        <p className="text-body-sm text-secondary">Antes de esa fecha, un cargador (o material en custodia) que el almacén no entregó a la furgoneta no se descuenta: queda como <i>instalado, no entregado por el almacén</i> y sale así en el informe del socio. Se comprueba al procesar el cierre. Vacío = siempre normal.</p>
+        <button onClick={() => { if (ejecutar({ op: 'configCierres', args: { kit: conf.kit as 'A', apertura: conf.apertura ? Date.parse(conf.apertura) : undefined, cargadoresHasta: conf.cargadores ? new Date(conf.cargadores).getTime() : undefined } })) toast('Guardado.', 'ok'); }} className={`${BTN_S} h-11 self-start px-4`}><Icon n="save" className="ico-18" />Guardar</button>
         <p className="text-body-sm text-secondary">Sin fecha, se ignoran los cierres anteriores al borrado de los datos de ejemplo.</p>
       </div>
     </div>
