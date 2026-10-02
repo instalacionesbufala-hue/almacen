@@ -746,9 +746,43 @@ Hoy el propietario Esmove existe en la tabla `propietarios`, pero **no se pueden
   - con "Cargadores VE" pinchado, pulsar "N por completar" muestra exactamente las N referencias sin mínimo de todas las categorías;
   - hay prueba de la lógica de filtros.
 
+### E-025 · Artículos nuevos visibles en las furgonetas para asignarlos · PENDIENTE
+**Petición del usuario (02/10):** "Si agrego un nuevo artículo en el inventario, que salga en las furgonetas para asignarlo."
+**Decisión ya tomada por el usuario:** todo el material sale del almacén **con entrega firmada** al equipo (E-011/E-017), y **no quiere nada predeterminado**: sin plantillas ni kits de furgoneta. Esto **no** es una dotación objetivo, sino tener a mano todo el catálogo en cada furgoneta.
+
+**Qué hacer**
+- **En Equipos y técnicos → tarjeta del equipo → "A bordo de <matrícula>" → "Ver todo",** un interruptor **"Mostrar todo el catálogo"**:
+  - lista también los artículos con **0 ud** a bordo, incluidos los **recién creados**, ordenados como el `SelectorArticulo` (nombre o referencia) y con buscador;
+  - cada fila tiene **"Asignar"**: abre "Nueva entrega" para **ese equipo** con el artículo ya en la cesta, de modo que el resto del flujo y la firma son los de siempre. Se pueden marcar varios y "Asignar seleccionados".
+- **Al crear un artículo** (a mano, con la cámara, desde un albarán o importando), aparece al momento en esa lista de **todas** las furgonetas, sin hacer nada más. Los borradores y los archivados no salen.
+- **Recuento de furgoneta:** ya admite cualquier artículo (el chat lo cambió en `16a6f1f`: botones "Añadir lo que descuentan los cierres" y "Añadir otro artículo…"). Revisarlo y mantenerlo coherente con lo anterior.
+- **Hecho cuando:** un artículo recién creado aparece con 0 ud en las 3 furgonetas, se asigna a Búfala 2 con "Asignar" y, tras la firma, consta a bordo.
+
 ---
 
 ## Revisión del chat
+
+### 02/10/2026 · Revisión de E-024 y cambios del chat
+Verificado sobre `51767e4`:
+- **393 pruebas en verde** (172 de la app y 221 de la base de datos), `tsc -b` sin errores y build correcto.
+- Instant Box creado y escáner de albaranes en modo documento.
+- Bien razonada la decisión de una detección de bordes propia en lugar de OpenCV.js.
+
+**Cambios del chat:**
+- **`16a6f1f`:** el recuento de furgoneta admite **cualquier artículo**. Antes solo listaba lo que ya constaba a bordo, y el usuario necesita contar todo lo que llevan antes de empezar a abastecerse desde el almacén el lunes 05/10.
+- **`docs/apps-script-almacen.gs` adaptado al backend real del wizard:**
+  - el proyecto **no está unido a la hoja**: usa `SpreadsheetApp.openById(SHEETS_ID)` y `REGISTRO_SHEET_NAME`, no `getActiveSpreadsheet()`;
+  - `doPost` **solo encola**: el cierre se escribe en `procesarEnvio_(datos)` → `escribirEnRegistro_`, y ahí va `enviarAlAlmacen(datos)`, envuelto en `try/catch`;
+  - `almacenLog_` nunca lanza.
+  - El proyecto tiene **más de 50 propiedades**, así que la pantalla de Propiedades es de solo lectura: se guardan con una función temporal (`PropertiesService…setProperties`).
+
+**Decisiones del usuario:**
+- no se ponen teléfonos de los técnicos: el PDF lo comparte él en el grupo de WhatsApp del equipo;
+- las bridas se quedan con la foto de Saltoki.
+
+**Pendiente de diagnóstico:** en producción hay **0 cierres** recibidos y el token figura "sin uso", aunque el usuario ha conectado el Apps Script y lanzado el histórico. Lo revisa el chat con el usuario (registro "Almacén-log" y ejecuciones del Apps Script).
+
+**Orden: E-025.**
 
 ### 02/10/2026 · Chat: nuevas peticiones del usuario y estado de la app real
 En la app real:
