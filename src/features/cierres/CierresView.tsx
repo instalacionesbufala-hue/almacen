@@ -12,7 +12,8 @@ import { usePermisos } from '../../store/permisos';
 import { closeModal, openModal, SheetFoot, SheetHead } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 import { BTN_P, BTN_S, CARD, Icon, INP, LBL, Tag, Vacio } from '../../ui/base';
-import { SelectorArticulo } from '../../ui/selectorArticulo';
+import { OrdenArticulos, SelectorArticulo, usePrefSelector } from '../../ui/selectorArticulo';
+import { ordenarArticulos } from '../../domain/selector';
 import { CargarMas, useMas } from '../../ui/lista';
 
 const ESTADO: Record<EstadoCierre, { t: string; c: string }> = {
@@ -113,8 +114,9 @@ function RecuentoVehiculo({ vehiculo }: { vehiculo: string }) {
   const aBordo = E.aBordo.filter(b => b.vehiculo === vehiculo && b.unidades !== 0).map(b => b.sku);
   const [extra, setExtra] = useState<string[]>([]);
   const [cont, setCont] = useState<Record<string, string>>({});
-  const skus = [...new Set([...aBordo, ...extra])].filter(sku => find(E, sku))
-    .sort((a, b) => find(E, a)!.name.localeCompare(find(E, b)!.name, 'es', { sensitivity: 'base' }));
+  // E-025: mismo orden que los selectores de artículos (A-Z o por referencia, el que tenga elegido el usuario)
+  const orden = usePrefSelector().orden;
+  const skus = ordenarArticulos([...new Set([...aBordo, ...extra])].map(sku => find(E, sku)).filter((p): p is NonNullable<typeof p> => !!p), orden).map(p => p.sku);
   const anadir = (lista: string[]) => { const n = lista.filter(x => !skus.includes(x)); if (n.length) setExtra(e => [...e, ...n]); return n.length; };
   const deCierres = () => {
     const set = new Set<string>();
@@ -142,6 +144,7 @@ function RecuentoVehiculo({ vehiculo }: { vehiculo: string }) {
           <Icon n="playlist_add" className="ico-20" />Añadir lo que descuentan los cierres</button>
         <SelectorArticulo valor={null} onChange={sku => { if (sku) anadir([sku]); }} filtro={x => !skus.includes(x.sku)} placeholder="Añadir otro artículo…" ariaLabel="Añadir un artículo al recuento" className="flex-1" />
       </div>
+      {skus.length > 1 && <OrdenArticulos agrupar={false} />}
       {!skus.length && <Vacio>No consta material a bordo. Añade lo que lleva la furgoneta con los botones de arriba.</Vacio>}
       {skus.map(sku => { const p = find(E, sku)!, teorico = redondea(unidadesABordo(E, vehiculo, sku) / contenidoDe(p)); return (
         <div key={sku} className="flex items-center gap-3 py-2 border-b border-surface-container">

@@ -388,6 +388,7 @@ La primera carga se hizo leyendo los albaranes con la IA y dejó algunas fichas 
   - Al dar de alta material en custodia, **elige el socio** (si solo hay uno activo, sale ya puesto).
   - Custodia tiene una pestaña por socio, con su solicitud de reposición, su informe sin importes y su acta.
 - **Recuadros del inventario** (E-024): al pulsar uno (*N por completar*, *En custodia* o un socio, *Bajo mínimo*) se quitan los demás filtros, se aplica el suyo y la vista baja a la lista. Arriba de la lista sale un chip con el filtro (p. ej. *Sin mínimo ×*) para quitarlo.
+- **Dar material a una furgoneta** (E-025): Equipos → tarjeta del equipo → **Ver todo** → **Mostrar todo el catálogo**. Salen todos los artículos (también los de 0 ud y los recién creados; los borradores y archivados no), con buscador y orden A-Z o por referencia. **Asignar** (o marca varios y **Asignar seleccionados**) abre la entrega para ese equipo con los artículos ya en la cesta: ajusta cantidades y firma como siempre.
 - **Desplegables de artículos** (E-024): todos tienen buscador (nombre, SKU, EAN y códigos alternativos) y van **A-Z**. **Por referencia** los ordena por código; la app lo recuerda.
 
 ---

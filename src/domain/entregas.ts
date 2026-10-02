@@ -137,3 +137,20 @@ export const firmantesDe = (S: Pick<Estado, 'equipos' | 'tecnicos'>, equipo: str
 
 /** Correo válido (el mismo criterio que el servidor) */
 export const emailValido = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim());
+
+/* ---------- E-025 · Asignar artículos a un equipo desde su vehículo (todo el catálogo, también los de 0 ud) ---------- */
+/** Prepara la entrega para ese equipo con los artículos ya en la cesta (luego, el flujo y la firma de siempre).
+    Si la cesta tenía material para OTRO equipo, se vacía antes (la pantalla lo pregunta). */
+export function asignarAEquipo(S: Estado, c: Cesta, equipo: string, skus: string[]): { anadidos: string[]; avisos: string[] } {
+  if (c.equipo !== equipo && c.lineas.length) c.lineas = [];
+  c.equipo = equipo; c.receptor = null; c.paso = 2;
+  const anadidos: string[] = [], avisos: string[] = [];
+  for (const sku of skus) {
+    const p = find(S, sku);
+    if (!p || p.borrador || p.archivado) { avisos.push(`${sku}: no se puede entregar (no está en el catálogo activo)`); continue; }
+    if (c.lineas.some(l => l.sku === sku)) { anadidos.push(sku); continue; }       // ya estaba: no se suma otra vez
+    const r = anadir(S, c, sku);
+    if (r.ok) anadidos.push(r.sku || sku); else avisos.push(`${p.name}: ${r.aviso || 'no se ha podido añadir'}`);
+  }
+  return { anadidos, avisos };
+}

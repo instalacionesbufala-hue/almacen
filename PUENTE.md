@@ -746,7 +746,7 @@ Hoy el propietario Esmove existe en la tabla `propietarios`, pero **no se pueden
   - con "Cargadores VE" pinchado, pulsar "N por completar" muestra exactamente las N referencias sin mínimo de todas las categorías;
   - hay prueba de la lógica de filtros.
 
-### E-025 · Artículos nuevos visibles en las furgonetas para asignarlos · PENDIENTE
+### E-025 · Artículos nuevos visibles en las furgonetas para asignarlos · HECHO
 **Petición del usuario (02/10):** "Si agrego un nuevo artículo en el inventario, que salga en las furgonetas para asignarlo."
 **Decisión ya tomada por el usuario:** todo el material sale del almacén **con entrega firmada** al equipo (E-011/E-017), y **no quiere nada predeterminado**: sin plantillas ni kits de furgoneta. Esto **no** es una dotación objetivo, sino tener a mano todo el catálogo en cada furgoneta.
 
@@ -2318,3 +2318,26 @@ En "Para el día a día" se explican el ajuste y el aviso.
   - una instalación = un cierre;
   - el orden: **E-026 desplegado → histórico una sola vez → recuento de furgonetas el lunes**;
   - los cargadores hasta el 05/10, el material especial y Holded.
+
+### 02/10/2026 · E-025 · HECHO
+- **Dónde está:** Equipos → tarjeta → **Ver todo** abre el stock a bordo del vehículo. Ahí está el interruptor **"Mostrar todo el catálogo"**.
+- **Qué lista:** todo el catálogo, también lo que va con **0 ud a bordo** y lo recién creado.
+  - Los **borradores y archivados no salen**.
+  - Mismo buscador y orden que `SelectorArticulo`: nombre, SKU, EAN y códigos alternativos; A-Z o por referencia.
+  - Cada fila muestra lo que hay a bordo y en el almacén.
+- **Asignar:**
+  - por fila **"Asignar"**, o casillas y **"Asignar seleccionados"**;
+  - prepara la entrega **para ese equipo** con los artículos ya en la cesta y abre "Entrega de material" en el paso Material; cantidades, quién recoge y firma, como siempre (`asignarAEquipo` en `domain/entregas.ts`);
+  - si la cesta tenía material de **otro** equipo, pregunta antes de vaciarla;
+  - lo que no tiene stock en el almacén se avisa en lugar de añadirse.
+- **Sin equipo** (vehículo en taller), el vehículo enseña la lista pero no deja asignar.
+- **No hace falta nada al crear un artículo:** la lista sale del catálogo, así que uno nuevo (a mano, con la cámara, desde un albarán o importado) aparece al momento en todas las furgonetas.
+- **Recuento de furgoneta** (cambio del chat `16a6f1f`): revisado. Su lista usa ahora el **mismo orden** que los selectores (A-Z o por referencia, con el conmutador). Lo demás no cambia.
+- **"Cargar material"** del vehículo usa el mismo camino: equipo puesto y técnico elegido al firmar (E-017). Antes ponía el primer técnico como receptor.
+
+**Pruebas: 412 en verde** (+3):
+- `e025.test.ts`: el artículo recién creado está en la lista con 0 ud en las 3 furgonetas, se asigna a Búfala 2 y, tras preparar y firmar la entrega, consta a bordo;
+- también: borradores fuera, varios a la vez, cambio de equipo, sin duplicar y sin stock.
+- Comprobado en el navegador (demo): "Mostrar todo el catálogo" con 36 artículos, 2 seleccionados, y "Asignar seleccionados" abre la entrega de Búfala 2 con los 2 en la cesta.
+
+**E-027** (roles y permisos, que el chat añadió mientras tanto) **queda PENDIENTE**: no estaba en lo pedido.

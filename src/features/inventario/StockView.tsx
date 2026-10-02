@@ -1,10 +1,10 @@
 /* Stock general: panel de escritorio, inventario móvil y stock a bordo de un vehículo (E-013: sin precios ni estanterías) */
 import type { Estado, Producto } from '../../data/tipos';
 import { MARCA, UNIT, catDe, categoriasActivas, idsCategoriasActivas } from '../../data/catalogo';
-import { contenidoTxt, critical, esCustodia, find, nombreVehiculo, ORD, qtyTxt, searchProducts, status, stockDeVehiculo, stockTotal } from '../../domain/reglas';
+import { contenidoTxt, critical, esCustodia, find, nombreVehiculo, ORD, qtyTxt, searchProducts, status, stockDeVehiculo, stockTotal, unidadesABordo } from '../../domain/reglas';
 import { esHoy, fechaHora, hace, hoyISO, initials, num, redondea } from '../../domain/formato';
 import { descargarCsv } from '../../domain/csv';
-import { S, ultimoGuardado, useAlmacen } from '../../store/almacen';
+import { guardar, S, ultimoGuardado, useAlmacen } from '../../store/almacen';
 import { ir, setUI, useEsEscritorio, useUI } from '../../store/ui';
 import { toast } from '../../ui/toast';
 import { BTN_P, BTN_S, BTN_T, CARD, INP, Icon, Kpi, LBL, Pill, ST, Tag, TagCustodia, Tile } from '../../ui/base';
@@ -16,7 +16,9 @@ import { iaEtiqueta } from '../albaranes/lector';
 import { abrirAltaCamara } from '../altaCamara/AltaCamara';
 import { agruparPorCategoria, filasCsvInventario, htmlImprimirInventario, ordenarInventario, siguienteOrden, type ColOrden } from '../../domain/listaInventario';
 import { BotonSubir, useProgresivo } from '../../ui/lista';
-import { Fragment } from 'react';
+import { Fragment, useState } from 'react';
+import { asignarAEquipo } from '../../domain/entregas';
+import { OrdenArticulos, useListaArticulos } from '../../ui/selectorArticulo';
 import { chipsFiltros, EST_SIN_MINIMO, filtroDeRecuadro, propDeSocio, SIN_FILTROS, textoEstado, textoPropiedad, type FiltrosInv, type Recuadro } from '../../domain/filtrosInventario';
 import { colorSocio, desgloseCustodia, sociosActivos } from '../../domain/socios';
 
@@ -317,6 +319,7 @@ function CardMob({ p, pedido }: { p: Producto; pedido: boolean }) {
 
 function VanView() {
   const E = useAlmacen(), u = useUI(), v = E.vehiculos.find(x => x.id === u.almacen);
+  const [todo, setTodo] = useState(false);
   if (!v) { setTimeout(() => setUI({ almacen: 'central' })); return null; }
   const eq = E.equipos.find(e => e.vehiculo === v.id), vs = stockDeVehiculo(E, v.id);
   return (
@@ -325,15 +328,64 @@ function VanView() {
         <div><span className={LBL}>Stock a bordo · entregado − consumido − devuelto</span><h1 className="text-headline-lg-mobile lg:text-headline-lg font-bold">{v.matricula}{v.modelo ? ` · ${v.modelo}` : ''}</h1>
           <p className="text-secondary">{eq ? `${eq.nombre} · ${eq.tecnicos.map(t => E.tecnicos.find(x => x.id === t)?.nombre).join(' + ') || 'sin técnicos'}` : 'Sin equipo asignado (p. ej. en taller)'}</p></div>
         <div className="flex gap-2"><button onClick={() => setUI({ almacen: 'central' })} className={`${BTN_S} px-4 h-12`}><Icon n="warehouse" className="ico-20" />Volver al almacén</button>
-          {eq && <button onClick={() => { E.cesta.equipo = eq.id; E.cesta.receptor = eq.tecnicos[0] ?? null; E.cesta.paso = eq.tecnicos[0] ? 2 : 1; ir('entregas'); }} className={`${BTN_P} px-4 h-12`}><Icon n="add_shopping_cart" className="ico-20" />Cargar material</button>}</div>
+          {eq && <button onClick={() => asignar(eq.id, [])} className={`${BTN_P} px-4 h-12`}><Icon n="add_shopping_cart" className="ico-20" />Cargar material</button>}</div>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">{vs.length ? vs.map(x => { const p = find(E, x.sku)!; return (
+      {/* E-025: todo el catálogo, también lo que lleva 0 ud y lo recién creado, para asignarlo con una entrega firmada */}
+      <label className="inline-flex items-center gap-3 self-start bg-surface-container-low rounded-xl px-4 h-12 cursor-pointer font-semibold">
+        <input type="checkbox" checked={todo} onChange={e => setTodo(e.target.checked)} className="w-5 h-5 accent-primary" />Mostrar todo el catálogo</label>
+      {todo ? <CatalogoVehiculo vehiculo={v.id} equipo={eq?.id} />
+        : <div className="grid grid-cols-1 md:grid-cols-2 gap-3">{vs.length ? vs.map(x => { const p = find(E, x.sku)!; return (
         <article key={x.sku} className={`${CARD} p-4 flex gap-3 items-center ${x.qty < 0 ? 'ring-1 ring-error/40' : ''}`}><Tile p={p} />
           <div className="flex-1 min-w-0"><div className="font-mono text-label-sm text-secondary">{p.sku}</div><div className="font-semibold truncate">{p.name}</div>
             {contenidoTxt(p) && <div className="font-mono text-label-sm text-secondary">{num(x.unidades)} ud sueltas</div>}{x.qty < 0 && <div className="text-body-sm text-error">Discrepancia: consta más gastado que entregado</div>}</div>
           <div className="text-right"><div className={`text-headline-md font-bold ${x.qty < 0 ? 'text-error' : ''}`}>{qtyTxt(p, x.qty)}</div>
             {x.qty >= 1 && <button onClick={() => abrirMovimiento(p.sku, 'devolucion', { vehiculo: v.id, qty: Math.floor(x.qty), lock: true, ref: `Devuelto de ${v.matricula}` })} className="font-mono text-label-sm text-primary h-10">Devolver ↩</button>}</div>
-        </article>); }) : <div className={`${CARD} p-8 text-center text-secondary md:col-span-2`}>Este vehículo no lleva material del almacén.</div>}</div>
+        </article>); }) : <div className={`${CARD} p-8 text-center text-secondary md:col-span-2`}>Este vehículo no lleva material del almacén. Activa <b>Mostrar todo el catálogo</b> para asignarle artículos.</div>}</div>}
     </div>
   );
+}
+
+/** E-025 · Prepara la entrega para el equipo con esos artículos en la cesta y abre "Nueva entrega" (la firma es la de siempre) */
+function asignar(equipo: string, skus: string[]) {
+  const E = S(), c = E.cesta;
+  if (c.lineas.length && c.equipo && c.equipo !== equipo) {
+    const otro = E.equipos.find(x => x.id === c.equipo)?.nombre || c.equipo;
+    if (!confirm(`La entrega en curso es para ${otro} (${c.lineas.length} artículo${c.lineas.length === 1 ? '' : 's'}). ¿Vaciarla y empezar una para este equipo?`)) return;
+  }
+  const r = asignarAEquipo(E, c, equipo, skus);
+  guardar();
+  if (r.avisos.length) toast(r.avisos.join(' · '), 'warn', 7000);
+  else if (skus.length) toast(`${r.anadidos.length} artículo${r.anadidos.length === 1 ? '' : 's'} en la entrega: revisa las cantidades y firma.`, 'ok');
+  ir('entregas');
+}
+
+function CatalogoVehiculo({ vehiculo, equipo }: { vehiculo: string; equipo?: string }) {
+  const E = useAlmacen();
+  const [q, setQ] = useState(''), [sel, setSel] = useState<string[]>([]);
+  const { lista } = useListaArticulos(q);                                  // sin borradores; los archivados no están en el catálogo
+  const { visibles, centinela } = useProgresivo(lista, q);
+  const alternar = (sku: string) => setSel(x => (x.includes(sku) ? x.filter(y => y !== sku) : [...x, sku]));
+  return (<section className="flex flex-col gap-3">
+    <div className="flex flex-wrap items-center gap-2">
+      <div className="relative flex-1 min-w-[220px]"><Icon n="search" className="absolute left-3 top-1/2 -translate-y-1/2 text-outline ico-20" />
+        <input value={q} onChange={e => setQ(e.target.value)} type="search" placeholder="Nombre, SKU, EAN o código" className={`${INP} h-12 pl-10`} aria-label="Buscar en el catálogo" /></div>
+      <OrdenArticulos agrupar={false} />
+    </div>
+    {!equipo && <p className="text-body-sm text-amber-800 bg-amber-50 rounded-lg p-3">Este vehículo no tiene equipo: asígnalo a un equipo para entregarle material.</p>}
+    {sel.length > 0 && equipo && <div className="sticky top-16 z-10 flex flex-wrap items-center gap-2 bg-primary-fixed rounded-xl p-3 shadow-sm">
+      <span className="flex-1 font-semibold">{sel.length} seleccionado{sel.length === 1 ? '' : 's'}</span>
+      <button onClick={() => setSel([])} className={`${BTN_S} h-11 px-3`}>Quitar selección</button>
+      <button onClick={() => asignar(equipo, sel)} className={`${BTN_P} h-11 px-4`}><Icon n="add_shopping_cart" className="ico-20" />Asignar seleccionados</button></div>}
+    <p className="font-mono text-label-sm text-secondary">{lista.length} artículos del catálogo · a bordo y sin cargar</p>
+    <div className="flex flex-col gap-2">{visibles.map(p => { const ud = unidadesABordo(E, vehiculo, p.sku), q2 = redondea(ud / (p.contenido || 1)), marcado = sel.includes(p.sku); return (
+      <div key={p.sku} className={`${CARD} p-3 flex items-center gap-3 ${marcado ? 'ring-2 ring-primary' : ''}`}>
+        {equipo && <input type="checkbox" checked={marcado} onChange={() => alternar(p.sku)} className="w-6 h-6 accent-primary shrink-0" aria-label={`Seleccionar ${p.name}`} />}
+        <Tile p={p} size="w-11 h-11" />
+        <button onClick={() => abrirFicha(p.sku)} className="flex-1 min-w-0 text-left"><div className="font-semibold truncate">{p.name}</div>
+          <div className="font-mono text-label-sm text-secondary">{p.sku} · almacén {qtyTxt(p, p.stock)}</div></button>
+        <div className={`text-right whitespace-nowrap font-semibold ${q2 < 0 ? 'text-error' : q2 === 0 ? 'text-secondary' : ''}`}>{qtyTxt(p, q2)}<div className={LBL}>a bordo</div></div>
+        {equipo && <button onClick={() => asignar(equipo, [p.sku])} className={`${BTN_S} h-11 px-3 shrink-0`}>Asignar</button>}
+      </div>); })}</div>
+    <div ref={centinela} />
+  </section>);
 }
