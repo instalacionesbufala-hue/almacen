@@ -15,7 +15,7 @@
  */
 
 // Solo lo que el almacén necesita (sin fotos, vídeos ni actas)
-var ALMACEN_CAMPOS = ['numInst', 'esbrainUuid', 'cliente', 'direccion', 'fechaCierreIso', 'fechaIso', 'equipo', 'hardware', 'materialEspecial', 'despFallido', 'version',
+var ALMACEN_CAMPOS = ['materialEspecial', 'numInst', 'esbrainUuid', 'cliente', 'direccion', 'fechaCierreIso', 'fechaIso', 'equipo', 'hardware', 'despFallido', 'version',
   'tipoLinea', 'fase', 'seccion', 'cableDatos', 'metrosLinea', 'metrosUtp', 'rj45', 'bornasMono', 'bornasTrif',
   'pvc32', 'corr32', 'acero32', 'acero40', 'canaleta', 'sot50', 'sot90',
   'cajaReg', 'caja6', 'caja12', 'caja18', 'cerradura', 'perfTab', 'perfForj', 'pica', 'preinst', 'mag1025', 'mag32', 'mag40'];
@@ -66,6 +66,7 @@ function almacenLog_(estado, numInst, detalle, datos) {
 function enviarAlAlmacen(datos) {
   var c = almacenRecortar_(datos || {});
   try {
+    almacenCompletarDesdeCalendario_(c);   // modelo del cargador y material especial del calendario si el cierre no los trae
     var r = almacenLlamar_(c);
     if (r && r.estado && r.estado !== 'aplicado' && r.estado !== 'duplicado') almacenLog_(r.estado, c.numInst, JSON.stringify(r), null);
     return r;
@@ -105,11 +106,122 @@ function cargarHistoricoAlAlmacen() {
   for (var i = 0; i < cierres.length; i += 100) {
     var lote = cierres.slice(i, i + 100);
     try {
-      var r = almacenLlamar_({ cierres: lote, origen: 'historico' });   // E-026: misma instalación = mismo cierre (no duplica lo llegado en directo)
+      var r = almacenLlamar_({ cierres: lote, origen: 'historico' });   // E-026: misma instalación = mismo cierre
       total.enviados += lote.length; total.errores += r.errores || 0;
       (r.resultados || []).filter(function (x) { return x.error; }).forEach(function (x) { almacenLog_('ERROR', x.numInst, x.error, null); });
     } catch (e) { total.errores += lote.length; almacenLog_('ERROR', 'lote ' + (i / 100 + 1), e.message || e, null); }
   }
+  almacenLog_('HISTORICO', '', JSON.stringify(total), null);
+  Logger.log(total);
+}
+
+/* ===== Chat (02/10) · Modelo del cargador desde el calendario (hoja "🔗 ESBRAIN") =====
+   El cierre y la hoja "Registro" no siempre traen el modelo del cargador (V2C 5 m, V2C 10 m, Policharger…).
+   El calendario sí: columnas "Nº PRESUPUESTO", "HARDWARE" y "MATERIAL ESPECIAL". */
+var ALMACEN_CAL_CACHE_ = null;
+function almacenCalendario_() {
+  if (ALMACEN_CAL_CACHE_) return ALMACEN_CAL_CACHE_;
+  var mapa = {};
+  try {
+    var hoja = (typeof _hojaEsbrain_ === 'function') ? _hojaEsbrain_() : almacenLibro_().getSheetByName(typeof ESBRAIN_SHEET_NAME !== 'undefined' ? ESBRAIN_SHEET_NAME : '🔗 ESBRAIN');
+    var v = hoja.getDataRange().getValues(), fc = -1, cPre = -1, cHw = -1, cMat = -1;
+    for (var r = 0; r < Math.min(6, v.length) && fc < 0; r++) {
+      var cab = v[r].map(function (h) { return String(h).trim().toUpperCase(); });
+      if (cab.indexOf('HARDWARE') >= 0 && cab.indexOf('Nº PRESUPUESTO') >= 0) { fc = r; cPre = cab.indexOf('Nº PRESUPUESTO'); cHw = cab.indexOf('HARDWARE'); cMat = cab.indexOf('MATERIAL ESPECIAL'); }
+    }
+    if (fc >= 0) for (var i = fc + 1; i < v.length; i++) {
+      var k = String(v[i][cPre] || '').trim().toUpperCase(); if (!k) continue;
+      mapa[k] = { hardware: String(v[i][cHw] || '').trim(), materialEspecial: cMat >= 0 ? String(v[i][cMat] || '').trim() : '' };
+    }
+  } catch (e) { Logger.log('Calendario no disponible: ' + e); }
+  ALMACEN_CAL_CACHE_ = mapa;
+  return mapa;
+}
+function almacenCompletarDesdeCalendario_(c) {
+  if (!c || !c.numInst) return c;
+  var x = almacenCalendario_()[String(c.numInst).trim().toUpperCase()];
+  if (x) { if (!c.hardware && x.hardware) c.hardware = x.hardware; if (!c.materialEspecial && x.materialEspecial) c.materialEspecial = x.materialEspecial; }
+  return c;
+}
+
+/** Prueba: muestra el modelo de cargador que el calendario da para los cierres desde el 30/09 (no envía nada) */
+function probarCalendarioAlmacen() {
+  var c = histLeer_(), sin = 0;
+  c.forEach(function (x) { almacenCompletarDesdeCalendario_(x); if (!x.hardware) sin++; Logger.log(x.numInst + ' · ' + x.equipo + ' · HARDWARE: ' + (x.hardware || '(no está en el calendario)') + (x.materialEspecial ? ' · MATERIAL ESPECIAL: ' + x.materialEspecial : '')); });
+  Logger.log('Cierres: ' + c.length + ' · sin modelo de cargador: ' + sin);
+}
+
+/**
+ * Chat (02/10) · Carga ÚNICA del histórico de cierres desde la hoja "Registro" (cabeceras en la fila 2).
+ * Pega esto al FINAL de Almacen.gs, guarda y ejecuta UNA vez: cargarHistoricoRegistro
+ *  - Solo envía cierres desde la apertura (30/09/2026). El almacén ignora los anteriores igualmente.
+ *  - "Registro" no guarda el modelo del cargador: el histórico descuenta material, no cargadores.
+ *  - Se ejecuta UNA sola vez (deja la marca ALMACEN_HISTORICO_HECHO). Repetirlo duplicaría consumos,
+ *    porque aquí la fecha va sin hora y los cierres en directo llegan con hora.
+ */
+var HIST_DESDE = new Date(2026, 8, 30);                       // 30/09/2026 (los meses empiezan en 0)
+var HIST_MAPA = {                                             // cabecera de "Registro" → campo del wizard
+  'FECHA': 'fechaCierreIso', 'EQUIPO': 'equipo', 'Nº INST.': 'numInst', 'CLIENTE': 'cliente', 'DIRECCIÓN': 'direccion',
+  'M. LÍNEA': 'metrosLinea', 'TIPO LÍNEA': 'tipoLinea', 'SECCIÓN': 'seccion', 'FASE': 'fase',
+  'M. UTP': 'metrosUtp', 'RJ45': 'rj45', 'CABLE DATOS': 'cableDatos',
+  'BORNAS MONO': 'bornasMono', 'BORNAS TRIF': 'bornasTrif',
+  'MAG 10-25A': 'mag1025', 'MAG 32A': 'mag32', 'MAG 40A': 'mag40', 'PICA TIERRA': 'pica',
+  'ACERO 32MM': 'acero32', 'CANALETA': 'canaleta', 'CORRUGADO M': 'corr32', 'TUBO PVC M': 'pvc32',
+  'DESP. FALL.': 'despFallido'
+};
+var HIST_NUM = ['metrosLinea', 'metrosUtp', 'rj45', 'bornasMono', 'bornasTrif', 'mag1025', 'mag32', 'mag40', 'pica', 'acero32', 'canaleta', 'corr32', 'pvc32'];
+
+function histSinTildes_(s) { return String(s == null ? '' : s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim(); }
+function histNum_(v) { if (typeof v === 'number') return v; var t = String(v || '').trim(); if (t.indexOf(',') >= 0) t = t.replace(/\./g, '').replace(',', '.'); var n = parseFloat(t); return isNaN(n) ? 0 : n; }
+function histValor_(campo, v) {
+  if (HIST_NUM.indexOf(campo) >= 0) return histNum_(v);
+  var t = histSinTildes_(v);
+  if (campo === 'fase') return /tri/.test(t) ? 'trif' : (/mono/.test(t) ? 'mono' : t);
+  if (campo === 'tipoLinea') return /mang/.test(t) ? 'manguera' : (/tub/.test(t) ? 'tubo' : t);
+  if (campo === 'seccion') { var m = String(v).match(/\d+(?:[.,]\d+)?/); return m ? m[0].replace(',', '.') : t; }
+  if (campo === 'despFallido') return v === true || /^(si|s|x|1|true|fallido)$/.test(t);
+  return typeof v === 'string' ? v.trim() : v;
+}
+
+/** Primero: muestra lo que enviaría (5 ejemplos y el total) SIN enviar nada */
+function probarHistoricoRegistro() { var c = histLeer_(); Logger.log('Cierres a enviar desde el 30/09: ' + c.length); c.slice(0, 5).forEach(function (x) { Logger.log(JSON.stringify(x)); }); }
+
+function histLeer_() {
+  var hoja = almacenLibro_().getSheetByName(typeof REGISTRO_SHEET_NAME !== 'undefined' && REGISTRO_SHEET_NAME ? REGISTRO_SHEET_NAME : 'Registro');
+  var v = hoja.getDataRange().getValues();
+  var fCab = 1;                                               // fila 2 (índice 1)
+  var cab = v[fCab].map(function (h) { return String(h).trim().toUpperCase(); });
+  var col = {};
+  Object.keys(HIST_MAPA).forEach(function (h) { var i = cab.indexOf(h.toUpperCase()); if (i >= 0) col[HIST_MAPA[h]] = i; });
+  ['fechaCierreIso', 'numInst', 'equipo'].forEach(function (k) { if (col[k] === undefined) throw new Error('Falta la columna de ' + k + ' en la fila 2 de Registro'); });
+  var out = [];
+  for (var r = fCab + 1; r < v.length; r++) {
+    var fila = v[r], f = fila[col.fechaCierreIso];
+    var fecha = f instanceof Date ? f : (f ? new Date(f) : null);
+    if (!fecha || isNaN(fecha) || fecha < HIST_DESDE) continue;
+    var o = {};
+    Object.keys(col).forEach(function (k) { o[k] = k === 'fechaCierreIso' ? fecha.toISOString() : histValor_(k, fila[col[k]]); });
+    if (!o.numInst) continue;
+    o.numInst = String(o.numInst).trim();
+    out.push(o);
+  }
+  return out;
+}
+
+/** Envío ÚNICO al almacén */
+function cargarHistoricoRegistro() {
+  var props = PropertiesService.getScriptProperties();
+  if (props.getProperty('ALMACEN_HISTORICO_HECHO')) throw new Error('El histórico ya se cargó el ' + props.getProperty('ALMACEN_HISTORICO_HECHO') + '. No se repite para no duplicar consumos.');
+  var cierres = histLeer_().map(almacenCompletarDesdeCalendario_), total = { enviados: 0, errores: 0, ignorados: 0 };
+  for (var i = 0; i < cierres.length; i += 100) {
+    var lote = cierres.slice(i, i + 100);
+    try {
+      var r = almacenLlamar_({ cierres: lote, origen: 'historico' });   // E-026: misma instalación = mismo cierre
+      total.enviados += lote.length; total.errores += r.errores || 0;
+      (r.resultados || []).forEach(function (x) { if (x.error) almacenLog_('ERROR', x.numInst, x.error, null); if (x.estado === 'ignorado') total.ignorados++; });
+    } catch (e) { total.errores += lote.length; almacenLog_('ERROR', 'lote ' + (i / 100 + 1), e.message || e, null); }
+  }
+  if (total.enviados && total.errores < total.enviados) props.setProperty('ALMACEN_HISTORICO_HECHO', new Date().toISOString());
   almacenLog_('HISTORICO', '', JSON.stringify(total), null);
   Logger.log(total);
 }
