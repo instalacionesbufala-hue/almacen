@@ -915,6 +915,29 @@ Una tabla con una fila por apartado y casillas **Ver** y **Modificar**, en lengu
 5. **Filtro de fechas de la lista de cierres:** viene por defecto "desde ayer" y oculta los 4 del 30/09; el usuario pensaría que no llegaron. Que el filtro por defecto cubra **desde la fecha de apertura** (o los últimos 30 días) y muestre arriba "Mostrando X de Y cierres".
 6. **Hecho cuando:** hay pruebas de: editar la fecha de inicio con reproceso, el atajo de vehículo actual, el resumen sin `no_entregado`, y el filtro por defecto.
 
+### E-030 · Resolver una línea "sin equivalencia" con varios artículos (conductores de la línea) y deshacer una resolución · PENDIENTE (urgente)
+**Caso real del usuario (03/10), cierre E2632246** (Búfala 1, ya procesado con "Usar el vehículo actual"):
+- El cierre dice `tipoLinea = manguera`, `seccion = 10`, `fase = mono`, `metrosLinea = 49`. No hay RZ1-K 3G10 en stock (pendiente de servir), así que la línea quedó **"sin equivalencia"**.
+- Al resolverla a mano, **la app solo deja elegir un artículo**. El usuario eligió "CABLE H07Z1-K 10MM AM/VERDE" y se descontaron **49 m de ese único cable**.
+
+**Regla del usuario:** si la línea **no es manguera RZ1-K**, va con conductores sueltos (H07Z1-K):
+- **monofásica:** **3 conductores** (fase marrón, neutro azul, tierra amarillo/verde), cada uno de `metrosLinea` metros;
+- **trifásica:** **5 conductores** (3 fases marrón, negro y gris, neutro azul, tierra amarillo/verde).
+
+**Qué hacer**
+1. **Resolver con varios artículos:** en la resolución manual de cualquier línea "sin equivalencia", poder **añadir más de un artículo**, cada uno con su cantidad, que por defecto es la de la partida. Botón "+ Añadir artículo" y quitar con ✕.
+2. **Atajo para `metrosLinea`:** en esa línea, dos botones:
+   - **"Manguera RZ1-K":** un artículo (el selector, filtrando por RZ1-K y la sección).
+   - **"Conductores sueltos (3 o 5)":** propone automáticamente los H07Z1-K **de la sección del cierre** (10 mm² en este caso), 3 o 5 según `fase`, con `metrosLinea` metros cada uno. Si falta algún color de esa sección en el catálogo, lo marca en rojo ("no hay H07Z1-K 10 mm² NEGRO") para elegir otro o darlo de alta.
+   - Que la misma lógica sirva para **proponer una regla de equivalencia** ("¿Guardar como regla para manguera 10 mono → conductores sueltos?"), sin aplicarla sola.
+3. **Deshacer una resolución manual** (administrador): en la línea resuelta, **"Deshacer resolución"**.
+   - Revierte su movimiento con un ajuste enlazado (se devuelve a bordo lo descontado), deja la línea otra vez "sin equivalencia" y queda en la versión del cierre y en la auditoría.
+   - Luego se puede volver a resolver bien.
+4. **Caso real:** que el usuario pueda, desde la app, deshacer la resolución de E2632246 (los 49 m de AM/VERDE vuelven a 2690NKC) y resolverla con los 3 conductores de 10 mm². **No tocar sus datos sin que lo haga él.** Explicar en la respuesta los pasos exactos.
+5. **Hecho cuando:**
+   - Hay pruebas de: resolución con 3 y con 5 artículos; atajo "Conductores sueltos" en mono y en trif, incluido un color que falta; deshacer resolución, que devuelve el stock, deja la línea pendiente y la registra en la versión y la auditoría.
+   - El caso E2632246 se puede corregir desde la app.
+
 ---
 
 ## Revisión del chat
@@ -947,7 +970,7 @@ Es la que tiene el usuario en su Apps Script.
 
 **Lo siguiente del chat:** la función del Apps Script que envía la prefactura al aprobarla en Holded (E-026 §4).
 
-**Orden: E-029 (urgente) → E-028.** Histórico lanzado el 03/10: 12 cierres, 4 bloqueados en "Equipo sin vehículo" (E-029).
+**Orden: E-029 (urgente) → E-030 (urgente) → E-028.** Histórico lanzado el 03/10: 12 cierres, 4 bloqueados en "Equipo sin vehículo" (E-029).
 
 ### 02/10/2026 · Chat: conexión del wizard y siguiente paso
 - **Cierres en directo:** desde hoy, `procesarEnvio_` → `enviarAlAlmacen(datos)`. Los 2 cierres de hoy se procesaron antes de añadir la línea.
