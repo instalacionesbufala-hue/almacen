@@ -1,7 +1,8 @@
 /* E-012 · Cierres de instalación recibidos del wizard: estado, líneas traducidas, pendientes que resuelve el administrador,
    consumo por equipo y periodo, discrepancias (vehículos en negativo) y recuento de vehículo. */
-import { useState } from 'react';
-import type { CierreApp, EstadoCierre, Unidad } from '../../data/tipos';
+import { Fragment, useState } from 'react';
+import type { CierreApp, EstadoCierre, LineaCierre, Unidad } from '../../data/tipos';
+import { conductoresSueltos, datosLinea, filtroRZ1K, mangueraRZ1K, reglaDeResolucion, type Propuesta } from '../../domain/resolucion';
 import { consumoPorArticulo, desdeCierresPorDefecto, discrepancias, lineasDe, noEntregadosPorArticulo, ORIGEN_VERSION, textoDiferencia } from '../../domain/cierres';
 import { vehiculoActualDeCierre, vehiculoHistorialDeCierre } from '../../domain/asignaciones';
 import { descargarCsv } from '../../domain/csv';
@@ -79,7 +80,6 @@ export default function CierresView() {
 
 function FilaCierre({ c, abierto, alternar, puede }: { c: CierreApp; abierto: boolean; alternar: () => void; puede: boolean }) {
   const E = useAlmacen(), lineas = lineasDe(E, c.id);
-  const [elegido, setElegido] = useState<Record<string, string>>({});
   return (<article className={`${CARD} overflow-hidden`}>
     <button onClick={alternar} className="w-full text-left p-4 flex flex-wrap items-center gap-3">
       <div className="flex-1 min-w-[220px]"><div className="font-semibold">{c.numInst || '—'} · {c.cliente || 'sin cliente'}</div>
@@ -97,20 +97,65 @@ function FilaCierre({ c, abierto, alternar, puede }: { c: CierreApp; abierto: bo
       {c.estado === 'sin_vehiculo' && puede && <AccionesSinVehiculo c={c} />}
       {!lineas.length ? <p className="text-body-sm text-secondary">{c.despFallido ? 'Desplazamiento fallido: sin consumo.' : 'Sin material declarado.'}</p> :
         <table className="w-full text-body-sm"><thead><tr className={`text-left ${LBL}`}><th className="py-1">Partida</th><th>Artículo</th><th className="text-right">Cantidad</th><th /></tr></thead>
-          <tbody>{lineas.map(l => { const p = l.sku ? find(E, l.sku) : undefined; const resolver = puede && (l.estado === 'pendiente' || l.estado === 'sin_equivalencia'); return (
-            <tr key={l.id} className="border-t border-surface-container align-top">
+          <tbody>{lineas.map(l => { const p = l.sku ? find(E, l.sku) : undefined; const resolver = puede && (l.estado === 'pendiente' || l.estado === 'sin_equivalencia'); return (<Fragment key={l.id}>
+            <tr className="border-t border-surface-container align-top">
               <td className="py-1.5 font-mono text-label-sm">{l.campo}{l.formula !== 'directa' && l.formula !== 'unidad' ? ` (${l.formula})` : ''}<div className="text-secondary">{num(l.valor)}</div></td>
               <td className="py-1.5">{p ? p.name : <span className="text-amber-800">{l.estado === 'pendiente' ? 'Por elegir' : 'Sin equivalencia'}</span>}
                 {l.estado === 'no_entregado' && <Tag c="bg-violet-100 text-violet-800 ml-1">no entregado por el almacén: no se descuenta</Tag>}
                 {l.estimada && <Tag c="bg-amber-100 text-amber-800 ml-1">estimado</Tag>}{l.estado === 'discrepancia' && <Tag c="bg-error-container text-error ml-1">deja el vehículo en negativo</Tag>}
                 {l.nota && <div className="text-label-sm text-secondary">{l.nota}</div>}
-                {resolver && <div className="flex gap-2 mt-1 items-start"><SelectorArticulo valor={elegido[l.id] || null} onChange={sku => setElegido({ ...elegido, [l.id]: sku || '' })} className="flex-1" alto="h-11" />
-                  <button disabled={!elegido[l.id]} onClick={() => { if (ejecutar({ op: 'resolverLinea', args: { linea: l.id, sku: elegido[l.id] } })) toast('Línea resuelta: se descuenta del vehículo.', 'ok'); }} className={`${BTN_P} h-11 px-3 disabled:opacity-40`}>Aplicar</button></div>}</td>
+                {puede && l.estado === 'resuelta' && (!l.resolucion || l.previo) && <button onClick={() => deshacer(E, l)} className="text-error text-body-sm font-semibold h-10 flex items-center gap-1"><Icon n="undo" className="ico-18" />Deshacer resolución</button>}</td>
               <td className="py-1.5 text-right whitespace-nowrap font-semibold">{p ? cant(l.cantidad, p.unit, contenidoDe(p)) : num(l.cantidad)}</td>
               <td />
-            </tr>); })}</tbody></table>}
+            </tr>
+            {resolver && <tr><td colSpan={4} className="pb-2"><div className="w-0 min-w-full"><ResolverLinea c={c} l={l} /></div></td></tr>}</Fragment>); })}</tbody></table>}
     </div>}
   </article>);
+}
+
+/* ---------- E-030 · Resolver una línea con varios artículos (conductores de la línea) y deshacer ---------- */
+const deshacer = (E: ReturnType<typeof useAlmacen>, l: LineaCierre) => {
+  const grupo = l.resolucion ? E.lineasCierre.filter(x => x.resolucion === l.resolucion) : [l];
+  const lista = grupo.map(x => `· ${num(x.cantidad)} ${find(E, x.sku || '')?.name || x.sku}`).join('\n');
+  if (!confirm(`¿Deshacer la resolución de ${l.campo}?\n\n${lista}\n\nLo descontado vuelve a bordo del vehículo (con un ajuste enlazado al cierre) y la línea queda otra vez sin resolver. Queda en la versión del cierre y en la auditoría.`)) return;
+  if (ejecutar({ op: 'deshacerResolucion', args: { linea: l.id } })) toast('Resolución deshecha: el material ha vuelto a bordo. Ya puedes resolverla bien.', 'ok');
+};
+type FilaRes = { id: string; sku: string | null; cantidad: string; etiqueta?: string; falta?: string };
+function ResolverLinea({ c, l }: { c: CierreApp; l: LineaCierre }) {
+  const E = useAlmacen(), { fase, seccion, tipoLinea } = datosLinea(c);
+  const [modo, setModo] = useState<'libre' | 'manguera' | 'conductores'>('libre');
+  const [filas, setFilas] = useState<FilaRes[]>(() => [{ id: nuevoId(), sku: null, cantidad: String(l.cantidad) }]);
+  const de = (ps: Propuesta[]): FilaRes[] => ps.map(p => ({ id: nuevoId(), sku: p.sku || null, cantidad: String(p.cantidad), etiqueta: p.etiqueta, falta: p.sku ? undefined : p.falta }));
+  const cambiar = (i: number, x: Partial<FilaRes>) => setFilas(fs => fs.map((f, j) => j === i ? { ...f, ...x } : f));
+  const ok = filas.length > 0 && filas.every(f => f.sku && toNum(f.cantidad) > 0);
+  const linea = `${tipoLinea || 'línea'}${seccion ? ` ${String(seccion).replace('.', ',')} mm²` : ''} ${fase === 'trif' ? 'trifásica' : 'monofásica'}`;
+  const aplicar = () => {
+    const articulos = filas.map(f => ({ id: f.id, sku: f.sku!, cantidad: toNum(f.cantidad) }));
+    const regla = modo !== 'libre' ? reglaDeResolucion(E, c, l, articulos) : null;
+    if (!ejecutar({ op: 'resolverLineaVarios', args: { linea: l.id, grupo: nuevoId(), articulos } })) return;
+    toast(`Línea resuelta con ${articulos.length} artículo${articulos.length === 1 ? '' : 's'}: se descuenta del vehículo.`, 'ok');
+    // la misma lógica sirve de regla para las próximas instalaciones iguales, pero solo si el administrador lo confirma
+    if (regla && confirm(`¿Guardar como regla para ${linea} → ${modo === 'conductores' ? `conductores sueltos (${articulos.length})` : 'manguera RZ1-K'}?\n\nLas próximas instalaciones iguales se descontarán solas así. Este cierre ya está resuelto y no cambia.`)
+      && ejecutar({ op: 'equivalencia', args: { regla } })) toast('Regla guardada (Configuración → Integraciones y equivalencias).', 'ok');
+  };
+  return (<div className="flex flex-col gap-2 mt-2 rounded-lg bg-surface-container-low p-2">
+    {l.campo === 'metrosLinea' && <div className="flex flex-wrap gap-2">
+      <button onClick={() => { setModo('manguera'); setFilas(de([mangueraRZ1K(E, seccion, fase, l.cantidad)])); }} className={`${BTN_S} h-11 px-3 text-body-sm ${modo === 'manguera' ? 'ring-2 ring-primary' : ''}`}>Manguera RZ1-K</button>
+      <button onClick={() => { setModo('conductores'); setFilas(de(conductoresSueltos(E, seccion, fase, l.cantidad))); }} className={`${BTN_S} h-11 px-3 text-body-sm ${modo === 'conductores' ? 'ring-2 ring-primary' : ''}`}>Conductores sueltos ({fase === 'trif' ? 5 : 3})</button>
+      <span className="text-label-sm text-secondary self-center">{linea}, {num(l.cantidad)} m</span>
+    </div>}
+    {filas.map((f, i) => <div key={f.id} className="flex flex-col gap-1">
+      {(f.etiqueta || f.falta) && <div className="text-label-sm">{f.etiqueta && <span className="text-secondary">{f.etiqueta}</span>}{f.falta && !f.sku && <span className="text-error font-semibold">{f.etiqueta ? ' · ' : ''}{f.falta}: elige otro o dalo de alta en Inventario</span>}</div>}
+      <div className="flex gap-2 items-start">
+        <SelectorArticulo valor={f.sku} onChange={sku => cambiar(i, { sku })} filtro={modo === 'manguera' ? filtroRZ1K(seccion) : undefined} className="flex-1 min-w-0" alto="h-11" />
+        <input inputMode="decimal" value={f.cantidad} onChange={x => cambiar(i, { cantidad: x.target.value })} className={`${INP} h-11 !w-20 text-right`} aria-label="Cantidad" />
+        <button onClick={() => setFilas(fs => fs.filter((_, j) => j !== i))} className="h-11 w-11 shrink-0 text-secondary" aria-label="Quitar artículo"><Icon n="close" className="ico-20" /></button>
+      </div></div>)}
+    <div className="flex flex-wrap gap-2">
+      <button onClick={() => setFilas(fs => [...fs, { id: nuevoId(), sku: null, cantidad: String(l.cantidad) }])} className={`${BTN_S} h-11 px-3 text-body-sm`}><Icon n="add" className="ico-18" />Añadir artículo</button>
+      <button disabled={!ok} onClick={aplicar} className={`${BTN_P} h-11 px-4 flex-1 disabled:opacity-40`}>Aplicar{filas.length > 1 ? ` (${filas.length} artículos)` : ''}</button>
+    </div>
+  </div>);
 }
 
 /* ---------- E-029 · Cierres "Equipo sin vehículo" ---------- */

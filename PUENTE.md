@@ -915,7 +915,7 @@ Una tabla con una fila por apartado y casillas **Ver** y **Modificar**, en lengu
 5. **Filtro de fechas de la lista de cierres:** viene por defecto "desde ayer" y oculta los 4 del 30/09; el usuario pensaría que no llegaron. Que el filtro por defecto cubra **desde la fecha de apertura** (o los últimos 30 días) y muestre arriba "Mostrando X de Y cierres".
 6. **Hecho cuando:** hay pruebas de: editar la fecha de inicio con reproceso, el atajo de vehículo actual, el resumen sin `no_entregado`, y el filtro por defecto.
 
-### E-030 · Resolver una línea "sin equivalencia" con varios artículos (conductores de la línea) y deshacer una resolución · PENDIENTE (urgente)
+### E-030 · Resolver una línea "sin equivalencia" con varios artículos (conductores de la línea) y deshacer una resolución · HECHO
 **Caso real del usuario (03/10), cierre E2632246** (Búfala 1, ya procesado con "Usar el vehículo actual"):
 - El cierre dice `tipoLinea = manguera`, `seccion = 10`, `fase = mono`, `metrosLinea = 49`. No hay RZ1-K 3G10 en stock (pendiente de servir), así que la línea quedó **"sin equivalencia"**.
 - Al resolverla a mano, **la app solo deja elegir un artículo**. El usuario eligió "CABLE H07Z1-K 10MM AM/VERDE" y se descontaron **49 m de ese único cable**.
@@ -2562,3 +2562,54 @@ En "Para el día a día" se explican el ajuste y el aviso.
 - `src/domain/e029.test.ts` (5): lo mismo en la app, más el consumo sin `no_entregado` ni cierres sin vehículo y el filtro por defecto.
 - `tsc -b` y build correctos.
 - **En el navegador (demo con el caso del 30/09):** editar el inicio → "Reprocesar el cierre afectado" → cuadro a 0 y versión 2. El atajo en todos procesa el resto y la sección de no entregados muestra 2 ud. Comprobado también a 375 px.
+
+### 03/10/2026 · E-030 · HECHO
+**Aplicado en producción:** migración `20261020000100_e030_resolver_varios_deshacer.sql`.
+
+**Comprobado en producción (solo lectura):**
+- columnas y permisos nuevos en su sitio;
+- la línea `metrosLinea` de **E2632246 sigue como la dejó el usuario** (resuelta con 6000650655 AM/VERDE, 49 m): no he tocado datos.
+
+**Para el usuario: cómo corregir E2632246.** Equipos → pestaña **Cierres** → abre **E2632246**.
+1. En la línea `metrosLinea` (49 m de AM/VERDE) pulsa **"Deshacer resolución"** y acepta. Los 49 m vuelven a bordo de 2690NKC y la línea queda otra vez "sin equivalencia".
+2. En esa misma línea pulsa **"Conductores sueltos (3)"**. Salen marrón (6000650653), azul (6000650654) y amarillo/verde (6000650655) de 10 mm², 49 m cada uno.
+3. Pulsa **"Aplicar (3 artículos)"**.
+4. Al final pregunta si quieres guardarlo como regla para "manguera 10 mm² monofásica → conductores sueltos". Contesta lo que prefieras; este cierre no cambia.
+
+**1. Resolver con varios artículos** (cualquier línea "sin equivalencia" o "pendiente")
+- Una fila por artículo (selector y cantidad, por defecto la de la partida), **"Añadir artículo"** y **✕** para quitar. Hasta 10 artículos.
+- **Servidor:** `resolver_linea_varios(linea, grupo, articulos)`.
+  - Valida todo antes de tocar nada: artículos dados de alta y cantidades mayores que 0.
+  - La línea original pasa a "resuelta" con el primer artículo y **guarda cómo estaba** (columna `previo`). Los demás son líneas nuevas del mismo grupo (columna `resolucion`).
+  - **Decisión de Code:** los ids los pone la app, para que coincidan en el móvil y en el servidor aunque se trabaje sin cobertura.
+  - Deja versión en el cierre ("Línea metrosLinea resuelta por …: A + B + C", con la diferencia) y auditoría.
+- La función de siempre (`resolver_linea_cierre`, un artículo) pasa por la nueva, así que también se puede deshacer.
+
+**2. Atajos en `metrosLinea`**
+- **"Conductores sueltos (3 o 5)":** propone los H07Z1-K **de la sección del cierre**, según `fase`, con los metros de la partida cada uno.
+  - El color y la sección se leen del nombre del artículo.
+  - Si falta un color, lo marca en rojo, por ejemplo "No hay H07Z1-K 10 mm² NEGRO en el catálogo: elige otro o dalo de alta en Inventario".
+  - **En producción hoy:** de 10 mm² solo hay marrón, azul y amarillo/verde, así que una trifásica de 10 saldrá con negro y gris en rojo.
+- **"Manguera RZ1-K":** un artículo, la RZ1-K de esa sección (3G para mono y 5G para trif), con el selector filtrado a RZ1-K de esa sección. Si no está, lo dice.
+- **Regla:** tras aplicar un atajo, pregunta "¿Guardar como regla para manguera 10 mm² monofásica → conductores sueltos (3)?".
+  - Solo si se acepta la guarda: condiciones tipoLinea, fase y sección del cierre, y los artículos elegidos.
+  - **Decisión de Code:** se guarda **confirmada**, porque el administrador acaba de aceptarla. Vale para las próximas instalaciones; no reprocesa nada.
+
+**3. Deshacer una resolución** (botón **"Deshacer resolución"**, administrador, con confirmación que lista lo que se devuelve)
+- **Servidor:** `deshacer_resolucion(linea)`.
+  - Se puede pulsar desde cualquier línea del grupo y deshace la resolución entera: borra las líneas añadidas y devuelve la original a como estaba.
+  - `_sincronizar_cierre` devuelve lo descontado a bordo con un **ajuste "Corrección de cierre" enlazado al cierre**.
+  - Deja versión ("Resolución de metrosLinea deshecha por …", con la diferencia en negativo) y auditoría.
+- **Resoluciones anteriores a E-030** (como la de E2632246), que no guardaban cómo estaba la línea: vuelven a "sin equivalencia", sin artículo, con su cantidad y sin la marca "resuelta por".
+
+**Interfaz:** el formulario va en una fila propia bajo la línea, a todo el ancho. Dentro de la columna "Artículo" se salía de la tarjeta, y en el móvil ensanchaba la tabla.
+
+**Pruebas: 454 en verde** (+14):
+- `supabase/tests/e030.test.ts` (5):
+  - 3 conductores (stock, versión y auditoría) y 5 conductores;
+  - validación sin efectos y no resolver dos veces;
+  - el caso real: resolución antigua de AM/VERDE deshecha (vuelven 49 m, línea "sin equivalencia", ajuste enlazado, versión y auditoría) y resuelta bien con 3;
+  - deshacer una de 5 desde cualquiera de sus líneas.
+- `src/domain/e030.test.ts` (9): lectura de color y sección; atajo mono y trif con colores que faltan; manguera RZ1-K; la regla propuesta; resolver y deshacer en la app (también una resolución antigua); validación.
+- `tsc -b` y build correctos.
+- **En el navegador (demo con E2632246 como en producción):** "Deshacer resolución" → los 49 m vuelven a bordo; "Conductores sueltos (3)" → Aplicar → 49 m de cada uno y la regla propuesta. Comprobado también a 375 px.

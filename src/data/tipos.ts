@@ -193,6 +193,8 @@ export interface LineaCierre {
   id: string; cierre: string; campo: string; formula: string; valor: number; sku?: string; cantidad: number; estimada: boolean;
   /** E-026: no_entregado = cargador instalado que no salió del almacén gestionado (antes del 05/10): no se descuenta */
   estado: 'aplicada' | 'discrepancia' | 'sin_equivalencia' | 'pendiente' | 'resuelta' | 'no_entregado'; nota: string;
+  /** E-030: resolución manual (grupo de líneas) y cómo estaba la línea original, para deshacerla */
+  resolucion?: string; previo?: { estado: LineaCierre['estado']; sku?: string; cantidad: number; nota: string };
 }
 export interface ArticuloRegla { sku: string | null; factor: number; nombre?: string }
 export interface Equivalencia {

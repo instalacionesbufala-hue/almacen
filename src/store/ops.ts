@@ -2,6 +2,7 @@
    - aplicarse en local (validación previa con src/domain y respuesta inmediata en pantalla), y
    - traducirse a su función SQL del servidor (la fuente de verdad en modo nube).
    En modo nube la operación se guarda en la cola y se reaplica en local hasta que el servidor la confirma. */
+import { deshacerResolucionLocal, resolverVariosLocal, type ArticuloResolucion } from '../domain/resolucion';
 import { editarInicioAsignacionLocal, reprocesarCierresLocal, usarVehiculoActualLocal } from '../domain/asignaciones';
 import { gestiona } from '../domain/permisos';
 import type { OrigenFoto, Tallas, ConfigAvisos, Propietario, Rol, RolApp, CatId, EstadoEquipo, Estado, Herramienta, LineaEntrega, Producto, TipoIncidencia, TipoMov, Equivalencia, ArticuloRegla, Categoria } from '../data/tipos';
@@ -94,6 +95,8 @@ export type Op =
   | { op: 'configCierres'; args: { kit: 'A' | 'B' | 'C'; apertura?: number; cargadoresHasta?: number } }
   | { op: 'revisarMaterialEspecial'; args: { id: string; nota: string } }
   | { op: 'resolverLinea'; args: { linea: string; sku: string; cantidad?: number } }
+  | { op: 'resolverLineaVarios'; args: { linea: string; grupo: string; articulos: ArticuloResolucion[] } }
+  | { op: 'deshacerResolucion'; args: { linea: string } }
   | { op: 'reprocesarCierre'; args: { id: string } }
   | { op: 'reprocesarCierres'; args: { ids: string[] } }
   | { op: 'usarVehiculoActual'; args: { ids: string[] } }
@@ -429,13 +432,22 @@ export const OPS: Defs = {
     local: (S, a) => {
       if (S.rol !== 'admin') throw new Error('Solo el administrador resuelve las líneas pendientes');
       const l = S.lineasCierre.find(x => x.id === a.linea); if (!l) throw new Error('Línea no encontrada');
-      if (l.estado !== 'pendiente' && l.estado !== 'sin_equivalencia') return;
-      if (!find(S, a.sku)) throw new Error(`Artículo no encontrado: ${a.sku}`);
-      Object.assign(l, { sku: a.sku.toUpperCase(), cantidad: a.cantidad ?? l.cantidad, estado: 'resuelta' });
-      sincronizarCierreLocal(S, l.cierre);
+      // E-030: igual que en el servidor, pasa por la resolución de varios (así se puede deshacer)
+      resolverVariosLocal(S, a.linea, nuevoId(), [{ id: nuevoId(), sku: a.sku, cantidad: a.cantidad ?? l.cantidad }], S.operator);
     },
     rpc: a => ['resolver_linea_cierre', { p_linea: a.linea, p_sku: a.sku, p_cantidad: a.cantidad ?? null }],
     desc: () => 'Resolver una línea de un cierre',
+  },
+  /* ---------- E-030 · Resolver con varios artículos y deshacer ---------- */
+  resolverLineaVarios: {
+    local: (S, a) => { if (!gestiona(S, 'cierres')) throw new Error('Solo el administrador resuelve las líneas pendientes'); resolverVariosLocal(S, a.linea, a.grupo, a.articulos, S.operator); },
+    rpc: a => ['resolver_linea_varios', { p_linea: a.linea, p_grupo: a.grupo, p_articulos: a.articulos }],
+    desc: (_S, a) => `Resolver una línea de un cierre (${a.articulos.length} artículo${a.articulos.length === 1 ? '' : 's'})`,
+  },
+  deshacerResolucion: {
+    local: (S, a) => { if (!gestiona(S, 'cierres')) throw new Error('Solo el administrador'); deshacerResolucionLocal(S, a.linea, S.operator); },
+    rpc: a => ['deshacer_resolucion', { p_linea: a.linea }],
+    desc: () => 'Deshacer la resolución de una línea',
   },
   reprocesarCierre: {
     local: (S, a) => {
