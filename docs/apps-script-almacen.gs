@@ -225,3 +225,118 @@ function cargarHistoricoRegistro() {
   almacenLog_('HISTORICO', '', JSON.stringify(total), null);
   Logger.log(total);
 }
+
+/* =====================================================================================================
+   Chat (03/10) · PREFACTURA APROBADA DE HOLDED → ALMACÉN (E-026 §4)
+   Cada hora mira los presupuestos de Holded APROBADOS (desde el 30/09/2026) y envía sus líneas al almacén.
+   El almacén crea una versión nueva del cierre de esa instalación y descuenta SOLO la diferencia
+   (p. ej. las 2 "Caja registro 100x100" que el técnico no puso en el cierre).
+   - Si cambias un presupuesto ya enviado, se reenvía y el almacén ajusta la diferencia.
+   - Usa tus funciones de siempre: _holdedGet_ (lista de presupuestos) y _lineasDoc_ (sus líneas).
+   Pasos: 1) probarPrefacturasAlmacen (no envía nada)  2) instalarPrefacturasAlmacen (activa la revisión horaria)
+   ===================================================================================================== */
+var ALM_PF_DESDE = new Date(2026, 8, 30);          // solo presupuestos de instalaciones desde el 30/09/2026
+var ALM_PF_PROP = 'ALMACEN_PREFACTURAS_ENVIADAS';  // { idHolded: huella de lo enviado }
+
+/** Línea de la tarifa → campo del cierre. Se compara sin tildes ni mayúsculas. El orden importa. */
+var ALM_PF_REGLAS = [
+  [/manguera/, 'metrosLinea'],
+  [/linea.*tubo|bajo tubo/, 'metrosLinea'],
+  [/cable.*datos|utp|ftp/, 'metrosUtp'],
+  [/rj ?45/, 'rj45'],
+  [/corrugado/, 'corr32'],
+  [/acero.*40/, 'acero40'],
+  [/acero/, 'acero32'],
+  [/canaleta/, 'canaleta'],
+  [/soterrado.*90/, 'sot90'],
+  [/soterrado/, 'sot50'],
+  [/borna.*trif/, 'bornasTrif'],
+  [/borna.*mono/, 'bornasMono'],
+  [/caja.*distrib.*18/, 'caja18'],
+  [/caja.*distrib.*12/, 'caja12'],
+  [/caja.*distrib.*6/, 'caja6'],
+  [/cerradura/, 'cerradura'],
+  [/caja.*registro/, 'cajaReg'],
+  [/magnetotermico.*40/, 'mag40'],
+  [/magnetotermico.*32/, 'mag32'],
+  [/magnetotermico/, 'mag1025'],
+  [/toma de tierra|pica/, 'pica'],
+  [/pre.?instalacion/, 'preinst']
+];
+
+function almPfNorm_(s) { return String(s == null ? '' : s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim(); }
+function almPfAprobado_(d) { return !!(d && (d.approvedAt || d.status === 1 || String(d.status).toLowerCase() === 'accepted')) && !d.isDraft; }
+function almPfFecha_(d) { var t = d.approvedAt || d.date; if (!t) return null; var n = Number(t); return new Date(n < 1e12 ? n * 1000 : n); }
+
+/** numInst (E26xxxxx) del presupuesto: número del documento, notas o descripción */
+function almPfNumInst_(d) {
+  var txt = [d.docNumber, d.notes, d.desc].map(function (x) { return String(x || ''); }).join(' ').toUpperCase();
+  var m = txt.match(/\bE\d{7}\b/);
+  return m ? m[0] : '';
+}
+
+/** Traduce las líneas del presupuesto a campos del cierre; devuelve { lineas, sinTraducir } */
+function almPfTraducir_(d) {
+  var lineas = {}, sin = [];
+  (_lineasDoc_(d) || []).forEach(function (l) {
+    var nombre = l.name || l.desc || '', n = almPfNorm_(nombre), u = Number(l.units != null ? l.units : l.quantity) || 0;
+    if (!n || !u) return;
+    var campo = null;
+    for (var i = 0; i < ALM_PF_REGLAS.length && !campo; i++) if (ALM_PF_REGLAS[i][0].test(n)) campo = ALM_PF_REGLAS[i][1];
+    if (campo) lineas[campo] = (lineas[campo] || 0) + u; else sin.push(nombre);
+  });
+  return { lineas: lineas, sinTraducir: sin };
+}
+
+/** Presupuestos aprobados desde ALM_PF_DESDE, ya traducidos */
+function almPfLeer_() {
+  var desde = Math.floor(ALM_PF_DESDE.getTime() / 1000), hasta = Math.floor(Date.now() / 1000) + 86400;
+  var docs = _holdedGet_('/documents/estimate?starttmp=' + desde + '&endtmp=' + hasta) || [];
+  if (!Array.isArray(docs)) docs = docs.data || docs.items || [];
+  var out = [];
+  docs.forEach(function (d) {
+    if (!almPfAprobado_(d)) return;
+    var numInst = almPfNumInst_(d); if (!numInst) return;
+    var t = almPfTraducir_(d), f = almPfFecha_(d);
+    out.push({ id: d.id, numInst: numInst, documento: String(d.docNumber || d.id), fechaAprobacion: f ? f.toISOString() : null, lineas: t.lineas, sinTraducir: t.sinTraducir });
+  });
+  return out;
+}
+
+/** PRUEBA: muestra lo que enviaría, sin enviar nada */
+function probarPrefacturasAlmacen() {
+  var lista = almPfLeer_(), enviados = JSON.parse(PropertiesService.getScriptProperties().getProperty(ALM_PF_PROP) || '{}');
+  Logger.log('Presupuestos aprobados desde el 30/09: ' + lista.length);
+  lista.forEach(function (p) {
+    var huella = JSON.stringify(p.lineas), estado = enviados[p.id] === huella ? 'ya enviado' : (enviados[p.id] ? 'CAMBIADO: se reenviaría' : 'se enviaría');
+    Logger.log(p.numInst + ' · doc ' + p.documento + ' · ' + estado + ' · ' + JSON.stringify(p.lineas) + (p.sinTraducir.length ? ' · SIN TRADUCIR: ' + p.sinTraducir.join(' | ') : ''));
+  });
+}
+
+/** ENVÍO: manda al almacén los aprobados nuevos o cambiados (lo ejecuta el activador cada hora) */
+function enviarPrefacturasAlmacen() {
+  var lock = LockService.getScriptLock(); if (!lock.tryLock(20000)) return;
+  try {
+    var props = PropertiesService.getScriptProperties(), enviados = JSON.parse(props.getProperty(ALM_PF_PROP) || '{}'), n = 0;
+    almPfLeer_().forEach(function (p) {
+      var huella = JSON.stringify(p.lineas);
+      if (enviados[p.id] === huella) return;
+      try {
+        var r = almacenLlamar_({ origen: 'holded', numInst: p.numInst, documento: p.documento, fechaAprobacion: p.fechaAprobacion, lineas: p.lineas });
+        if (r && r.error) { almacenLog_('ERROR', p.numInst, 'Prefactura ' + p.documento + ': ' + r.error, null); return; }
+        enviados[p.id] = huella; n++;
+        if (p.sinTraducir.length) almacenLog_('AVISO', p.numInst, 'Prefactura ' + p.documento + ' · líneas sin traducir: ' + p.sinTraducir.join(' | '), null);
+      } catch (e) { almacenLog_('ERROR', p.numInst, 'Prefactura ' + p.documento + ': ' + (e.message || e), null); }
+    });
+    var ids = Object.keys(enviados); if (ids.length > 800) ids.slice(0, ids.length - 800).forEach(function (k) { delete enviados[k]; });
+    props.setProperty(ALM_PF_PROP, JSON.stringify(enviados));
+    if (n) Logger.log('Prefacturas enviadas al almacén: ' + n);
+  } finally { lock.releaseLock(); }
+}
+
+/** Activa la revisión automática cada hora (ejecutar UNA vez) */
+function instalarPrefacturasAlmacen() {
+  ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'enviarPrefacturasAlmacen') ScriptApp.deleteTrigger(t); });
+  ScriptApp.newTrigger('enviarPrefacturasAlmacen').timeBased().everyHours(1).create();
+  Logger.log('Revisión horaria de prefacturas activada.');
+}
