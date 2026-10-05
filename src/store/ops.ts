@@ -13,7 +13,7 @@ import { redondea } from '../domain/formato';
 import { asignarHerramienta, registrarIncidencia } from '../domain/herramientas';
 import { fotoDe, grupoFoto } from '../domain/fotos';
 import { normalizarTelefono } from '../domain/whatsapp';
-import { EQUIVALENCIAS_PROPUESTA, KITS_PROPUESTA, registrarVersionLocal, sincronizarCierreLocal, type EnvioCierre, type LineaTraducida } from '../domain/cierres';
+import { EQUIVALENCIAS_PROPUESTA, KITS_PROPUESTA, estadoLinea, quitarResueltasCubiertas, registrarVersionLocal, sincronizarCierreLocal, type EnvioCierre, type LineaTraducida } from '../domain/cierres';
 import { cambiarCodigoLocal, fusionarLocal, reasignarLineaLocal } from '../domain/fichas';
 import { ajustarLocal, previsionAjuste } from '../domain/ajuste';
 import { asociarLocal, motivoSkuNoValido, quitarCodigoLocal, type TipoCodigo } from '../domain/codigos';
@@ -377,13 +377,14 @@ export const OPS: Defs = {
       if (S.rol !== 'admin') throw new Error('Solo el administrador');
       const ci = S.cierres.find(c => c.id === a.id); if (!ci || ci.estado === 'ignorado') return;
       const antes = new Map<string, number>(); for (const m of S.movements) if (m.cierre === a.id) antes.set(m.sku, (antes.get(m.sku) || 0) - (m.unidades || 0));
+      quitarResueltasCubiertas(S, a.id, a.lineas);
       const resueltos = new Set(S.lineasCierre.filter(l => l.cierre === a.id && l.estado === 'resuelta').map(l => l.campo));
       S.lineasCierre = S.lineasCierre.filter(l => l.cierre !== a.id || l.estado === 'resuelta');
       for (const l of a.lineas) {
         if (l.estado !== 'aplicable' && resueltos.has(l.campo)) continue;
         const sku = l.sku && find(S, l.sku) && !find(S, l.sku)!.borrador ? l.sku : undefined;
         S.lineasCierre.push({ id: uid('L'), cierre: a.id, campo: l.campo, formula: l.formula, valor: l.valor, sku, cantidad: l.cantidad, estimada: l.estimada,
-          estado: l.estado === 'aplicable' && sku ? 'aplicada' : l.estado === 'pendiente' ? 'pendiente' : 'sin_equivalencia', nota: l.nota });
+          estado: estadoLinea(l, sku), nota: l.nota });
       }
       sincronizarCierreLocal(S, a.id);
       const despues = new Map<string, number>(); for (const m of S.movements) if (m.cierre === a.id) despues.set(m.sku, (despues.get(m.sku) || 0) - (m.unidades || 0));
@@ -402,7 +403,7 @@ export const OPS: Defs = {
       if (i >= 0) S.equivalencias[i] = { ...regla }; else S.equivalencias.push({ ...regla });
       S.equivalencias.sort((a, b) => a.orden - b.orden);
     },
-    rpc: ({ regla: r }) => ['guardar_equivalencia', { p: { id: r.id, campo: r.campo, formula: r.formula, condiciones: r.condiciones, articulos: r.articulos, kit: r.kit ?? '', estimada: r.estimada, activa: r.activa, orden: r.orden, nota: r.nota ?? '', confirmada: r.confirmada } }],
+    rpc: ({ regla: r }) => ['guardar_equivalencia', { p: { id: r.id, campo: r.campo, formula: r.formula, condiciones: r.condiciones, articulos: r.articulos, kit: r.kit ?? '', estimada: r.estimada, activa: r.activa, orden: r.orden, nota: r.nota ?? '', confirmada: r.confirmada, sin_descuento: r.sinDescuento ?? '' } }],
     desc: (_S, a) => `Equivalencia de ${a.regla.campo}`,
   },
   cargarPropuesta: {

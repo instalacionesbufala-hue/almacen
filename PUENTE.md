@@ -965,7 +965,7 @@ Una tabla con una fila por apartado y casillas **Ver** y **Modificar**, en lengu
 7. **Caso real:** que el usuario pueda dejar el **corrugado 6200020032** como **rollo de 50 m**, convirtiendo los 150 m actuales a 3 rollos y los de las furgonetas en proporción. Explicar los pasos en la respuesta. **No tocar sus datos.**
 8. **Hecho cuando** hay pruebas de: conversión de metros a rollos en almacén y vehículos, consumo de un cierre en metros sobre un artículo en rollos, entrega por rollos y por metros sueltos, y recuento mixto.
 
-### E-032 · La prefactura aprobada trae el tipo de línea, la sección, el UTP y el equipo: que el almacén los use · PENDIENTE (urgente)
+### E-032 · La prefactura aprobada trae el tipo de línea, la sección, el UTP y el equipo: que el almacén los use · HECHO
 **Caso real del usuario (05/10), presupuesto E2632263 aprobado en Holded.** Llegó **antes** que el cierre del wizard y salió "sin equipo · Equipo sin vehículo", con `metrosLinea` **sin equivalencia**, `metrosUtp` **"Por elegir"** y `preinst` **sin equivalencia**. Las líneas de Holded decían todo:
 - "LÍNEA ELÉCTRICA **MONOFÁSICA 3x6mm BAJO TUBO** DE PVC" → tubo · mono · sección 6, es decir, 3 conductores H07Z1-K de 6 mm²;
 - "CABLE DATOS **U/UTP** CAT 6" → U/UTP.
@@ -2758,3 +2758,70 @@ En "Para el día a día" se explican el ajuste y el aviso.
 - `tsc -b` y build correctos.
 - **En el navegador (demo con el corrugado como en producción):** Editar → Rollos 50 m → la pregunta con las dos opciones y sus cifras → 3 rollos (150 m), mínimo 2, furgonetas −0,36 / −0,18 / 0,8 rollos. Con metros sueltos, la cesta en metros (15 m → 0,3 rollos).
   - Fallo encontrado y corregido: el mínimo no se convertía, porque la ficha ya estaba actualizada al calcularlo.
+
+### 05/10/2026 · E-032 · HECHO
+**Aplicado en producción:**
+- migración `20261022000100_e032_prefactura_atributos.sql`;
+- `registrar-cierre` desplegada.
+
+**Cambio en la base real (decisión del usuario, 05/10):** `preinst` → **"Material no gestionado en el almacén"**.
+- No había regla para `preinst`; he creado `E032-PREINST`.
+- Las dos reglas de UTP por cable de datos (`P-UTP-F`, orden 48; `P-UTP-U`, orden 49) van por delante de las de modelo de cargador (P05 y P06).
+
+**Comprobado en producción (solo lectura):**
+- las reglas quedan así;
+- **E2632263 y E2632019 siguen como estaban**: aún no los ha reenviado el Apps Script, que revisa cada hora.
+
+**Simulación con las reglas reales** de lo que calculará el servidor cuando llegue E2632263 con sus atributos:
+- 28 m de 6000650603, 6000650604 y 6000650605 (H07Z1-K 6 mm² marrón, azul y amarillo/verde);
+- 28 m de 7270020010 (U/UTP);
+- 2 RJ45 y 3 de corrugado;
+- `preinst` 1, "no gestionado".
+- Todo se descuenta de la furgoneta del equipo del calendario, en la fecha de la instalación.
+- Las resoluciones a mano que tenía (10 mm² y U/UTP) **se sustituyen, no se suman** (ver 5).
+
+**E2632019 no se reenviará:** no tiene material, y el Apps Script ya no envía esas prefacturas. Seguirá "sin vehículo", pero no descuenta nada. Si el usuario quiere quitarlo del aviso, puede pulsar "Usar el vehículo actual" en él: no tiene líneas, así que no mueve nada.
+
+**1. `atributos` en la prefactura** (módulo compartido, usado por `registrar-cierre` y por la app)
+- `normalizarAtributos`:
+  - "3x6mm" → 6 y "5G10mm" → 10;
+  - "BAJO TUBO" → tubo y "MONOFÁSICA" → mono;
+  - el cable de datos tal cual;
+  - equipo, cargador, fecha y material especial del calendario.
+- Se guardan en la versión Holded (`cierres.holded.atributos`).
+- **La misma prefactura con atributos distintos es versión nueva**, no duplicado.
+
+**2. Precedencia** (`cierreEfectivo`)
+- `tipoLinea`, `fase`, `seccion` y `cableDatos`: **manda la prefactura** si los trae.
+- `equipo`, `fechaCierreIso`, `hardware` y `materialEspecial`: **manda el wizard**; la prefactura solo rellena lo que el wizard no trae.
+- **Prefactura sin cierre del wizard:** se guarda con el equipo, el cargador y la fecha del calendario, así que **ya tiene vehículo y descuenta**. Cada prefactura nueva lo rehace mientras no llegue el wizard.
+- **Fecha del cierre:** mientras no haya llegado el wizard, la que trae la versión (la de la instalación, no la de aprobación). Cuando llega el wizard, la suya.
+
+**3. UTP según `cableDatos`:** F/UTP o FTP → F/UTP; U/UTP o UTP → U/UTP. Si no viene, por el cargador, como antes. Ya no sale "Por elegir" cuando la prefactura lo dice.
+
+**4. Partidas sin descuento** (Equivalencias → regla → **"Qué descuenta"**)
+- **"No descuenta material (servicio)":** la partida no deja línea ni queda pendiente.
+- **"Material no gestionado en el almacén":** queda la línea con su cantidad, en estado nuevo `no_gestionado`. No descuenta, no cuenta como pendiente ni como "sin equivalencia", y el cierre no queda "parcial".
+  - Se ve en el cierre con la etiqueta "material no gestionado en el almacén".
+  - En "Consumo del periodo" hay un apartado propio (partida, cantidad y cuántos cierres), y va también en el CSV.
+  - Cuando se den de alta los artículos, basta con cambiar la regla a "Artículos del almacén". Los cierres anteriores solo cambian con "Recalcular cierres desde…".
+- **En la base:** columna `equivalencias_cierre.sin_descuento` y `guardar_equivalencia` la guarda.
+
+**5. Decisión de Code (necesaria para E2632263):** si una regla ya cubre una partida, **sustituye su resolución manual**.
+- Sin esto, al llegar la prefactura con atributos se habrían sumado los 28 m de 10 mm² resueltos a mano y los 28 m de 6 mm² de la regla: 56 m de cada uno.
+- Una partida que sigue sin regla conserva su resolución (E-030).
+- Va en `_registrar_version_cierre`, en `recalcular_cierre_admin` y en la app.
+
+**Cómo se ha hecho en la base:** las tres funciones (`_registrar_version_cierre`, `recalcular_cierre_admin` y `guardar_equivalencia`) se reescriben en el sitio, comprobando que cada texto aparece una sola vez, como en E-031.
+
+**Pruebas: 479 en verde** (+13):
+- `supabase/tests/e032.test.ts` (6):
+  - prefactura sin cierre previo con atributos y equipo: V-F02, la fecha de la instalación, 3 conductores de 6 mm², U/UTP aunque el cargador sea Policharger, `preinst` no gestionado y el servicio sin línea;
+  - precedencia (prefactura en tipo, sección y UTP; wizard en equipo y fecha, y otra versión del wizard no lo deshace);
+  - prefactura y luego wizard (manda su fecha y su equipo);
+  - duplicado o versión nueva según los atributos;
+  - el caso real (resuelta a mano con 10 mm²: la regla la sustituye, no se suma);
+  - `guardar_equivalencia` con `sin_descuento`.
+- `src/domain/e032.test.ts` (7): normalización, precedencia, versiones, UTP, partidas sin descuento y el estado local (incluido el resumen de no gestionado).
+- `tsc -b`, `deno check` y build correctos.
+- **En el navegador:** el formulario de regla con "Qué descuenta" (sus tres opciones; en las dos sin descuento se ocultan los artículos y se explica).

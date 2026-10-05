@@ -5,7 +5,7 @@ import { cantTxt } from '../../domain/formatos';
 import { Fragment, useState } from 'react';
 import type { CierreApp, EstadoCierre, LineaCierre, Unidad } from '../../data/tipos';
 import { conductoresSueltos, datosLinea, filtroRZ1K, mangueraRZ1K, reglaDeResolucion, type Propuesta } from '../../domain/resolucion';
-import { consumoPorArticulo, desdeCierresPorDefecto, discrepancias, lineasDe, noEntregadosPorArticulo, ORIGEN_VERSION, textoDiferencia } from '../../domain/cierres';
+import { consumoPorArticulo, desdeCierresPorDefecto, discrepancias, lineasDe, noEntregadosPorArticulo, noGestionadoPorPartida, ORIGEN_VERSION, textoDiferencia } from '../../domain/cierres';
 import { vehiculoActualDeCierre, vehiculoHistorialDeCierre } from '../../domain/asignaciones';
 import { descargarCsv } from '../../domain/csv';
 import { fechaHora, hoyISO, num, redondea, toNum } from '../../domain/formato';
@@ -36,13 +36,14 @@ export default function CierresView() {
   // sin useMemo: el estado se modifica en el sitio (misma referencia), y la lista y el consumo se quedarían viejos tras procesar un cierre
   const lista = E.cierres.filter(c => (f.equipo === 'all' || c.equipoWizard === f.equipo) && (f.estado === 'all' || c.estado === f.estado)
     && c.fecha >= Date.parse(f.desde) && c.fecha < Date.parse(f.hasta) + 864e5);
-  const consumo = consumoPorArticulo(E, lista), noEntregados = noEntregadosPorArticulo(E, lista);
+  const consumo = consumoPorArticulo(E, lista), noEntregados = noEntregadosPorArticulo(E, lista), noGestionado = noGestionadoPorPartida(E, lista);
   const sinVehiculo = E.cierres.filter(c => c.estado === 'sin_vehiculo'), sinVehiculoLista = lista.filter(c => c.estado === 'sin_vehiculo').length;
   const [n, mas] = useMas(100, JSON.stringify(f));
   const disc = discrepancias(E);
   const pendientes = E.lineasCierre.filter(l => l.estado === 'pendiente' || l.estado === 'sin_equivalencia').length;
   const exportar = () => descargarCsv(`consumos-cierres-${f.desde}-${f.hasta}.csv`, [['SKU', 'Artículo', 'Unidades', 'Formatos', 'Unidad', 'Estimado'],
-    ...consumo.map(c => [c.sku, c.nombre, c.unidades, c.formatos, c.unidad, c.estimada ? 'sí' : ''])]);
+    ...consumo.map(c => [c.sku, c.nombre, c.unidades, c.formatos, c.unidad, c.estimada ? 'sí' : '']),
+    ...noGestionado.map(x => ['', `${x.campo} (material no gestionado en el almacén: no descontado)`, x.cantidad, '', '', ''])]);
   if (!E.cierres.length) return <section className={`${CARD} p-6 flex flex-col gap-2`}><h2 className="text-headline-sm font-semibold">Aún no ha llegado ningún cierre</h2>
     <p className="text-body-md text-secondary">Cuando el wizard de cierres esté conectado (Configuración → Integraciones y la guía, paso 14), cada cierre descontará aquí el material del vehículo de su equipo.</p></section>;
   return (<div className="flex flex-col gap-4">
@@ -68,6 +69,9 @@ export default function CierresView() {
           {noEntregados.length > 0 && <div className="flex flex-col pt-2"><h3 className="font-semibold text-body-md">Instalados no entregados por el almacén</h3>
             <p className="text-body-sm text-secondary mb-1">Cargadores que el equipo ya llevaba: se instalaron, pero no se descuentan.</p>
             {noEntregados.map(x => <div key={x.sku} className="flex justify-between gap-2 py-1.5 border-b border-surface-container text-body-sm"><span className="min-w-0 truncate">{x.nombre}</span><b className="whitespace-nowrap text-violet-800">{num(x.formatos)} {unidadTxt(x.unidad as Unidad, x.formatos)}</b></div>)}</div>}
+          {noGestionado.length > 0 && <div className="flex flex-col pt-2"><h3 className="font-semibold text-body-md">Material no gestionado en el almacén</h3>
+            <p className="text-body-sm text-secondary mb-1">Partidas que llevan material que aún no está en el almacén: se cuentan, no se descuentan.</p>
+            {noGestionado.map(x => <div key={x.campo} className="flex justify-between gap-2 py-1.5 border-b border-surface-container text-body-sm"><span className="font-mono">{x.campo}</span><b className="whitespace-nowrap">{num(x.cantidad)} · {x.cierres} cierre{x.cierres === 1 ? '' : 's'}</b></div>)}</div>}
         </section>
         <section className={`${CARD} p-4 flex flex-col gap-2`}>
           <h2 className="font-semibold flex items-center gap-2"><Icon n="report" className="text-error" />Discrepancias</h2>
@@ -102,8 +106,9 @@ function FilaCierre({ c, abierto, alternar, puede }: { c: CierreApp; abierto: bo
           <tbody>{lineas.map(l => { const p = l.sku ? find(E, l.sku) : undefined; const resolver = puede && (l.estado === 'pendiente' || l.estado === 'sin_equivalencia'); return (<Fragment key={l.id}>
             <tr className="border-t border-surface-container align-top">
               <td className="py-1.5 font-mono text-label-sm">{l.campo}{l.formula !== 'directa' && l.formula !== 'unidad' ? ` (${l.formula})` : ''}<div className="text-secondary">{num(l.valor)}</div></td>
-              <td className="py-1.5">{p ? p.name : <span className="text-amber-800">{l.estado === 'pendiente' ? 'Por elegir' : 'Sin equivalencia'}</span>}
+              <td className="py-1.5">{p ? p.name : l.estado === 'no_gestionado' ? <span className="text-secondary">—</span> : <span className="text-amber-800">{l.estado === 'pendiente' ? 'Por elegir' : 'Sin equivalencia'}</span>}
                 {l.estado === 'no_entregado' && <Tag c="bg-violet-100 text-violet-800 ml-1">no entregado por el almacén: no se descuenta</Tag>}
+                {l.estado === 'no_gestionado' && <Tag c="bg-surface-container-high text-secondary ml-1">material no gestionado en el almacén: no descuenta</Tag>}
                 {l.estimada && <Tag c="bg-amber-100 text-amber-800 ml-1">estimado</Tag>}{l.estado === 'discrepancia' && <Tag c="bg-error-container text-error ml-1">deja el vehículo en negativo</Tag>}
                 {l.nota && <div className="text-label-sm text-secondary">{l.nota}</div>}
                 {puede && l.estado === 'resuelta' && (!l.resolucion || l.previo) && <button onClick={() => deshacer(E, l)} className="text-error text-body-sm font-semibold h-10 flex items-center gap-1"><Icon n="undo" className="ico-18" />Deshacer resolución</button>}</td>

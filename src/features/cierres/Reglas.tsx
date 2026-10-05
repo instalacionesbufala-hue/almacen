@@ -63,14 +63,14 @@ export const abrirRegla = (r?: Equivalencia, duplicar = false) => openModal(<For
 function FormRegla({ r, duplicar }: { r?: Equivalencia; duplicar: boolean }) {
   const E = useAlmacen();
   const [f, setF] = useState({ campo: r?.campo || '', formula: r?.formula || 'directa' as Equivalencia['formula'], articulos: r?.articulos || [], kit: r?.kit || '',
-    estimada: r?.estimada ?? false, orden: String(duplicar ? (r?.orden ?? 0) + 1 : r?.orden ?? (Math.max(0, ...E.equivalencias.map(x => x.orden)) + 10)), nota: r?.nota || '' });
+    estimada: r?.estimada ?? false, sinDescuento: (r?.sinDescuento || '') as '' | 'servicio' | 'no_gestionado', orden: String(duplicar ? (r?.orden ?? 0) + 1 : r?.orden ?? (Math.max(0, ...E.equivalencias.map(x => x.orden)) + 10)), nota: r?.nota || '' });
   const [conds, setConds] = useState<FilaCond[]>(aFilas(r?.condiciones || {}));
   const [versiones, setVersiones] = useState<{ ts: string; operario: string; version: Equivalencia }[] | null>(null);
   const guardar = () => {
     if (!f.campo.trim()) return toast('Indica la partida del wizard.', 'err');
-    if (f.formula !== 'fijaciones' && f.articulos.some(a => a.sku === '')) return toast('Elige el artículo de cada línea (o quítala).', 'err');
+    if (!f.sinDescuento && f.formula !== 'fijaciones' && f.articulos.some(a => a.sku === '')) return toast('Elige el artículo de cada línea (o quítala).', 'err');
     const regla: Equivalencia = { id: r && !duplicar ? r.id : `R${Date.now().toString(36)}`, campo: f.campo.trim(), formula: f.formula, condiciones: deFilas(conds),
-      articulos: f.formula === 'fijaciones' ? [] : f.articulos, kit: f.formula === 'fijaciones' ? (f.kit || null) : null,
+      articulos: f.formula === 'fijaciones' || f.sinDescuento ? [] : f.articulos, kit: f.formula === 'fijaciones' && !f.sinDescuento ? (f.kit || null) : null, sinDescuento: f.sinDescuento || null,
       estimada: f.estimada || f.formula === 'manguitos' || f.formula === 'fijaciones', activa: r?.activa ?? true, orden: Number(f.orden) || 100, nota: f.nota.trim(),
       confirmada: r && !duplicar ? r.confirmada : false };
     if (ejecutar({ op: 'equivalencia', args: { regla } })) { closeModal(); toast(duplicar ? 'Regla duplicada como borrador.' : r?.confirmada ? 'Regla guardada (la versión anterior queda en el historial).' : 'Regla guardada.', 'ok'); }
@@ -90,7 +90,11 @@ function FormRegla({ r, duplicar }: { r?: Equivalencia; duplicar: boolean }) {
         <div><div className={`${LBL} mb-1`}>Condiciones</div><CondicionesEditor filas={conds} onChange={setConds} /></div>
       </div>
       <div className="flex flex-col gap-3">
-        {f.formula === 'fijaciones' ? <Campo label="Kit de fijación (vacío = el de por defecto)"><select value={f.kit} onChange={e => setF({ ...f, kit: e.target.value })} className={`${INP} h-12`}><option value="">Por defecto ({E.configApp.kitFijacion || 'A'})</option><option>A</option><option>B</option><option>C</option></select></Campo>
+        <Campo label="Qué descuenta"><select value={f.sinDescuento} onChange={e => setF({ ...f, sinDescuento: e.target.value as '' | 'servicio' | 'no_gestionado' })} className={`${INP} h-12`}>
+          <option value="">Artículos del almacén</option><option value="servicio">No descuenta material (servicio: solo mano de obra)</option><option value="no_gestionado">Material no gestionado en el almacén (se cuenta, no descuenta)</option></select></Campo>
+        {f.sinDescuento === 'servicio' && <p className="text-body-sm text-secondary">La partida no deja línea en el cierre ni queda pendiente.</p>}
+        {f.sinDescuento === 'no_gestionado' && <p className="text-body-sm text-secondary">La partida lleva material que aún no está en el almacén: queda en el cierre y en los informes con su cantidad, sin descontar nada ni quedar pendiente. Cuando lo des de alta, cambia aquí a "Artículos del almacén" (los cierres anteriores no cambian salvo con "Recalcular cierres desde…").</p>}
+        {f.sinDescuento ? null : f.formula === 'fijaciones' ? <Campo label="Kit de fijación (vacío = el de por defecto)"><select value={f.kit} onChange={e => setF({ ...f, kit: e.target.value })} className={`${INP} h-12`}><option value="">Por defecto ({E.configApp.kitFijacion || 'A'})</option><option>A</option><option>B</option><option>C</option></select></Campo>
           : <div><div className={`${LBL} mb-1`}>Artículos (cantidad en unidades del artículo por unidad de la partida: 1 m → 1 m)</div><ArticulosEditor valor={f.articulos} onChange={a => setF({ ...f, articulos: a })} /></div>}
         <div className="grid grid-cols-2 gap-2">
           <Campo label="Orden"><input value={f.orden} onChange={e => setF({ ...f, orden: e.target.value })} inputMode="numeric" className={`${INP} h-12`} /></Campo>

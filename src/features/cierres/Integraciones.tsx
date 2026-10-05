@@ -91,7 +91,7 @@ export function Integraciones() {
         <tbody>{E.equivalencias.map(r => <tr key={r.id} className={`border-t border-surface-container align-top ${r.activa ? '' : 'opacity-50'}`}>
           <td className="p-2 font-mono">{r.campo}{!r.confirmada && <Tag c="bg-amber-100 text-amber-800 ml-1">borrador</Tag>}</td>
           <td className="p-2 font-mono text-label-sm">{condicionesTexto(r.condiciones) || '—'}</td>
-          <td className="p-2">{r.formula === 'fijaciones' ? `kit ${r.kit || E.configApp.kitFijacion || 'A'}` : r.articulos.map((a, i) => { const p = a.sku ? find(E, a.sku) : undefined;
+          <td className="p-2">{r.sinDescuento ? <span className="text-secondary">{r.sinDescuento === 'servicio' ? 'No descuenta material (servicio)' : 'Material no gestionado en el almacén (se cuenta, no descuenta)'}</span> : r.formula === 'fijaciones' ? `kit ${r.kit || E.configApp.kitFijacion || 'A'}` : r.articulos.map((a, i) => { const p = a.sku ? find(E, a.sku) : undefined;
             return <div key={i} className={!a.sku || !p ? 'text-error font-semibold' : ''}>{a.sku ? `${a.sku}${p ? ` · ${p.name}` : ' · NO EXISTE en el catálogo'}` : `${a.nombre || 'artículo'}: sin dar de alta`}{a.factor !== 1 ? ` ×${a.factor}` : ''}</div>; })}
             {r.formula === 'fijaciones' && (E.kits[r.kit || E.configApp.kitFijacion || 'A'] || []).some(a => !a.sku || !find(E, a.sku)) && <div className="text-error font-semibold">el kit tiene artículos que no existen</div>}
             {r.nota && <div className="text-label-sm text-secondary">{r.nota}</div>}</td>

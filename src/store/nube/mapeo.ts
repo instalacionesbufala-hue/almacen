@@ -63,7 +63,7 @@ export function aEstado(t: Tablas, base: Pick<Estado, 'cesta' | 'seq'>, operador
     .sort((a, b) => b.fecha - a.fecha);
   const lineasCierre: LineaCierre[] = (t.cierre_lineas || []).map(l => ({ id: l.id, cierre: l.cierre_id, campo: l.campo, formula: l.formula, valor: n(l.valor), sku: l.sku ?? undefined, cantidad: n(l.cantidad), estimada: !!l.estimada, estado: l.estado, nota: l.nota || '',
     ...(l.resolucion ? { resolucion: l.resolucion } : {}), ...(l.previo ? { previo: { estado: l.previo.estado, sku: l.previo.sku ?? undefined, cantidad: n(l.previo.cantidad), nota: l.previo.nota || '' } } : {}) }));
-  const equivalencias: Equivalencia[] = (t.equivalencias_cierre || []).map(r => ({ id: r.id, campo: r.campo, formula: r.formula, condiciones: r.condiciones || {}, articulos: r.articulos || [], kit: r.kit, estimada: !!r.estimada, activa: !!r.activa, orden: r.orden, nota: r.nota || '', confirmada: !!r.confirmada }))
+  const equivalencias: Equivalencia[] = (t.equivalencias_cierre || []).map(r => ({ id: r.id, campo: r.campo, formula: r.formula, condiciones: r.condiciones || {}, articulos: r.articulos || [], kit: r.kit, estimada: !!r.estimada, activa: !!r.activa, orden: r.orden, nota: r.nota || '', confirmada: !!r.confirmada, ...(r.sin_descuento ? { sinDescuento: r.sin_descuento } : {}) }))
     .sort((a, b) => a.orden - b.orden);
   const kits: Record<string, ArticuloRegla[]> = Object.fromEntries((t.kits_fijacion || []).map(k => [k.kit, k.articulos || []]));
   const integraciones: Integracion[] = (t.integraciones || []).map(i => ({ id: i.id, nombre: i.nombre, creado: ms(i.creado), creadoPor: i.creado_por, revocado: i.revocado ? ms(i.revocado) : undefined, ultimoUso: i.ultimo_uso ? ms(i.ultimo_uso) : undefined }));

@@ -63,6 +63,15 @@ export function prepararEnvio(S: Estado, raw: Record<string, unknown>, origen: O
     meta: { clave, accion: v.accion, origen, documento: v.documento, base: p?.version || 0, wizard: v.wizard, holded: v.holded, entrada: raw } };
 }
 
+/** Estado de una línea traducida al guardarla (E-032: no_gestionado se conserva) */
+export const estadoLinea = (l: LineaTraducida, sku?: string): LineaCierre['estado'] =>
+  l.estado === 'aplicable' && sku ? 'aplicada' : l.estado === 'pendiente' ? 'pendiente' : l.estado === 'no_gestionado' ? 'no_gestionado' : 'sin_equivalencia';
+/** E-032: una partida que una regla ya cubre sustituye su resolución manual (si no, se sumarían las dos) */
+export function quitarResueltasCubiertas(S: Estado, cierre: string, lineas: LineaTraducida[]) {
+  const cubiertos = new Set(lineas.filter(l => l.estado === 'aplicable' && l.sku && find(S, l.sku) && !find(S, l.sku)!.borrador).map(l => l.campo));
+  if (cubiertos.size) S.lineasCierre = S.lineasCierre.filter(l => l.cierre !== cierre || l.estado !== 'resuelta' || !cubiertos.has(l.campo));
+}
+
 /** Guarda una versión de un cierre en el estado local (= _registrar_version_cierre) */
 export function registrarVersionLocal(S: Estado, a: EnvioCierre): { estado: string; id: string; version?: number; diferencia?: { sku: string; unidades: number }[] } {
   const { efectivo: c, lineas, meta } = a;
@@ -89,13 +98,14 @@ export function registrarVersionLocal(S: Estado, a: EnvioCierre): { estado: stri
   (ci.versiones ||= []).push(version);
   if (ci.estado === 'ignorado') return { estado: 'ignorado', id: ci.id };
   const id = ci.id, antes = consumoDe(S, id);
+  quitarResueltasCubiertas(S, id, lineas);
   const resueltos = new Set(S.lineasCierre.filter(l => l.cierre === id && l.estado === 'resuelta').map(l => l.campo));
   S.lineasCierre = S.lineasCierre.filter(l => l.cierre !== id || l.estado === 'resuelta');
   for (const l of lineas) {
     if (l.estado !== 'aplicable' && resueltos.has(l.campo)) continue;
     const sku = l.sku && find(S, l.sku) && !find(S, l.sku)!.borrador ? l.sku : undefined;
     S.lineasCierre.push({ id: uid('L'), cierre: id, campo: l.campo, formula: l.formula, valor: l.valor, sku, cantidad: l.cantidad, estimada: l.estimada,
-      estado: l.estado === 'aplicable' && sku ? 'aplicada' : l.estado === 'pendiente' ? 'pendiente' : 'sin_equivalencia', nota: l.nota });
+      estado: estadoLinea(l, sku), nota: l.nota });
   }
   sincronizarCierreLocal(S, id);
   const despues = consumoDe(S, id);
@@ -132,6 +142,17 @@ function resumenLineas(S: Estado, cierres: CierreApp[], estados: string[]) {
   }
   return [...m.values()].map(x => { const p = find(S, x.sku); return { ...x, nombre: p?.name || x.sku, formatos: p ? redondea(x.unidades / contenidoDe(p)) : x.unidades, unidad: p?.unit || 'ud' }; })
     .sort((a, b) => a.nombre.localeCompare(b.nombre));
+}
+
+/** E-032 · Partidas con material no gestionado en el almacén: cuánto y en cuántos cierres (no descuentan) */
+export function noGestionadoPorPartida(S: Estado, cierres: CierreApp[]) {
+  const ids = new Set(cierres.filter(c => c.estado !== 'fallido' && c.estado !== 'ignorado').map(c => c.id));
+  const m = new Map<string, { campo: string; cantidad: number; cierres: Set<string> }>();
+  for (const l of S.lineasCierre) if (ids.has(l.cierre) && l.estado === 'no_gestionado') {
+    const x = m.get(l.campo) || { campo: l.campo, cantidad: 0, cierres: new Set<string>() };
+    x.cantidad = redondea(x.cantidad + l.cantidad); x.cierres.add(l.cierre); m.set(l.campo, x);
+  }
+  return [...m.values()].map(x => ({ campo: x.campo, cantidad: x.cantidad, cierres: x.cierres.size })).sort((a, b) => a.campo.localeCompare(b.campo));
 }
 
 /** E-029 · Desde qué día enseña la lista de cierres por defecto: la apertura del inventario, o hace 30 días si es anterior o no hay */

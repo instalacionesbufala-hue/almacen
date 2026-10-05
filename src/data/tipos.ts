@@ -195,7 +195,8 @@ export interface VersionCierre { n: number; origen: string; documento: string; r
 export interface LineaCierre {
   id: string; cierre: string; campo: string; formula: string; valor: number; sku?: string; cantidad: number; estimada: boolean;
   /** E-026: no_entregado = cargador instalado que no salió del almacén gestionado (antes del 05/10): no se descuenta */
-  estado: 'aplicada' | 'discrepancia' | 'sin_equivalencia' | 'pendiente' | 'resuelta' | 'no_entregado'; nota: string;
+  /** E-032: no_gestionado = la partida lleva material que aún no gestiona el almacén: se cuenta, no descuenta ni queda pendiente */
+  estado: 'aplicada' | 'discrepancia' | 'sin_equivalencia' | 'pendiente' | 'resuelta' | 'no_entregado' | 'no_gestionado'; nota: string;
   /** E-030: resolución manual (grupo de líneas) y cómo estaba la línea original, para deshacerla */
   resolucion?: string; previo?: { estado: LineaCierre['estado']; sku?: string; cantidad: number; nota: string };
 }
@@ -203,6 +204,8 @@ export interface ArticuloRegla { sku: string | null; factor: number; nombre?: st
 export interface Equivalencia {
   id: string; campo: string; formula: 'directa' | 'manguitos' | 'fijaciones' | 'unidad'; condiciones: Record<string, string | string[]>;
   articulos: ArticuloRegla[]; kit?: string | null; estimada: boolean; activa: boolean; orden: number; nota?: string; confirmada: boolean;
+  /** E-032: la partida no descuenta (servicio) o lleva material no gestionado en el almacén */
+  sinDescuento?: 'servicio' | 'no_gestionado' | null;
 }
 export interface Integracion { id: string; nombre: string; creado: number; creadoPor: string; revocado?: number; ultimoUso?: number }
 

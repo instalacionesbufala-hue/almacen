@@ -19,7 +19,10 @@ export interface ArticuloRegla { sku: string | null; factor: number; nombre?: st
 export interface Regla {
   id: string; campo: string; formula: Formula; condiciones: Record<string, string | string[]>;
   articulos: ArticuloRegla[]; kit?: string | null; estimada: boolean; activa: boolean; orden: number; nota?: string;
+  /** E-032: la partida no descuenta: es solo mano de obra (servicio) o lleva material que aún no gestiona el almacén (no_gestionado) */
+  sinDescuento?: SinDescuento | null;
 }
+export type SinDescuento = 'servicio' | 'no_gestionado';
 export type Kits = Record<string, ArticuloRegla[]>;
 
 export interface Cierre {
@@ -28,7 +31,7 @@ export interface Cierre {
 }
 export interface LineaTraducida {
   campo: string; formula: Formula; valor: number; sku: string | null; cantidad: number; estimada: boolean;
-  estado: 'aplicable' | 'sin_equivalencia' | 'pendiente'; regla: string | null; nota: string;
+  estado: 'aplicable' | 'sin_equivalencia' | 'pendiente' | 'no_gestionado'; regla: string | null; nota: string;
 }
 
 /** E-026 · Partidas que vienen en la prefactura de Holded: sustituyen a las del cierre; las demás (tipoLinea, seccion, fase, pvc32, hardware, equipo, fecha) se conservan */
@@ -69,7 +72,24 @@ export function claveCierre(c: Pick<Cierre, 'esbrainUuid' | 'numInst'>): string 
 
 /* ---------- E-026 · Versiones de un cierre: directo (wizard), histórico y prefactura aprobada de Holded ---------- */
 export type OrigenVersion = 'wizard' | 'historico' | 'holded' | 'admin';
-export interface PrefacturaHolded { documento: string; fechaAprobacion: string; lineas: Record<string, number> }
+export interface PrefacturaHolded { documento: string; fechaAprobacion: string; lineas: Record<string, number>; atributos?: Record<string, string> }
+/** E-032 · Atributos que manda la prefactura: los de la línea (sacados de los nombres de las líneas de Holded) mandan sobre el wizard,
+    porque es lo facturado; los del calendario (equipo, cargador, fecha de la instalación) solo rellenan lo que el wizard no trae. */
+export const ATRIBUTOS_LINEA = ['tipoLinea', 'fase', 'seccion', 'cableDatos'] as const;
+export const ATRIBUTOS_CALENDARIO = ['equipo', 'hardware', 'fechaCierreIso', 'materialEspecial'] as const;
+export function normalizarAtributos(raw: unknown): Record<string, string> {
+  const a = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>, out: Record<string, string> = {};
+  for (const k of [...ATRIBUTOS_LINEA, ...ATRIBUTOS_CALENDARIO]) {
+    let v = txt(a[k]);
+    if (!v) continue;
+    if (k === 'tipoLinea') v = /tubo/i.test(v) ? 'tubo' : /manguera/i.test(v) ? 'manguera' : norm(v);
+    if (k === 'fase') v = /tri/i.test(v) ? 'trif' : /mono/i.test(v) ? 'mono' : norm(v);
+    if (k === 'seccion') { const m = v.match(/(\d+(?:[.,]\d+)?)\s*mm/i) || v.match(/(\d+(?:[.,]\d+)?)\s*$/); if (m) v = String(Number(m[1].replace(',', '.'))); }
+    if (k === 'materialEspecial') v = materialEspecial(v);
+    if (v) out[k] = v;
+  }
+  return out;
+}
 /** Lo que ya se sabe del cierre: los últimos datos del wizard (o del histórico), la última prefactura y qué orígenes han llegado */
 export interface PrevioCierre { version: number; wizard: Record<string, unknown> | null; holded: PrefacturaHolded | null; origenes: string[] }
 export interface Version { accion: 'nueva' | 'duplicado' | 'obsoleto'; origen: OrigenVersion; documento: string; wizard: Cierre | null; holded: PrefacturaHolded | null; efectivo: Cierre; avisos: string[] }
@@ -80,12 +100,16 @@ export function normalizarPrefactura(raw: Record<string, unknown>): PrefacturaHo
   for (const [k, v] of Object.entries((raw.lineas as Record<string, unknown>) || {})) {
     if ((CAMPOS_FACTURABLES as readonly string[]).includes(k)) lineas[k] = Math.max(0, numero(v)); else ignorados.push(k);
   }
-  return { documento: txt(raw.documento), fechaAprobacion: txt(raw.fechaAprobacion), lineas, ignorados };
+  const atributos = normalizarAtributos(raw.atributos);
+  return { documento: txt(raw.documento), fechaAprobacion: txt(raw.fechaAprobacion), lineas, ...(Object.keys(atributos).length ? { atributos } : {}), ignorados };
 }
 
 /** Los datos con los que se calcula el consumo: los del wizard con las partidas de la prefactura encima */
 export function cierreEfectivo(wizard: Record<string, unknown> | null, holded: PrefacturaHolded | null, extra: Record<string, unknown> = {}): Cierre {
-  return normalizarCierre({ ...extra, ...(wizard || {}), ...(holded?.lineas || {}) });
+  const at = holded?.atributos || {}, base: Record<string, unknown> = { ...extra, ...(wizard || {}) };
+  for (const k of ATRIBUTOS_CALENDARIO) if (!txt(base[k]) && at[k]) base[k] = at[k];      // manda el wizard; si no lo trae, el calendario
+  for (const k of ATRIBUTOS_LINEA) if (at[k]) base[k] = at[k];                            // manda la prefactura aprobada
+  return normalizarCierre({ ...base, ...(holded?.lineas || {}) });
 }
 
 const mismoMaterial = (a: Record<string, unknown>, b: Record<string, unknown>) => CAMPOS_IDENTICOS.every(k => norm(a[k]) === norm(b[k]) || (numero(a[k]) === numero(b[k]) && (CAMPOS_MATERIAL as readonly string[]).includes(k)));
@@ -103,11 +127,15 @@ export function prepararVersion(previo: PrevioCierre | null, origen: OrigenVersi
     if (!normInst(raw.numInst)) throw new Error('La prefactura no trae numInst');
     if (pf.ignorados.length) avisos.push(`Partidas de la prefactura que no se usan: ${pf.ignorados.join(', ')}`);
     documento = pf.documento;
-    const nueva: PrefacturaHolded = { documento: pf.documento, fechaAprobacion: pf.fechaAprobacion, lineas: { ...(holded?.lineas || {}), ...pf.lineas } };
-    if (holded && JSON.stringify(nueva.lineas) === JSON.stringify(holded.lineas) && (previo?.origenes || []).includes('holded')) accion = 'duplicado';
+    const atributos = { ...(holded?.atributos || {}), ...(pf.atributos || {}) };
+    const nueva: PrefacturaHolded = { documento: pf.documento, fechaAprobacion: pf.fechaAprobacion, lineas: { ...(holded?.lineas || {}), ...pf.lineas }, ...(Object.keys(atributos).length ? { atributos } : {}) };
+    if (holded && JSON.stringify(nueva.lineas) === JSON.stringify(holded.lineas) && JSON.stringify(nueva.atributos || {}) === JSON.stringify(holded.atributos || {})
+        && (previo?.origenes || []).includes('holded')) accion = 'duplicado';
     holded = nueva;
-    // prefactura sin cierre previo: se guarda con lo que traiga (equipo y fecha, si vienen)
-    if (!wizard) wizard = normalizarCierre({ numInst: raw.numInst, equipo: raw.equipo, fechaCierreIso: raw.fechaCierreIso || raw.fecha || pf.fechaAprobacion, cliente: raw.cliente, direccion: raw.direccion, hardware: raw.hardware });
+    // prefactura sin cierre del wizard (aún): se guarda con lo que traiga; E-032: equipo, cargador y fecha de la instalación del calendario
+    const hayWizard = (previo?.origenes || []).some(o => o === 'wizard' || o === 'historico');
+    if (!hayWizard) wizard = normalizarCierre({ numInst: raw.numInst, equipo: raw.equipo || atributos.equipo, fechaCierreIso: raw.fechaCierreIso || atributos.fechaCierreIso || raw.fecha || pf.fechaAprobacion,
+      cliente: raw.cliente || wizard?.cliente, direccion: raw.direccion || wizard?.direccion, hardware: raw.hardware || atributos.hardware, materialEspecial: atributos.materialEspecial });
   } else {
     const c = normalizarCierre(raw);
     if (wizard) {
@@ -151,6 +179,14 @@ export function traducirCierre(c: Cierre, reglas: Regla[], kits: Kits, kitDefect
   for (const lista of grupos.values()) {
     const r = lista.find(x => cumple(c, x.condiciones) && valorCampo(c, x.campo) > 0);
     if (!r) continue;
+    // E-032: partidas sin descuento. "servicio": nada; "no_gestionado": queda la línea con su cantidad (para contar), sin artículo ni pendiente
+    if (r.sinDescuento) {
+      r.campo.split('+').forEach(k => cubiertos.add(k.trim()));
+      const v = valorCampo(c, r.campo);
+      if (r.sinDescuento === 'no_gestionado') out.push({ campo: r.campo, formula: r.formula, valor: v, sku: null, cantidad: r.formula === 'unidad' ? 1 : v, estimada: r.estimada, estado: 'no_gestionado', regla: r.id,
+        nota: ['material no gestionado en el almacén: no descuenta', r.nota].filter(Boolean).join(' · ') });
+      continue;
+    }
     if (r.formula === 'directa') r.campo.split('+').forEach(k => cubiertos.add(k.trim()));   // manguitos y fijaciones son extras: no cubren la partida
     const v = valorCampo(c, r.campo);
     if (r.formula === 'fijaciones') {
@@ -203,6 +239,9 @@ export const EQUIVALENCIAS_PROPUESTA: Regla[] = [
   R('hardware', 'unidad', { 'hardware~': 'trydan&m10' }, [['8900500020', 1]], { nota: 'Trydan 7,4 kW 10 m' }),
   R('hardware', 'unidad', { 'hardware~': 'trydan' }, [['8900590300', 1]], { nota: 'Trydan 7,4 kW 5 m (el más habitual)' }),
   R('hardware', 'unidad', { 'hardware~': 'policharger' }, [['8906000665', 1]], { nota: 'Policharger NW T2' }),
+  // E-032: el cable de datos que dice la prefactura (o el wizard) manda sobre el modelo del cargador; F/UTP antes, porque "utp" también está en "f/utp"
+  R('metrosUtp', 'directa', { 'cableDatos~': ['f/utp', 'ftp'] }, [['7270021010', 1]], { id: 'P-UTP-F', orden: 45, nota: 'Cat6 F/UTP (lo dice el cable de datos)' }),
+  R('metrosUtp', 'directa', { 'cableDatos~': 'utp' }, [['7270020010', 1]], { id: 'P-UTP-U', orden: 46, nota: 'Cat6 U/UTP (lo dice el cable de datos)' }),
 ];
 
 export const KITS_PROPUESTA: Kits = {

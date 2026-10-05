@@ -37,7 +37,7 @@ Deno.serve(async (req) => {
     db.from('config_app').select('kit_fijacion').eq('id', 1).single(),
     db.from('productos').select('sku').eq('borrador', false).eq('archivado', false),
   ]);
-  const reglas: Regla[] = (filas || []).map(r => ({ id: r.id, campo: r.campo, formula: r.formula, condiciones: r.condiciones || {}, articulos: r.articulos || [], kit: r.kit, estimada: r.estimada, activa: r.activa, orden: r.orden, nota: r.nota }));
+  const reglas: Regla[] = (filas || []).map(r => ({ id: r.id, campo: r.campo, formula: r.formula, condiciones: r.condiciones || {}, articulos: r.articulos || [], kit: r.kit, estimada: r.estimada, activa: r.activa, orden: r.orden, nota: r.nota, sinDescuento: r.sin_descuento ?? null }));
   const kits: Kits = Object.fromEntries((kitsF || []).map(k => [k.kit, k.articulos || []]));
   const catalogo = new Set((prods || []).map(p => p.sku as string));
 
