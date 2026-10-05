@@ -43,22 +43,22 @@ describe('prefactura con atributos', () => {
       { campo: 'hardware', sku: '8906000665', cantidad: '1.000', estado: 'discrepancia' },
       { campo: 'metrosLinea', sku: '6000650603', cantidad: '28.000', estado: 'discrepancia' }, { campo: 'metrosLinea', sku: '6000650604', cantidad: '28.000', estado: 'discrepancia' },
       { campo: 'metrosLinea', sku: '6000650605', cantidad: '28.000', estado: 'discrepancia' },
-      { campo: 'metrosUtp', sku: '7270020010', cantidad: '28.000', estado: 'discrepancia' },        // U/UTP aunque el cargador sea Policharger
+      { campo: 'metrosUtp', sku: '7270021010', cantidad: '28.000', estado: 'discrepancia' },        // E-033: Policharger → F/UTP (lo decide el cargador)
       { campo: 'preinst', sku: null, cantidad: '1.000', estado: 'no_gestionado' },                  // se cuenta, no descuenta ni queda pendiente
       { campo: 'rj45', sku: '7280040060', cantidad: '2.000', estado: 'discrepancia' }]);            // perfTab (servicio): ni línea
-    for (const sku of ['6000650603', '6000650604', '6000650605', '7270020010']) expect(await aBordo('V-F02', sku)).toBe(-28);
+    for (const sku of ['6000650603', '6000650604', '6000650605', '7270021010']) expect(await aBordo('V-F02', sku)).toBe(-28);
   });
 
-  it('precedencia: la prefactura manda en tipo, sección y cable de datos; el wizard, en equipo y fecha', async () => {
+  it('precedencia: la prefactura manda en tipo y sección; el wizard, en equipo y fecha; el cable de datos lo decide el cargador (E-033)', async () => {
     await enviar({ numInst: 'E2639300', equipo: 'Búfala 1', fechaCierreIso: H(-6), tipoLinea: 'manguera', fase: 'mono', seccion: '10', cableDatos: 'U/UTP', hardware: 'V2C TRYDAN', metrosLinea: 20, metrosUtp: 10 }, 'wizard');
     await enviar({ ...PREFACTURA, numInst: 'E2639300', atributos: { ...PREFACTURA.atributos, cableDatos: 'F/UTP', fechaCierreIso: H(-2) }, lineas: { metrosLinea: 20, metrosUtp: 10 } });
     const c = await cierre('E2639300');
     expect([c.vehiculo_id, c.equipo_wizard]).toEqual(['V-F01', 'Búfala 1']);
     expect(new Date(c.fecha).getTime()).toBeLessThan(Date.parse(H(-5)));                                        // sigue la del wizard
-    expect((await lineas('E2639300')).filter(l => l.campo !== 'hardware').map(l => [l.campo, l.sku])).toEqual([['metrosLinea', '6000650603'], ['metrosLinea', '6000650604'], ['metrosLinea', '6000650605'], ['metrosUtp', '7270021010']]);
+    expect((await lineas('E2639300')).filter(l => l.campo !== 'hardware').map(l => [l.campo, l.sku])).toEqual([['metrosLinea', '6000650603'], ['metrosLinea', '6000650604'], ['metrosLinea', '6000650605'], ['metrosUtp', '7270020010']]);
     // otra versión del wizard (con su manguera de 10) no deshace lo que dice la prefactura
     await enviar({ numInst: 'E2639300', version: 2, equipo: 'Búfala 1', fechaCierreIso: H(-6), tipoLinea: 'manguera', fase: 'mono', seccion: '10', cableDatos: 'U/UTP', hardware: 'V2C TRYDAN', metrosLinea: 20, metrosUtp: 10 }, 'wizard');
-    expect((await lineas('E2639300')).filter(l => l.campo !== 'hardware').map(l => l.sku)).toEqual(['6000650603', '6000650604', '6000650605', '7270021010']);
+    expect((await lineas('E2639300')).filter(l => l.campo !== 'hardware').map(l => l.sku)).toEqual(['6000650603', '6000650604', '6000650605', '7270020010']);
   });
 
   it('una prefactura sola y luego el wizard: manda la fecha y el equipo del wizard', async () => {
@@ -69,11 +69,11 @@ describe('prefactura con atributos', () => {
     expect(Math.abs(Date.parse(c.fecha) - (Date.now() - 8 * 3600e3))).toBeLessThan(60e3);
   });
 
-  it('la misma prefactura otra vez es duplicado; si cambian los atributos, versión nueva', async () => {
+  it('la misma prefactura otra vez es duplicado; si cambian los atributos, versión nueva; el cable de datos de Holded no cuenta', async () => {
     await enviar(PREFACTURA);
     expect((await enviar(PREFACTURA)).estado).toBe('duplicado');
-    expect((await enviar({ ...PREFACTURA, atributos: { ...PREFACTURA.atributos, cableDatos: 'F/UTP' } })).version).toBe(2);
-    expect((await lineas('E2632263')).find(l => l.campo === 'metrosUtp')!.sku).toBe('7270021010');
+    expect((await enviar({ ...PREFACTURA, atributos: { ...PREFACTURA.atributos, cableDatos: 'F/UTP' } })).estado).toBe('duplicado');      // E-033: se ignora
+    expect((await enviar({ ...PREFACTURA, atributos: { ...PREFACTURA.atributos, seccion: '10' } })).version).toBe(2);
   });
 
   it('el caso real: resuelta a mano con 10 mm² y sin atributos; al llegar con atributos la regla sustituye la resolución (no se suman)', async () => {

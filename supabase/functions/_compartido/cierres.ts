@@ -75,7 +75,8 @@ export type OrigenVersion = 'wizard' | 'historico' | 'holded' | 'admin';
 export interface PrefacturaHolded { documento: string; fechaAprobacion: string; lineas: Record<string, number>; atributos?: Record<string, string> }
 /** E-032 · Atributos que manda la prefactura: los de la línea (sacados de los nombres de las líneas de Holded) mandan sobre el wizard,
     porque es lo facturado; los del calendario (equipo, cargador, fecha de la instalación) solo rellenan lo que el wizard no trae. */
-export const ATRIBUTOS_LINEA = ['tipoLinea', 'fase', 'seccion', 'cableDatos'] as const;
+// E-033: el cable de datos NO: en Holded la tarifa siempre dice U/UTP; lo decide el cargador (aunque lo envíe un Apps Script antiguo, se ignora)
+export const ATRIBUTOS_LINEA = ['tipoLinea', 'fase', 'seccion'] as const;
 export const ATRIBUTOS_CALENDARIO = ['equipo', 'hardware', 'fechaCierreIso', 'materialEspecial'] as const;
 export function normalizarAtributos(raw: unknown): Record<string, string> {
   const a = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>, out: Record<string, string> = {};
@@ -239,9 +240,10 @@ export const EQUIVALENCIAS_PROPUESTA: Regla[] = [
   R('hardware', 'unidad', { 'hardware~': 'trydan&m10' }, [['8900500020', 1]], { nota: 'Trydan 7,4 kW 10 m' }),
   R('hardware', 'unidad', { 'hardware~': 'trydan' }, [['8900590300', 1]], { nota: 'Trydan 7,4 kW 5 m (el más habitual)' }),
   R('hardware', 'unidad', { 'hardware~': 'policharger' }, [['8906000665', 1]], { nota: 'Policharger NW T2' }),
-  // E-032: el cable de datos que dice la prefactura (o el wizard) manda sobre el modelo del cargador; F/UTP antes, porque "utp" también está en "f/utp"
-  R('metrosUtp', 'directa', { 'cableDatos~': ['f/utp', 'ftp'] }, [['7270021010', 1]], { id: 'P-UTP-F', orden: 45, nota: 'Cat6 F/UTP (lo dice el cable de datos)' }),
-  R('metrosUtp', 'directa', { 'cableDatos~': 'utp' }, [['7270020010', 1]], { id: 'P-UTP-U', orden: 46, nota: 'Cat6 U/UTP (lo dice el cable de datos)' }),
+  // E-032/E-033: el cable de datos del wizard, solo como último recurso (sin cargador reconocido): manda el cargador (V2C → U/UTP, Policharger → F/UTP).
+  // F/UTP antes que U/UTP, porque "utp" también está en "f/utp"
+  R('metrosUtp', 'directa', { 'cableDatos~': ['f/utp', 'ftp'] }, [['7270021010', 1]], { id: 'P-UTP-F', orden: 65, nota: 'Cat6 F/UTP (sin cargador: lo dice el cable de datos)' }),
+  R('metrosUtp', 'directa', { 'cableDatos~': 'utp' }, [['7270020010', 1]], { id: 'P-UTP-U', orden: 66, nota: 'Cat6 U/UTP (sin cargador: lo dice el cable de datos)' }),
 ];
 
 export const KITS_PROPUESTA: Kits = {

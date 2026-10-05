@@ -997,7 +997,7 @@ Contrato:
    - Hay pruebas de: prefactura sin cierre previo con atributos y equipo (descuenta del vehículo correcto); precedencia (prefactura sobre wizard en tipo, sección y UTP; wizard sobre prefactura en equipo y fecha); UTP por `cableDatos`; partidas "No descuenta material" y "Material no gestionado en el almacén" (ni descuentan ni quedan pendientes).
    - E2632263 queda con 28 m de cada conductor H07Z1-K de 6 mm² (marrón, azul y amarillo/verde) y 28 m de U/UTP, descontados de la furgoneta del equipo del calendario.
 
-### E-033 · El cable de datos lo decide siempre el cargador, no Holded · PENDIENTE (urgente, pequeño)
+### E-033 · El cable de datos lo decide siempre el cargador, no Holded · HECHO
 **Aclaración del usuario (05/10):** con el cargador **V2C** el cable de datos es **siempre U/UTP**, y con **Policharger** es **siempre F/UTP**. En Holded **no hay distinción**: la línea de la tarifa se llama siempre "CABLE DATOS U/UTP CAT 6". En E-032 se pusieron las reglas `P-UTP-F` y `P-UTP-U` (por `cableDatos`, orden 48 y 49) **por delante** de las del modelo de cargador (P05 y P06), así que **un Policharger descontaría U/UTP**.
 
 **Ya hecho por el chat:** el Apps Script **deja de enviar `cableDatos`** en los `atributos` de la prefactura (`docs/apps-script-almacen.gs`).
@@ -2841,3 +2841,39 @@ En "Para el día a día" se explican el ajuste y el aviso.
 - `src/domain/e032.test.ts` (7): normalización, precedencia, versiones, UTP, partidas sin descuento y el estado local (incluido el resumen de no gestionado).
 - `tsc -b`, `deno check` y build correctos.
 - **En el navegador:** el formulario de regla con "Qué descuenta" (sus tres opciones; en las dos sin descuento se ocultan los artículos y se explica).
+
+### 05/10/2026 · E-033 · HECHO
+**Aplicado en producción:**
+- migración `20261023000100_e033_utp_lo_decide_el_cargador.sql`;
+- `registrar-cierre` desplegada (cambia el módulo compartido).
+
+**Comprobado en producción (solo lectura):** las reglas de `metrosUtp` quedan en este orden:
+1. P05 V2C/Trydan → U/UTP (50);
+2. P06 Policharger → F/UTP (60);
+3. P-UTP-F (65);
+4. P-UTP-U (66).
+
+Las versiones anteriores de P-UTP-F y P-UTP-U (órdenes 48 y 49) están en el historial de equivalencias.
+
+**Revisión en producción de lo ya descontado: no hay nada que arreglar.**
+- **Ningún cierre usó P-UTP-F ni P-UTP-U.** Todos los UTP se resolvieron por el cargador (P05 y P06) o a mano.
+- **El único Policharger** (E2632096) descontó **F/UTP** (7270021010, 12 m) con P06. Correcto.
+- **E2632263 y E2632213** (prefacturas sin vehículo, U/UTP resuelto a mano) aún no tienen atributos.
+  - Cuando lleguen con el cargador del calendario, la regla del cargador sustituye esa resolución (E-032 §5).
+  - Si alguno es Policharger, saldrá F/UTP.
+
+**Cambios**
+1. **El cargador manda.** En el módulo compartido, P-UTP-F y P-UTP-U pasan a orden 65 y 66, detrás de P05 y P06. Solo se usan sin un cargador reconocido; entonces vale el `cableDatos` del wizard.
+2. **`cableDatos` de Holded se ignora**, aunque lo envíe un Apps Script antiguo.
+   - Ya no está entre los atributos de línea de la prefactura (`ATRIBUTOS_LINEA` = tipoLinea, fase, sección).
+   - No se guarda y no pisa el del wizard, tampoco uno que se hubiera guardado antes en `holded.atributos`.
+   - Una prefactura que solo cambie el `cableDatos` es "duplicado".
+
+**Pruebas: 484 en verde** (+5 nuevas; las de E-032 se ajustan a la nueva precedencia).
+- `supabase/tests/e033.test.ts` (5), con una base que tiene las reglas como estaban en producción:
+  - la migración las reordena y guarda la versión anterior;
+  - Policharger con `cableDatos = U/UTP` → F/UTP;
+  - V2C → U/UTP, también si dice F/UTP;
+  - sin cargador → el `cableDatos` del wizard;
+  - una prefactura con `cableDatos` no lo aplica, ni sola ni sobre el wizard.
+- `tsc -b`, `deno check` y build correctos.

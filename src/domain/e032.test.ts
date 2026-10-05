@@ -15,13 +15,13 @@ const UTP = EQUIVALENCIAS_PROPUESTA.filter(r => r.campo === 'metrosUtp');
 
 describe('atributos de la prefactura', () => {
   it('se normalizan: "3x6mm" → 6, "5G10mm" → 10, tubo, mono, trif', () => {
-    expect(normalizarAtributos(AT)).toEqual({ tipoLinea: 'tubo', fase: 'mono', seccion: '6', cableDatos: 'U/UTP', equipo: 'Búfala 2', hardware: 'POLICHARGER NW', fechaCierreIso: AT.fechaCierreIso });
+    expect(normalizarAtributos(AT)).toEqual({ tipoLinea: 'tubo', fase: 'mono', seccion: '6', equipo: 'Búfala 2', hardware: 'POLICHARGER NW', fechaCierreIso: AT.fechaCierreIso });
     expect(normalizarAtributos({ seccion: '5G10mm', fase: 'trifásica', tipoLinea: 'manguera' })).toEqual({ seccion: '10', fase: 'trif', tipoLinea: 'manguera' });
   });
-  it('precedencia: la prefactura en tipo, fase, sección y cable de datos; el wizard en equipo, fecha y cargador', () => {
+  it('precedencia: la prefactura en tipo, fase y sección; el wizard en equipo, fecha, cargador y cable de datos (E-033)', () => {
     const wizard = normalizarCierre({ numInst: 'E1', equipo: 'Búfala 1', fechaCierreIso: H(-6), hardware: 'V2C TRYDAN', tipoLinea: 'manguera', seccion: '10', fase: 'mono', cableDatos: 'F/UTP' });
     const e = cierreEfectivo(wizard, { documento: 'D', fechaAprobacion: H(0), lineas: { metrosLinea: 20 }, atributos: normalizarAtributos(AT) });
-    expect([e.tipoLinea, e.seccion, e.cableDatos, e.equipo, e.fechaCierreIso, e.hardware, e.metrosLinea]).toEqual(['tubo', '6', 'U/UTP', 'Búfala 1', wizard.fechaCierreIso, 'V2C TRYDAN', 20]);
+    expect([e.tipoLinea, e.seccion, e.cableDatos, e.equipo, e.fechaCierreIso, e.hardware, e.metrosLinea]).toEqual(['tubo', '6', 'F/UTP', 'Búfala 1', wizard.fechaCierreIso, 'V2C TRYDAN', 20]);
     // sin wizard: lo del calendario
     const v = prepararVersion(null, 'holded', PF);
     expect([v.efectivo.equipo, v.efectivo.fechaCierreIso, v.efectivo.hardware]).toEqual(['Búfala 2', AT.fechaCierreIso, 'POLICHARGER NW']);
@@ -36,10 +36,11 @@ describe('atributos de la prefactura', () => {
 });
 
 describe('traducción', () => {
-  it('UTP por el cable de datos (aunque el cargador sea de otra marca); si no viene, por el cargador', () => {
+  it('E-033: UTP por el cargador (aunque el cable de datos diga otra cosa); sin cargador reconocido, por el cable de datos', () => {
     const t = (c: Record<string, unknown>) => traducirCierre(normalizarCierre({ metrosUtp: 10, ...c }), UTP, {}).find(l => l.campo === 'metrosUtp')!.sku;
-    expect(t({ cableDatos: 'U/UTP', hardware: 'POLICHARGER' })).toBe('7270020010');
-    expect(t({ cableDatos: 'F/UTP', hardware: 'V2C TRYDAN' })).toBe('7270021010');
+    expect(t({ cableDatos: 'U/UTP', hardware: 'POLICHARGER' })).toBe('7270021010');
+    expect(t({ cableDatos: 'F/UTP', hardware: 'V2C TRYDAN' })).toBe('7270020010');
+    expect(t({ cableDatos: 'U/UTP' })).toBe('7270020010');
     expect(t({ cableDatos: 'FTP' })).toBe('7270021010');
     expect(t({ hardware: 'POLICHARGER' })).toBe('7270021010');
     expect(t({ hardware: 'V2C TRYDAN' })).toBe('7270020010');
@@ -67,7 +68,7 @@ describe('en el estado local', () => {
     expect(c.vehiculo).toBe('V-F02');
     expect(S.lineasCierre.filter(l => l.cierre === c.id && l.campo !== 'hardware').map(l => [l.campo, l.sku, l.estado]))
       .toEqual([['metrosLinea', '6000650603', 'discrepancia'], ['metrosLinea', '6000650604', 'discrepancia'], ['metrosLinea', '6000650605', 'discrepancia'],
-        ['metrosUtp', '7270020010', 'discrepancia'], ['rj45', '7280040060', 'discrepancia'], ['preinst', undefined, 'no_gestionado']]);
+        ['metrosUtp', '7270021010', 'discrepancia'], ['rj45', '7280040060', 'discrepancia'], ['preinst', undefined, 'no_gestionado']]);
     expect(unidadesABordo(S, 'V-F02', '6000650603')).toBe(-28);
     expect(noGestionadoPorPartida(S, S.cierres)).toEqual([{ campo: 'preinst', cantidad: 1, cierres: 1 }]);
   });
