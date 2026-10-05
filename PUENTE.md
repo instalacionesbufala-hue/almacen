@@ -988,10 +988,13 @@ Contrato:
    - `tipoLinea`, `fase`, `seccion` y `cableDatos`: **manda la prefactura aprobada** si los trae, porque es lo definitivo y facturado; si no, el wizard.
    - `equipo`, `fechaCierreIso` y `hardware`: **manda el wizard** si existe, porque es lo real; si no, los de la prefactura (calendario). Con eso, una prefactura que llega antes que el cierre **ya tiene equipo y vehículo** y descuenta.
 3. **UTP según `cableDatos`:** si viene `cableDatos` con F/UTP o FTP → artículo F/UTP; si viene U/UTP o UTP → U/UTP. Solo si no viene, se mira `hardware` (V2C → U/UTP, Policharger → F/UTP). Así deja de salir "Por elegir".
-4. **Partidas de servicio:** en Equivalencias, opción **"No descuenta material"** para una partida, por ejemplo `preinst` (Kit pre-instalación nuevo suministro). Así queda resuelta y no sale como "sin equivalencia". El usuario decide cuáles: aplicar esta opción a `preinst` **solo si el usuario lo confirma** (preguntarlo en la respuesta).
+4. **Partidas sin descuento:** en Equivalencias, para una partida, dos opciones nuevas además de los artículos:
+   - **"No descuenta material (servicio)":** para partidas que son solo mano de obra.
+   - **"Material no gestionado en el almacén":** la partida **lleva material**, pero ese material **todavía no está en el almacén**. La línea queda registrada en el cierre y en los informes, con la cantidad, para saber cuántas se han hecho; **no descuenta nada y no cuenta como pendiente ni como "sin equivalencia"**. Cuando el usuario dé de alta esos artículos, cambia la regla para que descuenten. Los cierres anteriores no se recalculan, salvo con "Recalcular cierres desde…" (E-016 §8).
+   - **Decisión del usuario (05/10):** `preinst` (Kit pre-instalación nuevo suministro) **lleva material, pero ahora no lo tiene en el almacén** → aplicar **"Material no gestionado en el almacén"** a `preinst` en la base real (cambio de regla confirmado por el usuario; contarlo en la respuesta).
 5. **Reevaluar lo pendiente:** al recibir una versión nueva con `atributos`, recalcular el cierre. Los **E2632263 y E2632019** existentes se reprocesan solos cuando el Apps Script los reenvíe (la huella incluye los atributos, así que se reenviarán en la siguiente hora). Comprobar en producción, en solo lectura, que quedan bien y explicarlo.
 6. **Hecho cuando:**
-   - Hay pruebas de: prefactura sin cierre previo con atributos y equipo (descuenta del vehículo correcto); precedencia (prefactura sobre wizard en tipo, sección y UTP; wizard sobre prefactura en equipo y fecha); UTP por `cableDatos`; partida "No descuenta material".
+   - Hay pruebas de: prefactura sin cierre previo con atributos y equipo (descuenta del vehículo correcto); precedencia (prefactura sobre wizard en tipo, sección y UTP; wizard sobre prefactura en equipo y fecha); UTP por `cableDatos`; partidas "No descuenta material" y "Material no gestionado en el almacén" (ni descuentan ni quedan pendientes).
    - E2632263 queda con 28 m de cada conductor H07Z1-K de 6 mm² (marrón, azul y amarillo/verde) y 28 m de U/UTP, descontados de la furgoneta del equipo del calendario.
 
 ---
