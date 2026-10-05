@@ -292,7 +292,7 @@ function almPfTraducir_(d) {
       var sec = n.match(/\d+\s*[xg]\s*(\d+(?:[.,]\d+)?)\s*mm/) || n.match(/(\d+(?:[.,]\d+)?)\s*mm/);
       if (sec) atr.seccion = sec[1].replace(',', '.');
     }
-    if (campo === 'metrosUtp') atr.cableDatos = /f\/?utp|ftp/.test(n) ? 'F/UTP' : (/utp/.test(n) ? 'U/UTP' : atr.cableDatos);
+    // El tipo de cable de datos NO se saca de Holded: la tarifa dice siempre "U/UTP". Lo decide el cargador (V2C → U/UTP, Policharger → F/UTP).
   });
   return { lineas: lineas, sinTraducir: sin, atributos: atr };
 }
