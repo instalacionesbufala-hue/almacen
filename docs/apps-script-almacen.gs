@@ -124,14 +124,16 @@ function almacenCalendario_() {
   var mapa = {};
   try {
     var hoja = (typeof _hojaEsbrain_ === 'function') ? _hojaEsbrain_() : almacenLibro_().getSheetByName(typeof ESBRAIN_SHEET_NAME !== 'undefined' ? ESBRAIN_SHEET_NAME : '🔗 ESBRAIN');
-    var v = hoja.getDataRange().getValues(), fc = -1, cPre = -1, cHw = -1, cMat = -1;
+    var v = hoja.getDataRange().getValues(), fc = -1, cPre = -1, cHw = -1, cMat = -1, cEq = -1, cFe = -1;
     for (var r = 0; r < Math.min(6, v.length) && fc < 0; r++) {
       var cab = v[r].map(function (h) { return String(h).trim().toUpperCase(); });
-      if (cab.indexOf('HARDWARE') >= 0 && cab.indexOf('Nº PRESUPUESTO') >= 0) { fc = r; cPre = cab.indexOf('Nº PRESUPUESTO'); cHw = cab.indexOf('HARDWARE'); cMat = cab.indexOf('MATERIAL ESPECIAL'); }
+      if (cab.indexOf('HARDWARE') >= 0 && cab.indexOf('Nº PRESUPUESTO') >= 0) { fc = r; cPre = cab.indexOf('Nº PRESUPUESTO'); cHw = cab.indexOf('HARDWARE'); cMat = cab.indexOf('MATERIAL ESPECIAL'); cEq = cab.indexOf('EQUIPO'); cFe = cab.indexOf('FECHA'); }
     }
     if (fc >= 0) for (var i = fc + 1; i < v.length; i++) {
       var k = String(v[i][cPre] || '').trim().toUpperCase(); if (!k) continue;
-      mapa[k] = { hardware: String(v[i][cHw] || '').trim(), materialEspecial: cMat >= 0 ? String(v[i][cMat] || '').trim() : '' };
+      var fe = cFe >= 0 ? v[i][cFe] : null;
+      mapa[k] = { hardware: String(v[i][cHw] || '').trim(), materialEspecial: cMat >= 0 ? String(v[i][cMat] || '').trim() : '',
+                  equipo: cEq >= 0 ? String(v[i][cEq] || '').trim() : '', fecha: fe instanceof Date && !isNaN(fe) ? fe.toISOString() : '' };
     }
   } catch (e) { Logger.log('Calendario no disponible: ' + e); }
   ALMACEN_CAL_CACHE_ = mapa;
@@ -277,15 +279,22 @@ function almPfNumInst_(d) {
 
 /** Traduce las líneas del presupuesto a campos del cierre; devuelve { lineas, sinTraducir } */
 function almPfTraducir_(d) {
-  var lineas = {}, sin = [];
+  var lineas = {}, sin = [], atr = {};
   (_lineasDoc_(d) || []).forEach(function (l) {
     var nombre = l.name || l.desc || '', n = almPfNorm_(nombre), u = Number(l.units != null ? l.units : l.quantity) || 0;
     if (!n || !u) return;
     var campo = null;
     for (var i = 0; i < ALM_PF_REGLAS.length && !campo; i++) if (ALM_PF_REGLAS[i][0].test(n)) campo = ALM_PF_REGLAS[i][1];
     if (campo) lineas[campo] = (lineas[campo] || 0) + u; else sin.push(nombre);
+    if (campo === 'metrosLinea') {                       // "LÍNEA ELÉCTRICA MONOFÁSICA 3x6mm BAJO TUBO DE PVC"
+      atr.tipoLinea = /manguera|rz1/.test(n) ? 'manguera' : (/tubo/.test(n) ? 'tubo' : atr.tipoLinea);
+      if (/trifas/.test(n)) atr.fase = 'trif'; else if (/monofas/.test(n)) atr.fase = 'mono';
+      var sec = n.match(/\d+\s*[xg]\s*(\d+(?:[.,]\d+)?)\s*mm/) || n.match(/(\d+(?:[.,]\d+)?)\s*mm/);
+      if (sec) atr.seccion = sec[1].replace(',', '.');
+    }
+    if (campo === 'metrosUtp') atr.cableDatos = /f\/?utp|ftp/.test(n) ? 'F/UTP' : (/utp/.test(n) ? 'U/UTP' : atr.cableDatos);
   });
-  return { lineas: lineas, sinTraducir: sin };
+  return { lineas: lineas, sinTraducir: sin, atributos: atr };
 }
 
 /** Presupuestos aprobados desde ALM_PF_DESDE, ya traducidos */
@@ -298,7 +307,14 @@ function almPfLeer_() {
     if (!almPfAprobado_(d)) return;
     var numInst = almPfNumInst_(d); if (!numInst) return;
     var t = almPfTraducir_(d), f = almPfFecha_(d);
-    out.push({ id: d.id, numInst: numInst, documento: String(d.docNumber || d.id), fechaAprobacion: f ? f.toISOString() : null, lineas: t.lineas, sinTraducir: t.sinTraducir });
+    if (!Object.keys(t.lineas).length) return;          // prefactura sin material (visita fallida): no se envía
+    var cal = almacenCalendario_()[numInst] || {};       // equipo, cargador y fecha de la instalación (calendario)
+    var atr = t.atributos;
+    if (cal.equipo) atr.equipo = cal.equipo;
+    if (cal.hardware) atr.hardware = cal.hardware;
+    if (cal.fecha) atr.fechaCierreIso = cal.fecha;
+    if (cal.materialEspecial) atr.materialEspecial = cal.materialEspecial;
+    out.push({ id: d.id, numInst: numInst, documento: String(d.docNumber || d.id), fechaAprobacion: f ? f.toISOString() : null, lineas: t.lineas, atributos: atr, sinTraducir: t.sinTraducir });
   });
   return out;
 }
@@ -308,8 +324,8 @@ function probarPrefacturasAlmacen() {
   var lista = almPfLeer_(), enviados = JSON.parse(PropertiesService.getScriptProperties().getProperty(ALM_PF_PROP) || '{}');
   Logger.log('Presupuestos aprobados desde el 30/09: ' + lista.length);
   lista.forEach(function (p) {
-    var huella = JSON.stringify(p.lineas), estado = enviados[p.id] === huella ? 'ya enviado' : (enviados[p.id] ? 'CAMBIADO: se reenviaría' : 'se enviaría');
-    Logger.log(p.numInst + ' · doc ' + p.documento + ' · ' + estado + ' · ' + JSON.stringify(p.lineas) + (p.sinTraducir.length ? ' · SIN TRADUCIR: ' + p.sinTraducir.join(' | ') : ''));
+    var huella = JSON.stringify([p.lineas, p.atributos]), estado = enviados[p.id] === huella ? 'ya enviado' : (enviados[p.id] ? 'CAMBIADO: se reenviaría' : 'se enviaría');
+    Logger.log(p.numInst + ' · doc ' + p.documento + ' · ' + estado + ' · ' + JSON.stringify(p.lineas) + ' · ' + JSON.stringify(p.atributos) + (p.sinTraducir.length ? ' · SIN TRADUCIR: ' + p.sinTraducir.join(' | ') : ''));
   });
 }
 
@@ -319,10 +335,10 @@ function enviarPrefacturasAlmacen() {
   try {
     var props = PropertiesService.getScriptProperties(), enviados = JSON.parse(props.getProperty(ALM_PF_PROP) || '{}'), n = 0;
     almPfLeer_().forEach(function (p) {
-      var huella = JSON.stringify(p.lineas);
+      var huella = JSON.stringify([p.lineas, p.atributos]);
       if (enviados[p.id] === huella) return;
       try {
-        var r = almacenLlamar_({ origen: 'holded', numInst: p.numInst, documento: p.documento, fechaAprobacion: p.fechaAprobacion, lineas: p.lineas });
+        var r = almacenLlamar_({ origen: 'holded', numInst: p.numInst, documento: p.documento, fechaAprobacion: p.fechaAprobacion, lineas: p.lineas, atributos: p.atributos });
         if (r && r.error) { almacenLog_('ERROR', p.numInst, 'Prefactura ' + p.documento + ': ' + r.error, null); return; }
         enviados[p.id] = huella; n++;
         if (p.sinTraducir.length) almacenLog_('AVISO', p.numInst, 'Prefactura ' + p.documento + ' · líneas sin traducir: ' + p.sinTraducir.join(' | '), null);
