@@ -997,9 +997,25 @@ Contrato:
    - Hay pruebas de: prefactura sin cierre previo con atributos y equipo (descuenta del vehículo correcto); precedencia (prefactura sobre wizard en tipo, sección y UTP; wizard sobre prefactura en equipo y fecha); UTP por `cableDatos`; partidas "No descuenta material" y "Material no gestionado en el almacén" (ni descuentan ni quedan pendientes).
    - E2632263 queda con 28 m de cada conductor H07Z1-K de 6 mm² (marrón, azul y amarillo/verde) y 28 m de U/UTP, descontados de la furgoneta del equipo del calendario.
 
+### E-033 · El cable de datos lo decide siempre el cargador, no Holded · PENDIENTE (urgente, pequeño)
+**Aclaración del usuario (05/10):** con el cargador **V2C** el cable de datos es **siempre U/UTP**, y con **Policharger** es **siempre F/UTP**. En Holded **no hay distinción**: la línea de la tarifa se llama siempre "CABLE DATOS U/UTP CAT 6". En E-032 se pusieron las reglas `P-UTP-F` y `P-UTP-U` (por `cableDatos`, orden 48 y 49) **por delante** de las del modelo de cargador (P05 y P06), así que **un Policharger descontaría U/UTP**.
+
+**Ya hecho por el chat:** el Apps Script **deja de enviar `cableDatos`** en los `atributos` de la prefactura (`docs/apps-script-almacen.gs`).
+
+**Qué hacer en el servidor**
+1. **El cargador manda:** que `metrosUtp` se resuelva **primero por `hardware`** (V2C/Trydan → U/UTP 7270020010; Policharger → F/UTP 7270021010). Las reglas por `cableDatos` (`P-UTP-F`, `P-UTP-U`) pasan **detrás** de las de cargador, como último recurso cuando no hay `hardware`. Hacerlo **con migración** sobre las reglas reales, guardando la versión anterior.
+2. **Ignorar `cableDatos` que llegue de Holded** (`origen: 'holded'`), aunque lo envíe un Apps Script antiguo: no debe pisar el del wizard ni contar en la precedencia de E-032 §2.
+3. **Revisar en producción** (solo lectura) si algún cierre con Policharger ya descontó U/UTP por esta regla. Si es así, explicarlo y ofrecer el arreglo (E-030 "Deshacer resolución" o "Recalcular cierres desde…"), **sin tocar datos**.
+4. **Hecho cuando:** hay pruebas de un Policharger con `cableDatos = U/UTP` que descuenta F/UTP, de un V2C que descuenta U/UTP, de un cierre sin `hardware` que usa `cableDatos`, y de que una prefactura con `cableDatos` no lo aplica.
+
 ---
 
 ## Revisión del chat
+
+### 05/10/2026 · Revisión de E-032 y ajuste del cable de datos
+- **E-032:** verificado. **479 pruebas en verde** y `tsc` sin errores. Bien, incluida la decisión de que la regla sustituye la resolución manual.
+- **Corrección del usuario:** en Holded el UTP no se distingue; lo decide el cargador. El Apps Script ya no envía `cableDatos`, y **E-033** pone las reglas de cargador por delante.
+- **Orden: E-033.**
 
 ### 05/10/2026 · Revisión de E-031 y nuevo E-032
 - **E-031:** verificado. **466 pruebas en verde** y `tsc` sin errores. Bien.
