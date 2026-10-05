@@ -938,9 +938,44 @@ Una tabla con una fila por apartado y casillas **Ver** y **Modificar**, en lengu
    - Hay pruebas de: resolución con 3 y con 5 artículos; atajo "Conductores sueltos" en mono y en trif, incluido un color que falta; deshacer resolución, que devuelve el stock, deja la línea pendiente y la registra en la versión y la auditoría.
    - El caso E2632246 se puede corregir desde la app.
 
+### E-031 · Formatos en metros (rollo, bobina, barra, caja) y conversión del stock al cambiar el formato · PENDIENTE
+**Petición del usuario (05/10):** el tubo corrugado (6200020032) se entrega **por rollos de 50 m**, pero los cierres lo consumen **en metros**. Hoy la ficha está en `unidades`: 150 ud en el almacén, −18 en Búfala 2, −9 en Búfala 1 y 40 en Búfala 3, que en realidad son **metros**.
+
+**Lo que falta**
+- `Unidad` solo admite `m | ud | bote | sobre | bolsa | pack | caja`. No hay **rollo**, **bobina** ni **barra**, y el contenido no tiene unidad propia (no se puede decir "rollo de 50 **m**").
+- **Al cambiar la unidad en "Editar", el stock no se convierte** (E-016 §3). Pasar este artículo a rollo dejaría "150 rollos" en vez de 3.
+
+**Qué hacer**
+1. **Formatos nuevos:** `rollo`, `bobina` y `barra`, con **contenido y unidad del contenido** (`m` o `ud`). Ejemplos:
+   - tubo corrugado: rollo de 50 m;
+   - cable H07Z1-K: rollo de 100 m o bobina de 500 m;
+   - Cat6: caja de 305 m;
+   - tubo PVC rígido: barra de 3 m.
+   - `caja` y `pack` también admiten contenido en metros.
+2. **Consumo de los cierres en metros:** descuenta `metros / contenido` del formato, a bordo de la furgoneta (como hoy con los sobres de RJ45). La furgoneta muestra las dos cosas: "2,64 rollos (132 m)".
+3. **Entregas:**
+   - por formato entero, por defecto: "Entregar 2 rollos";
+   - opción por artículo **"Permitir entregar metros sueltos"**, para cable cortado a medida. Si está activada, en la cesta se elige rollos o metros.
+4. **Conversión del stock al cambiar el formato** en Editar. Al pasar de `m`/`ud` a un formato con contenido, o al cambiar el contenido, la app pregunta:
+   - "¿El stock actual (150) está en **metros**? Se convertirá a **3 rollos de 50 m**, en el almacén y en cada furgoneta (−18 m → −0,36 rollos…)";
+   - o bien "El stock ya está en rollos (no convertir)".
+   - La conversión se registra como **ajuste de conversión enlazado** (sin cambiar la cantidad física), con auditoría, en almacén y vehículos.
+5. **Recuento** (de furgoneta y cíclico): admite contar en formato o en metros ("2 rollos y 15 m" → 2,3 rollos).
+6. **Informes y CSV:** cantidad en formato y su equivalente en metros.
+7. **Caso real:** que el usuario pueda dejar el **corrugado 6200020032** como **rollo de 50 m**, convirtiendo los 150 m actuales a 3 rollos y los de las furgonetas en proporción. Explicar los pasos en la respuesta. **No tocar sus datos.**
+8. **Hecho cuando** hay pruebas de: conversión de metros a rollos en almacén y vehículos, consumo de un cierre en metros sobre un artículo en rollos, entrega por rollos y por metros sueltos, y recuento mixto.
+
 ---
 
 ## Revisión del chat
+
+### 05/10/2026 · Chat: prefacturas de Holded en marcha y formatos en metros
+- **Prefacturas de Holded:** el chat añadió a `docs/apps-script-almacen.gs` la revisión horaria `enviarPrefacturasAlmacen` (`672d0f9`).
+  - La prueba en producción detectó **9 presupuestos aprobados** desde el 30/09, con el material bien traducido. Las líneas de servicios (montaje, puesta en servicio, documentación, perforaciones, km) se ignoran.
+  - Diferencia real esperada: **+1 Caja registro 100x100** en E2632096 y E2632245.
+  - `cajaReg` aún no tiene artículo, así que saldrá "sin equivalencia".
+- **E-031 (nuevo):** formatos en metros (rollo, bobina, barra) y conversión del stock al cambiar el formato. Caso real: el tubo corrugado en rollos de 50 m.
+- **Orden: E-031.**
 
 ### 03/10/2026 · Revisión de E-025, E-026 y E-027
 Verificado desde el chat sobre `643ebd7`:
