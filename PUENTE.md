@@ -965,9 +965,43 @@ Una tabla con una fila por apartado y casillas **Ver** y **Modificar**, en lengu
 7. **Caso real:** que el usuario pueda dejar el **corrugado 6200020032** como **rollo de 50 m**, convirtiendo los 150 m actuales a 3 rollos y los de las furgonetas en proporción. Explicar los pasos en la respuesta. **No tocar sus datos.**
 8. **Hecho cuando** hay pruebas de: conversión de metros a rollos en almacén y vehículos, consumo de un cierre en metros sobre un artículo en rollos, entrega por rollos y por metros sueltos, y recuento mixto.
 
+### E-032 · La prefactura aprobada trae el tipo de línea, la sección, el UTP y el equipo: que el almacén los use · PENDIENTE (urgente)
+**Caso real del usuario (05/10), presupuesto E2632263 aprobado en Holded.** Llegó **antes** que el cierre del wizard y salió "sin equipo · Equipo sin vehículo", con `metrosLinea` **sin equivalencia**, `metrosUtp` **"Por elegir"** y `preinst` **sin equivalencia**. Las líneas de Holded decían todo:
+- "LÍNEA ELÉCTRICA **MONOFÁSICA 3x6mm BAJO TUBO** DE PVC" → tubo · mono · sección 6, es decir, 3 conductores H07Z1-K de 6 mm²;
+- "CABLE DATOS **U/UTP** CAT 6" → U/UTP.
+
+El usuario no quiere tener que resolver a mano en cada instalación si es manguera o conductores, ni si es UTP o FTP.
+
+**Lo ha cambiado ya el chat en el Apps Script** (`docs/apps-script-almacen.gs`, `almPfTraducir_` y `almPfLeer_`). El envío de la prefactura lleva ahora un objeto **`atributos`**:
+- **sacado de los nombres de las líneas:** `tipoLinea` (tubo | manguera), `fase` (mono | trif), `seccion` ("3x6mm" → 6, "5G10mm" → 10) y `cableDatos` (U/UTP | F/UTP);
+- **sacado del calendario "🔗 ESBRAIN"** por `Nº PRESUPUESTO`: `equipo`, `hardware`, `fechaCierreIso` (la FECHA de la instalación) y `materialEspecial`.
+
+Además, las prefacturas **sin ninguna línea de material** (visitas fallidas, como E2632019) ya no se envían.
+
+Contrato:
+
+`{ origen:'holded', numInst, documento, fechaAprobacion, lineas:{…}, atributos:{ tipoLinea, fase, seccion, cableDatos, equipo, hardware, fechaCierreIso, materialEspecial } }`
+
+**Qué hacer en el servidor**
+1. **Aceptar `atributos`** en el modo `holded` de `registrar-cierre` y guardarlos en la versión Holded.
+2. **Precedencia al calcular el cierre:**
+   - `tipoLinea`, `fase`, `seccion` y `cableDatos`: **manda la prefactura aprobada** si los trae, porque es lo definitivo y facturado; si no, el wizard.
+   - `equipo`, `fechaCierreIso` y `hardware`: **manda el wizard** si existe, porque es lo real; si no, los de la prefactura (calendario). Con eso, una prefactura que llega antes que el cierre **ya tiene equipo y vehículo** y descuenta.
+3. **UTP según `cableDatos`:** si viene `cableDatos` con F/UTP o FTP → artículo F/UTP; si viene U/UTP o UTP → U/UTP. Solo si no viene, se mira `hardware` (V2C → U/UTP, Policharger → F/UTP). Así deja de salir "Por elegir".
+4. **Partidas de servicio:** en Equivalencias, opción **"No descuenta material"** para una partida, por ejemplo `preinst` (Kit pre-instalación nuevo suministro). Así queda resuelta y no sale como "sin equivalencia". El usuario decide cuáles: aplicar esta opción a `preinst` **solo si el usuario lo confirma** (preguntarlo en la respuesta).
+5. **Reevaluar lo pendiente:** al recibir una versión nueva con `atributos`, recalcular el cierre. Los **E2632263 y E2632019** existentes se reprocesan solos cuando el Apps Script los reenvíe (la huella incluye los atributos, así que se reenviarán en la siguiente hora). Comprobar en producción, en solo lectura, que quedan bien y explicarlo.
+6. **Hecho cuando:**
+   - Hay pruebas de: prefactura sin cierre previo con atributos y equipo (descuenta del vehículo correcto); precedencia (prefactura sobre wizard en tipo, sección y UTP; wizard sobre prefactura en equipo y fecha); UTP por `cableDatos`; partida "No descuenta material".
+   - E2632263 queda con 28 m de cada conductor H07Z1-K de 6 mm² (marrón, azul y amarillo/verde) y 28 m de U/UTP, descontados de la furgoneta del equipo del calendario.
+
 ---
 
 ## Revisión del chat
+
+### 05/10/2026 · Revisión de E-031 y nuevo E-032
+- **E-031:** verificado. **466 pruebas en verde** y `tsc` sin errores. Bien.
+- **E-032 (urgente, nuevo):** la prefactura aprobada debe bastar para descontar sin resolver a mano. El chat ya ha cambiado el Apps Script para enviar `atributos` (de las líneas y del calendario) y para no enviar prefacturas sin material.
+- **Orden: E-032.**
 
 ### 05/10/2026 · Chat: prefacturas de Holded en marcha y formatos en metros
 - **Prefacturas de Holded:** el chat añadió a `docs/apps-script-almacen.gs` la revisión horaria `enviarPrefacturasAlmacen` (`672d0f9`).
