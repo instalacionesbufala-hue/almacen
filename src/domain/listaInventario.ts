@@ -1,4 +1,5 @@
 /* E-019 · Inventario completo en una sola lista: orden por columna, agrupado por categoría, CSV y vista de impresión de la lista filtrada */
+import { ucDe } from './formatos';
 import type { Estado, Producto } from '../data/tipos';
 import { UNIT, catDe } from '../data/catalogo';
 import { ORD, status, stockTotal, unidadesABordo, contenidoDe, nombreVehiculo } from './reglas';
@@ -32,11 +33,11 @@ export function agruparPorCategoria(lista: Producto[]): { cat: string; label: st
 export function filasCsvInventario(E: Estado, lista: Producto[]): (string | number)[][] {
   const vs = E.vehiculos;
   return [
-    ['SKU', 'Nombre', 'Categoría', 'Propiedad', 'Almacén', ...vs.map(v => `Vehículo ${nombreVehiculo(E, v.id)}`), 'En vehículos', 'Total', 'Unidad', 'Contenido', 'Mínimo almacén', 'Estado', 'Proveedor', 'Código proveedor', 'EAN'],
+    ['SKU', 'Nombre', 'Categoría', 'Propiedad', 'Almacén', ...vs.map(v => `Vehículo ${nombreVehiculo(E, v.id)}`), 'En vehículos', 'Total', 'Unidad', 'Contenido', 'Unidad del contenido', 'Total en unidad del contenido', 'Mínimo almacén', 'Estado', 'Proveedor', 'Código proveedor', 'EAN'],
     ...lista.map(p => {
       const t = stockTotal(E, p);
       return [p.sku, p.name, catDe(p.cat).label, p.propiedad === 'custodia' ? `Custodia ${E.propietarios.find(o => o.id === p.propietario)?.nombre || ''}` : 'Propio',
-        p.stock, ...vs.map(v => redondea(unidadesABordo(E, v.id, p.sku) / contenidoDe(p))), redondea(t - p.stock), t, UNIT[p.unit], p.contenido || 1,
+        p.stock, ...vs.map(v => redondea(unidadesABordo(E, v.id, p.sku) / contenidoDe(p))), redondea(t - p.stock), t, UNIT[p.unit], p.contenido || 1, ucDe(p), redondea(t * contenidoDe(p)),
         p.minimoDefinido === false ? '' : p.min, { red: 'Crítico', amber: 'Bajo', green: 'Correcto' }[status(p)], p.supplier, p.supplierRef || '', p.ean || ''];
     }),
   ];

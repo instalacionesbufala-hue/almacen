@@ -1,10 +1,11 @@
 /* E-011 · Nueva entrega en tres pasos (móvil primero, botones de 56 px):
    1. Para quién (técnico y, si se quiere, la obra) · 2. Qué se entrega (buscador o escáner seguido) · 3. Firma del técnico.
    Nada predeterminado: el almacén elige los artículos. Se puede guardar como preparada (stock reservado) para firmar más tarde. */
+import { enMetros, equivTxt } from '../../domain/formatos';
 import { useEffect, useMemo, useState } from 'react';
 import { UNIT, categoriasActivas } from '../../data/catalogo';
 import type { Producto } from '../../data/tipos';
-import { contenidoTxt, disponibleReal, find, formatoEntero, nombreVehiculo, numEntrega, qtyTxt, status, vehiculoDeEquipo } from '../../domain/reglas';
+import { contenidoDe, contenidoTxt, disponibleReal, find, formatoEntero, unidadTxt, nombreVehiculo, numEntrega, qtyTxt, status, vehiculoDeEquipo } from '../../domain/reglas';
 import { fechaHora, num } from '../../domain/formato';
 import { aLineas, esPersonal, esPrenda, problemas, variantes } from '../../domain/entregas';
 import { avisoEstado, ejecutar, guardar, S, useAlmacen } from '../../store/almacen';
@@ -145,6 +146,8 @@ function LineaCesta({ sku }: { sku: string }) {
   if (!l || !p) return null;
   const disp = Math.max(0, disponibleReal(E, p)), falta = formatoEntero(p) && l.qty !== Math.trunc(l.qty), excede = l.qty > disp;
   const tallas = esPrenda(p) ? variantes(E, p) : [];
+  // E-031: con "metros sueltos" se elige entregar rollos (o el formato que sea) o metros
+  const sueltos = !formatoEntero(p) && enMetros(p), [enM, setEnM] = useState(false), factor = sueltos && enM ? contenidoDe(p) : 1;
   return (
     <div className={`rounded-xl p-3 flex flex-col gap-2 ${excede || falta ? 'bg-amber-50 ring-1 ring-amber-300' : 'bg-surface-container-low'}`}>
       <div className="flex items-center gap-3"><Tile p={p} size="w-12 h-12" />
@@ -153,10 +156,12 @@ function LineaCesta({ sku }: { sku: string }) {
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex items-center bg-white rounded-lg">
           <button onClick={() => quitarDeCesta(sku)} className="w-14 h-14 grid place-items-center" aria-label={`Menos ${p.name}`}><Icon n="remove" /></button>
-          <Cantidad sku={sku} qty={l.qty} />
+          <Cantidad sku={sku} qty={l.qty} factor={factor} />
           <button onClick={() => sumarUno(sku)} className="w-14 h-14 grid place-items-center bg-primary text-white rounded-r-lg" aria-label={`Más ${p.name}`}><Icon n="add" /></button>
         </div>
-        <span className="text-body-sm text-secondary">{UNIT[p.unit]}</span>
+        {sueltos ? <div className="flex rounded-lg overflow-hidden border border-outline-variant" role="group" aria-label="Entregar en">{([[false, unidadTxt(p.unit, 2)], [true, 'metros']] as const).map(([m, t]) => <button key={t} onClick={() => setEnM(m)} className={`h-12 px-3 text-body-sm font-semibold ${enM === m ? 'bg-primary text-white' : 'bg-white'}`}>{t}</button>)}</div>
+          : <span className="text-body-sm text-secondary">{UNIT[p.unit]}</span>}
+        {equivTxt(p, l.qty) && <span className="text-body-sm text-secondary">= {sueltos && enM ? qtyTxt(p, l.qty) : equivTxt(p, l.qty)}</span>}
         {tallas.length > 1 && <label className="flex items-center gap-2 ml-auto"><span className={LBL}>Talla</span>
           <select value={sku} onChange={e => cambiarTalla(sku, e.target.value)} className={`${INP} !w-auto h-14 font-semibold`} aria-label={`Talla de ${p.name}`}>
             {tallas.map(v => <option key={v.sku} value={v.sku} disabled={v.sku !== sku && Math.max(0, disponibleReal(E, v)) <= 0}>{v.talla || v.sku}{v.sku !== sku ? ` (${num(Math.max(0, disponibleReal(E, v)))})` : ''}</option>)}</select></label>}
@@ -169,10 +174,12 @@ function LineaCesta({ sku }: { sku: string }) {
   );
 }
 
-function Cantidad({ sku, qty }: { sku: string; qty: number }) {
-  const [v, setV] = useState(String(qty));
-  useEffect(() => setV(String(qty)), [qty]);
-  return <input value={v} onChange={e => setV(e.target.value)} onBlur={() => fijarCantidad(sku, Number(v.replace(',', '.')))} onKeyDown={e => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+/** factor: con metros sueltos se escribe en metros (qty × contenido) y se guarda en formatos */
+function Cantidad({ sku, qty, factor = 1 }: { sku: string; qty: number; factor?: number }) {
+  const ver = String(Math.round(qty * factor * 1000) / 1000);
+  const [v, setV] = useState(ver);
+  useEffect(() => setV(ver), [ver]);
+  return <input value={v} onChange={e => setV(e.target.value)} onBlur={() => fijarCantidad(sku, Math.round(Number(v.replace(',', '.')) / factor * 1000) / 1000)} onKeyDown={e => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
     inputMode="decimal" className="w-16 text-center font-bold text-body-lg bg-transparent focus:outline-none" aria-label="Cantidad" />;
 }
 

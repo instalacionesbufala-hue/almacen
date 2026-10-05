@@ -1,5 +1,6 @@
 /* Hojas (modales) del inventario: ficha, movimiento, alta/edición, recuento, selector, avisos.
    E-013: sin precios, sin números de serie y sin pasillo/estantería; el material está en el almacén o en un vehículo. */
+import { Contado, lineasContadas } from '../../ui/contado';
 import { useMemo, useState } from 'react';
 import qrcode from 'qrcode-generator';
 import type { Movimiento, Producto, TipoMov } from '../../data/tipos';
@@ -25,6 +26,7 @@ import { motivoSkuNoValido, skuPropuesto, skuValido } from '../../domain/codigos
 import { CodigosFicha } from './codigos';
 import { abrirRetirar } from './archivo';
 import { rolDe, vistaPermitida } from '../../domain/permisos';
+import { cambiaFormato, cantTxt, enMetros, cantVehiculoTxt, formatoTxt, normalizarFormato, previsionConversion, ucDe, type ModoConversion, type NuevoFormato } from '../../domain/formatos';
 
 /* ---------- Fila de movimiento ---------- */
 export function MovRow({ m }: { m: Movimiento }) {
@@ -62,7 +64,7 @@ function imprimirEtiqueta(p: Producto) {
 export function Ubicaciones({ p }: { p: Producto }) {
   const E = useAlmacen(), u = ubicaciones(E, p);
   return <div className="flex flex-wrap gap-1.5">{u.map(x => <span key={x.vehiculo || 'almacen'} className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-body-sm ${x.vehiculo ? (x.qty < 0 ? 'bg-error-container text-error' : 'bg-violet-50 text-violet-900') : 'bg-surface-container-low'}`}>
-    <Icon n={x.vehiculo ? 'local_shipping' : 'warehouse'} className="ico-16" />{x.donde} <b>{qtyTxt(p, x.qty)}</b></span>)}</div>;
+    <Icon n={x.vehiculo ? 'local_shipping' : 'warehouse'} className="ico-16" />{x.donde} <b>{cantTxt(p, x.qty)}</b></span>)}</div>;
 }
 
 /* ---------- Ficha ---------- */
@@ -167,7 +169,7 @@ function HojaMovimiento({ sku, type0, opts }: { sku: string; type0: TipoMov; opt
       {(type === 'devolucion' || type === 'merma' || type === 'traspaso') && <Campo label={type === 'devolucion' ? 'Vehículo que devuelve' : type === 'traspaso' ? 'Vehículo que se carga' : 'Dónde se ha perdido o roto'}>
         <select value={veh} onChange={e => setVeh(e.target.value)} className={`${INP} h-14`}>
           {type === 'merma' && <option value="">Almacén</option>}
-          {(type === 'devolucion' ? conMaterial : E.vehiculos).map(v => <option key={v.id} value={v.id}>{nombreVehiculo(E, v.id)} (lleva {qtyTxt(p, redondea(unidadesABordo(E, v.id, p.sku) / contenidoDe(p)))})</option>)}
+          {(type === 'devolucion' ? conMaterial : E.vehiculos).map(v => <option key={v.id} value={v.id}>{nombreVehiculo(E, v.id)} (lleva {cantVehiculoTxt(p, unidadesABordo(E, v.id, p.sku))})</option>)}
         </select></Campo>}
       <div><div className={`${LBL} mb-2`}>Cantidad ({unidadTxt(p.unit, 2)}{contenidoTxt(p) ? ` de ${num(contenidoDe(p))} ud` : ''})</div>
         <div className="flex items-center bg-white ring-1 ring-surface-container-high rounded-xl">
@@ -218,7 +220,7 @@ function HojaAjuste({ sku }: { sku: string }) {
       <div className="flex items-center gap-3 bg-surface-container-low rounded-xl p-3"><Tile p={p} />
         <div className="flex-1 min-w-0"><div className="font-mono text-label-sm text-secondary">{p.sku}{contenidoTxt(p) ? ` · ${contenidoTxt(p)}` : ''}</div><div className="text-body-sm">Almacén <b>{qtyTxt(p, p.stock)}</b></div></div></div>
       <Campo label="Dónde"><select value={veh} onChange={e => setVeh(e.target.value)} className={`${INP} h-14`}><option value="">Almacén</option>
-        {E.vehiculos.map(v => <option key={v.id} value={v.id}>{nombreVehiculo(E, v.id)} (lleva {qtyTxt(p, redondea(unidadesABordo(E, v.id, p.sku) / contenidoDe(p)))})</option>)}</select></Campo>
+        {E.vehiculos.map(v => <option key={v.id} value={v.id}>{nombreVehiculo(E, v.id)} (lleva {cantVehiculoTxt(p, unidadesABordo(E, v.id, p.sku))})</option>)}</select></Campo>
       <div><div className={`${LBL} mb-2`}>Cantidad ({unidadTxt(p.unit, 2)})</div>
         <div className="flex gap-2">
           <div className="grid grid-cols-2 bg-surface-container-low rounded-xl p-1 shrink-0">
@@ -252,7 +254,7 @@ function Selector({ type }: { type: TipoMov }) {
 }
 
 /* ---------- Alta / edición de referencia: los mismos campos que el CSV del catálogo ---------- */
-type FormProd = { sku: string; ean: string; name: string; cat: Producto['cat']; unit: Producto['unit']; contenido: string; packLabel: string; stock: string; min: string; supplier: string; supplierRef: string;
+type FormProd = { sku: string; ean: string; name: string; cat: Producto['cat']; unit: Producto['unit']; contenido: string; unidadContenido: 'm' | 'ud'; metrosSueltos: boolean; packLabel: string; stock: string; min: string; supplier: string; supplierRef: string;
   objetivo: string; proveedorHabitual: string; modelo: string; talla: string; propiedad: 'propia' | 'custodia'; propietario: string; notas: string };
 /** E-016: modo "propuesta" (el almacén propone cambios, no los aplica) y "revisar" (el administrador aplica una propuesta) */
 export const abrirFormProducto = (sku?: string, preset: Partial<Producto> = {}, onCreado?: (sku: string) => void, o: { modo?: 'propuesta' | 'revisar'; propuesta?: string } = {}) =>
@@ -261,7 +263,7 @@ function FormProducto({ sku, preset, onCreado, modo, propuesta }: { sku?: string
   const p = sku ? find(S(), sku) : undefined;
   const base: Partial<Producto> = p ? { ...p, ...preset } : { cat: 'fijaciones', unit: 'ud', contenido: 1, min: 0, ...preset };
   const [f, setF] = useState<FormProd>({
-    sku: base.sku || '', ean: base.ean || '', name: base.name || '', cat: base.cat || 'fijaciones', unit: base.unit || 'ud', contenido: String(base.contenido ?? 1), packLabel: base.packLabel || '',
+    sku: base.sku || '', ean: base.ean || '', name: base.name || '', cat: base.cat || 'fijaciones', unit: base.unit || 'ud', contenido: String(base.contenido ?? 1), unidadContenido: base.unit ? ucDe(base as Producto) : 'ud', metrosSueltos: !!base.metrosSueltos, packLabel: base.packLabel || '',
     stock: String(p?.borrador ? p.stockPropuesto ?? 0 : 0), min: base.minimoDefinido === false ? '' : String(base.min ?? ''), supplier: base.supplier || '', supplierRef: base.supplierRef || '',
     objetivo: base.objetivo != null ? String(base.objetivo) : '', proveedorHabitual: base.proveedorHabitual || '', modelo: base.modelo || '', talla: base.talla || '',
     propiedad: base.propiedad || 'propia', propietario: socioInicial(S(), base.propietario), notas: base.notas || '',
@@ -271,6 +273,8 @@ function FormProducto({ sku, preset, onCreado, modo, propuesta }: { sku?: string
   const pc = choque ? S().products.find(x => x.sku === choque) : undefined;
   const archivadoCon = !pc && f.sku.trim() && (!p || f.sku.trim().toUpperCase() !== p.sku) ? S().archivados?.find(x => x.sku === f.sku.trim().toUpperCase()) : undefined;
   const conContenido = f.unit !== 'm' && f.unit !== 'ud';
+  // E-031: si cambia el formato de una ficha con stock, antes de guardar se pregunta cómo convertirlo
+  const [conv, setConv] = useState<null | { obj: Producto; stockInicial: number; nf: NuevoFormato }>(null);
   const guardarProd = () => {
     const E = S(), code = f.sku.trim().toUpperCase(), name = f.name.trim();
     if (!code || !name) return toast('El SKU y el nombre son obligatorios.', 'err');
@@ -279,12 +283,13 @@ function FormProducto({ sku, preset, onCreado, modo, propuesta }: { sku?: string
     if (activo) { setChoque(activo.sku); return; }
     if (!p || code !== p.sku) { const malo = motivoSkuNoValido(code); if (malo) return toast(malo, 'err', 7000); }
     const n = { contenido: conContenido ? toNum(f.contenido) : 1, min: f.min.trim() === '' ? 0 : toNum(f.min), stock: toNum(f.stock) || 0 };
-    if (!(n.contenido > 0)) return toast('Indica cuántas unidades trae cada formato (bote de 1000 → 1000).', 'err');
+    if (!(n.contenido > 0)) return toast('Indica cuánto trae cada formato (bote de 1000 → 1000; rollo de 50 m → 50).', 'err');
     if (!(n.min >= 0) || !(n.stock >= 0)) return toast('Revisa los números: no pueden ser negativos.', 'err');
-    if (f.unit !== 'm' && n.stock !== Math.trunc(n.stock)) return toast(`El stock inicial va en ${unidadTxt(f.unit, 2)} enteros.`, 'err');
+    const uc = f.unit === 'm' ? 'm' : f.unit === 'ud' ? 'ud' : f.unidadContenido, sueltos = uc === 'm' && conContenido && f.metrosSueltos;
+    if (f.unit !== 'm' && !sueltos && n.stock !== Math.trunc(n.stock)) return toast(`El stock inicial va en ${unidadTxt(f.unit, 2)} enteros.`, 'err');
     if (!p) { const aviso = avisoStockInicial(E, code, n.stock); if (aviso && !confirm(aviso)) return; }
     const custodia = f.propiedad === 'custodia';
-    const obj: Producto = { sku: code, name, cat: f.cat, unit: f.unit, contenido: n.contenido, packLabel: f.packLabel.trim() || undefined, stock: p?.stock ?? 0, min: n.min, minimoDefinido: f.min.trim() !== '',
+    const obj: Producto = { sku: code, name, cat: f.cat, unit: f.unit, contenido: n.contenido, unidadContenido: uc, metrosSueltos: sueltos || undefined, packLabel: f.packLabel.trim() || undefined, stock: p?.stock ?? 0, min: n.min, minimoDefinido: f.min.trim() !== '',
       supplier: f.supplier.trim(), ean: f.ean.trim() || undefined, supplierRef: f.supplierRef.trim() || undefined,
       objetivo: f.objetivo.trim() === '' ? undefined : toNum(f.objetivo), proveedorHabitual: f.proveedorHabitual.trim() || undefined, modelo: f.modelo.trim() || undefined, talla: f.talla.trim() || undefined,
       propiedad: f.propiedad, propietario: custodia ? f.propietario : undefined, foto: p?.foto, fotoMini: p?.fotoMini, fotoOrigen: p?.fotoOrigen, notas: f.notas.trim() || undefined };
@@ -302,14 +307,31 @@ function FormProducto({ sku, preset, onCreado, modo, propuesta }: { sku?: string
       // E-021: si el código antiguo no era válido (la URL de un QR…), queda como código alternativo: escanearlo abre el artículo
       if (!skuValido(p.sku)) ejecutar({ op: 'asociarCodigo', args: { codigo: p.sku, sku: code, tipo: /^HTTP/i.test(p.sku) ? 'QR' : 'otro' } });
     }
-    if (!ejecutar({ op: 'producto', args: { producto: obj, nuevo: !p, stockInicial: p && !p.borrador ? 0 : n.stock } })) return;
+    const nf: NuevoFormato = normalizarFormato({ unit: f.unit, contenido: n.contenido, unidadContenido: uc });
+    if (p && !p.borrador && cambiaFormato(p, nf)) {
+      const hay = p.stock !== 0 || S().aBordo.some(b => b.sku === p.sku && b.unidades !== 0);
+      if (hay) { setConv({ obj, stockInicial: 0, nf }); return; }
+      if (!ejecutar({ op: 'cambiarFormato', args: { sku: p.sku, formato: nf, modo: 'formato' } })) return;
+    }
+    terminar(obj, p && !p.borrador ? 0 : n.stock);
+  };
+  const terminar = (obj: Producto, stockInicial: number, conversion?: ModoConversion) => {
+    if (conversion && p) {
+      const c0 = contenidoDe(p);                     // antes de convertir: cambiarFormato actualiza esta misma ficha
+      if (!ejecutar({ op: 'cambiarFormato', args: { sku: p.sku, formato: conv!.nf, modo: conversion } })) return;
+      // el mínimo y el objetivo se reexpresan igual que el stock (100 m de mínimo = 2 rollos)
+      if (conversion === 'contenido') { const k = c0 / conv!.nf.contenido; obj = { ...obj, min: redondea(obj.min * k), objetivo: obj.objetivo == null ? undefined : redondea(obj.objetivo * k) }; }
+    }
+    const code = obj.sku, n = { stock: stockInicial };
+    if (!ejecutar({ op: 'producto', args: { producto: obj, nuevo: !p, stockInicial } })) return;
     if (modo === 'revisar' && propuesta) ejecutar({ op: 'resolverPropuesta', args: { id: propuesta, aplicada: true } });
-    toast(p?.borrador ? `Borrador aprobado: ${code} ya se puede mover${n.stock > 0 ? ` y entran ${n.stock} ${unidadTxt(f.unit, n.stock)} en el almacén` : ''}.` : p ? 'Referencia actualizada.' : `Referencia ${code} creada.`, 'ok', 6000);
+    toast(p?.borrador ? `Borrador aprobado: ${code} ya se puede mover${n.stock > 0 ? ` y entran ${n.stock} ${unidadTxt(f.unit, n.stock)} en el almacén` : ''}.` : p ? (conversion ? `Referencia actualizada: formato ${formatoTxt(conv!.nf)}, stock convertido.` : 'Referencia actualizada.') : `Referencia ${code} creada.`, 'ok', 6000);
     if (!p) onCreado?.(code);
     closeModal();
   };
   const inp = (k: keyof FormProd, label: string, extra: React.InputHTMLAttributes<HTMLInputElement> = {}) =>
     <Campo label={label}><input value={String(f[k])} onChange={set(k)} className={`${INP} h-12`} {...extra} /></Campo>;
+  if (conv && p) return <ConversionFormato p={p} nf={conv.nf} volver={() => setConv(null)} elegir={m => terminar(conv.obj, conv.stockInicial, m)} />;
   return (<>
     <SheetHead title={modo === 'propuesta' ? 'Proponer un cambio' : modo === 'revisar' ? 'Revisar el cambio propuesto' : p?.borrador ? 'Completar y aprobar borrador' : p ? 'Editar referencia' : 'Nueva referencia'} sub={p?.borrador ? `${p.sku}${p.propuestoPor ? ` · propuesto por ${p.propuestoPor}` : ''}` : p ? p.sku : 'Alta en el catálogo del almacén'} />
     <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -323,7 +345,9 @@ function FormProducto({ sku, preset, onCreado, modo, propuesta }: { sku?: string
       <div className="sm:col-span-2">{inp('name', 'Nombre *')}</div>
       <Campo label="Categoría"><select value={f.cat} onChange={set('cat')} className={`${INP} h-12`}>{categoriasActivas().map(([k, c]) => <option key={k} value={k}>{c.label}</option>)}</select></Campo>
       <Campo label="Se vende y se entrega por"><select value={f.unit} onChange={set('unit')} className={`${INP} h-12`}>{UNIDADES.map(u => <option key={u} value={u}>{u === 'm' ? 'Metros' : u === 'ud' ? 'Unidades' : unidadTxt(u, 2).replace(/^./, c => c.toUpperCase())}</option>)}</select></Campo>
-      {conContenido && inp('contenido', `Unidades por ${UNIT[f.unit]} (bote de 1000 → 1000)`, { inputMode: 'numeric' })}
+      {conContenido && <div className="grid grid-cols-[1fr_auto] gap-2 items-end">{inp('contenido', `Cuánto trae cada ${UNIT[f.unit]} (bote de 1000 → 1000; rollo de 50 m → 50)`, { inputMode: 'decimal' })}
+        <select value={f.unidadContenido} onChange={e => setF({ ...f, unidadContenido: e.target.value as 'm' | 'ud' })} className={`${INP} h-12 !w-auto`} aria-label="Unidad del contenido"><option value="ud">ud</option><option value="m">m</option></select></div>}
+      {conContenido && f.unidadContenido === 'm' && <label className="sm:col-span-2 flex items-center gap-3 text-body-md min-h-12"><input type="checkbox" checked={f.metrosSueltos} onChange={e => setF({ ...f, metrosSueltos: e.target.checked })} className="w-5 h-5" />Permitir entregar metros sueltos (cable cortado a medida). Si no, se entrega por {UNIT[f.unit]} entero.</label>}
       {(!p || p.borrador) && inp('stock', `Stock inicial en el almacén (${unidadTxt(f.unit, 2)})${p?.borrador ? ' · contado por el almacén' : ''}`, { inputMode: 'decimal' })}
       {inp('min', 'Mínimo en el almacén (vacío = completar después)', { inputMode: 'decimal' })}
       {inp('supplier', 'Proveedor')}
@@ -338,6 +362,32 @@ function FormProducto({ sku, preset, onCreado, modo, propuesta }: { sku?: string
       {p && !p.borrador && <p className="sm:col-span-2 text-body-sm text-secondary">El stock no se edita aquí: se corrige con un ajuste (con motivo), con un recuento o, si vino mal de un albarán, con "Reasignar línea" en el albarán.</p>}
     </div>
     <SheetFoot className="flex gap-2"><button onClick={closeModal} className={`${BTN_S} h-12 px-5`}>Cancelar</button><button onClick={guardarProd} className={`${BTN_P} h-12 flex-1`}><Icon n="save" className="ico-20" />{modo === 'propuesta' ? 'Enviar la propuesta' : modo === 'revisar' ? 'Aplicar el cambio' : p?.borrador ? 'Aprobar' : p ? 'Guardar cambios' : 'Crear referencia'}</button></SheetFoot>
+  </>);
+}
+
+/* ---------- E-031 · Al cambiar el formato: ¿cómo se convierte el stock? ---------- */
+function ConversionFormato({ p, nf, volver, elegir }: { p: Producto; nf: NuevoFormato; volver: () => void; elegir: (m: ModoConversion) => void }) {
+  const E = useAlmacen();
+  const nuevo = { ...p, unit: nf.unit, contenido: nf.contenido, unidadContenido: nf.unidadContenido };
+  const a = previsionConversion(E, p, nf, 'contenido'), b = previsionConversion(E, p, nf, 'formato');
+  const ucTxt = nf.unidadContenido === 'm' ? 'metros' : 'unidades', c0 = contenidoDe(p);
+  const veh = (v: { vehiculo: string; antes: number; despues: number }) => `${nombreVehiculo(E, v.vehiculo).split(' · ').pop()}: ${num(v.antes)} ${ucDe(p)} → ${cantVehiculoTxt(nuevo, v.despues)}`;
+  return (<>
+    <SheetHead title="¿Cómo convierto el stock?" sub={`${p.sku} · de ${formatoTxt({ unit: p.unit, contenido: c0, unidadContenido: ucDe(p) })} a ${formatoTxt(nf)}`} />
+    <div className="p-5 flex flex-col gap-3">
+      <button onClick={() => elegir('contenido')} className="text-left rounded-xl border-2 border-primary p-4 flex flex-col gap-1 hover:bg-primary/5">
+        <b>{c0 === 1 ? `El stock actual (${num(p.stock)}) está en ${ucTxt}` : `Conservar la cantidad física (${cantTxt(p, p.stock)})`}</b>
+        <span className="text-body-sm">Se convierte a <b>{cantTxt(nuevo, a.stock)}</b> en el almacén{p.min ? ` (el mínimo, ${num(p.min)}, pasa a ${num(redondea(p.min * c0 / nf.contenido))})` : ''}.</span>
+        {a.vehiculos.length > 0 && <span className="text-body-sm text-secondary">Las furgonetas ya cuentan en {ucTxt} y no cambian: {a.vehiculos.map(veh).join(' · ')}</span>}
+      </button>
+      <button onClick={() => elegir('formato')} className="text-left rounded-xl border border-outline-variant p-4 flex flex-col gap-1 hover:bg-surface-container-low">
+        <b>El stock ya está en {unidadTxt(nf.unit, 2)} (no convertir)</b>
+        <span className="text-body-sm">El almacén se queda en <b>{cantTxt(nuevo, b.stock)}</b>.</span>
+        {b.vehiculos.length > 0 && <span className="text-body-sm text-secondary">Lo de las furgonetas se reexpresa: {b.vehiculos.map(veh).join(' · ')}</span>}
+      </button>
+      <p className="text-body-sm text-secondary">No cambia la cantidad física: queda un ajuste "Conversión de formato" enlazado en el historial (almacén y furgonetas) y en la auditoría.</p>
+    </div>
+    <SheetFoot className="flex gap-2"><button onClick={volver} className={`${BTN_S} h-12 px-5`}>Volver</button></SheetFoot>
   </>);
 }
 
@@ -371,9 +421,10 @@ function Conteo({ cat }: { cat: string }) {
   const nombre = cat === 'all' ? 'todo el almacén' : catDe(cat).label;
   const { validar } = usePermisos();
   const confirmar = () => {
-    const lineas = Object.entries(vals).filter(([, v]) => v.trim() !== '').map(([sku, v]) => ({ sku, contado: toNum(v) }));
+    const lineas = lineasContadas(vals, sku => find(E, sku));
     if (lineas.some(l => !(l.contado >= 0))) return toast('Revisa las cantidades: no pueden ser negativas.', 'err');
-    const mal = lineas.find(l => { const p = find(E, l.sku)!; return formatoEntero(p) && l.contado !== Math.trunc(l.contado); });
+    // E-031: un formato en metros se cuenta en rollos y metros sueltos (un rollo empezado cuenta)
+    const mal = lineas.find(l => { const p = find(E, l.sku)!; return formatoEntero(p) && !enMetros(p) && l.contado !== Math.trunc(l.contado); });
     if (mal) return toast(`${find(E, mal.sku)!.name}: cuenta ${unidadTxt(find(E, mal.sku)!.unit, 2)} enteros (los abiertos no cuentan).`, 'err');
     const n = lineas.filter(l => redondea(l.contado - find(E, l.sku)!.stock) !== 0).length;
     if (!ejecutar({ op: 'recuento', args: { id: nuevoId(), pasillo: nombre, lineas } })) return;
@@ -384,9 +435,8 @@ function Conteo({ cat }: { cat: string }) {
     <SheetHead title={`Recuento de ${nombre}`} sub={validar ? 'Escribe lo que cuentas en el almacén. Solo se ajustan las líneas con diferencia.' : 'Escribe lo que cuentas. Las diferencias quedan pendientes de validar por el administrador.'} />
     <div className="p-5 flex flex-col">{ps.map(p =>
       <div key={p.sku} className="flex items-center gap-3 py-2.5 border-b border-surface-container">
-        <div className="flex-1 min-w-0"><div className="font-medium truncate">{p.name}</div><div className="font-mono text-label-sm text-secondary">{p.sku} · sistema: {qtyTxt(p, p.stock)}</div></div>
-        <input value={vals[p.sku] ?? ''} onChange={e => setVals({ ...vals, [p.sku]: e.target.value })} inputMode="decimal" placeholder={num(p.stock)}
-          className={`${INP} !w-28 h-12 text-center font-mono`} aria-label={`Cantidad contada de ${p.name}`} />
+        <div className="flex-1 min-w-0"><div className="font-medium truncate">{p.name}</div><div className="font-mono text-label-sm text-secondary">{p.sku} · sistema: {cantTxt(p, p.stock)}</div></div>
+        <Contado p={p} vals={vals} setVals={setVals} placeholder={p.stock} />
       </div>)}</div>
     <SheetFoot><button onClick={confirmar} className={`${BTN_P} w-full h-14`}><Icon n="fact_check" className="ico-fill" />Confirmar recuento y ajustar diferencias</button></SheetFoot>
   </>);

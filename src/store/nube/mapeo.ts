@@ -32,7 +32,7 @@ const n = (v: unknown) => Number(v ?? 0);
 export function aEstado(t: Tablas, base: Pick<Estado, 'cesta' | 'seq'>, operador: string, rol: Rol = 'almacen'): Estado {
   const todos: (Producto & { archivado?: boolean })[] = t.productos.map(p => ({
     sku: p.sku, ean: p.ean ?? undefined, supplierRef: p.ref_proveedor ?? undefined, name: p.nombre, cat: p.categoria as CatId, unit: p.unidad as Unidad,
-    contenido: n(p.contenido) || 1, packLabel: p.formato_texto || undefined, stock: n(p.stock), min: n(p.minimo), minimoDefinido: p.minimo_definido !== false, supplier: p.proveedor || '',
+    contenido: n(p.contenido) || 1, ...(p.unidad_contenido === 'm' ? { unidadContenido: 'm' as const } : {}), ...(p.metros_sueltos ? { metrosSueltos: true } : {}), packLabel: p.formato_texto || undefined, stock: n(p.stock), min: n(p.minimo), minimoDefinido: p.minimo_definido !== false, supplier: p.proveedor || '',
     borrador: !!p.borrador, stockPropuesto: p.stock_propuesto == null ? undefined : n(p.stock_propuesto), propuestoPor: p.propuesto_por || undefined,
     propiedad: p.propiedad === 'custodia' ? 'custodia' : 'propia', propietario: p.propietario_id ?? undefined,
     objetivo: p.objetivo == null ? undefined : n(p.objetivo), proveedorHabitual: p.proveedor_habitual ?? undefined, modelo: p.modelo ?? undefined, talla: p.talla ?? undefined,

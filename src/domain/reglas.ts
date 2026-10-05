@@ -18,14 +18,15 @@ export function status(p: Pick<Producto, 'stock' | 'min'>): Semaforo {
 export const ORD: Record<Semaforo, number> = { red: 0, amber: 1, green: 2 };
 
 /* ---------- Formatos de venta ---------- */
-const PLURAL: Record<Unidad, string> = { m: 'm', ud: 'ud', bote: 'botes', sobre: 'sobres', bolsa: 'bolsas', pack: 'packs', caja: 'cajas' };
+const PLURAL: Record<Unidad, string> = { m: 'm', ud: 'ud', bote: 'botes', sobre: 'sobres', bolsa: 'bolsas', pack: 'packs', caja: 'cajas', rollo: 'rollos', bobina: 'bobinas', barra: 'barras' };
 export const unidadTxt = (u: Unidad, n: number) => (Math.abs(n) === 1 ? UNIT[u] : PLURAL[u]);
 export const contenidoDe = (p: Pick<Producto, 'contenido'>) => p.contenido && p.contenido > 0 ? p.contenido : 1;
-/** En el almacén y en las entregas se mueven formatos enteros (bote completo); solo los metros admiten decimales */
-export const formatoEntero = (p: Pick<Producto, 'unit'>) => p.unit !== 'm';
+/** En el almacén y en las entregas se mueven formatos enteros (bote completo); los metros admiten decimales, y (E-031) también
+    un formato en metros con "metros sueltos" (cable cortado a medida) */
+export const formatoEntero = (p: Pick<Producto, 'unit'> & { metrosSueltos?: boolean; unidadContenido?: 'm' | 'ud' }) => p.unit !== 'm' && !(p.metrosSueltos && p.unidadContenido === 'm');
 export const qtyTxt = (p: Pick<Producto, 'unit'>, q: number) => `${num(q)} ${unidadTxt(p.unit, q)}`;
-/** "bote de 1000 ud" (vacío en m y ud) */
-export const contenidoTxt = (p: Pick<Producto, 'unit' | 'contenido'>) => p.unit !== 'm' && p.unit !== 'ud' && contenidoDe(p) > 1 ? `${UNIT[p.unit]} de ${num(contenidoDe(p))} ud` : '';
+/** "bote de 1000 ud", "rollo de 50 m" (vacío en m y ud) */
+export const contenidoTxt = (p: Pick<Producto, 'unit' | 'contenido'> & { unidadContenido?: 'm' | 'ud' }) => p.unit !== 'm' && p.unit !== 'ud' && contenidoDe(p) > 1 ? `${UNIT[p.unit]} de ${num(contenidoDe(p))} ${p.unidadContenido === 'm' ? 'm' : 'ud'}` : '';
 
 export const critical = (S: Estado) => S.products.filter(p => !p.borrador && status(p) === 'red');
 export const warning = (S: Estado) => S.products.filter(p => !p.borrador && status(p) === 'amber');

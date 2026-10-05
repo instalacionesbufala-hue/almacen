@@ -4,7 +4,7 @@
 export type CatId = string;
 export interface Categoria { id: string; nombre: string; icono: string; color: string; orden: number; activa: boolean }
 /** E-013: formato de venta. En el almacén se mueven formatos enteros (salvo metros); el contenido cuenta para los consumos (E-012) */
-export type Unidad = 'm' | 'ud' | 'bote' | 'sobre' | 'bolsa' | 'pack' | 'caja';
+export type Unidad = 'm' | 'ud' | 'bote' | 'sobre' | 'bolsa' | 'pack' | 'caja' | 'rollo' | 'bobina' | 'barra';
 /** 'ajuste' lleva la cantidad con signo (+ suma, − resta) y exige motivo; solo el administrador */
 /** E-013: traspaso (almacén → vehículo), devolucion (vehículo → almacén) y consumo (en obra, desde el vehículo; E-012) */
 export type TipoMov = 'entrada' | 'salida' | 'merma' | 'ajuste' | 'traspaso' | 'devolucion' | 'consumo';
@@ -20,6 +20,9 @@ export interface Producto {
   unit: Unidad;
   /** Unidades por formato: bote de 1000 tacos → 1000 (en m y ud, 1) */
   contenido?: number;
+  /** E-031: unidad del contenido (rollo de 50 m → 'm'; bote de 1000 → 'ud') y si se puede entregar en metros sueltos */
+  unidadContenido?: 'm' | 'ud';
+  metrosSueltos?: boolean;
   /** Descripción corta opcional ("Monofásico · 40 A") */
   packLabel?: string;
   /** Stock del ALMACÉN en formatos (E-013). Lo de los vehículos está en Estado.aBordo */

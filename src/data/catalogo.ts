@@ -47,8 +47,8 @@ export const catDe = (id: string | undefined): CatInfo => CATS[id || ''] ?? { la
 export const categoriasActivas = (): [string, CatInfo][] => Object.entries(CATS).filter(([, c]) => c.activa).sort((a, b) => a[1].orden - b[1].orden);
 export const idsCategoriasActivas = () => categoriasActivas().map(([k]) => k);
 /** Formato de venta (E-013). En plural, ver unidadTxt() en domain/formato */
-export const UNIT: Record<Unidad, string> = { m: 'm', ud: 'ud', bote: 'bote', sobre: 'sobre', bolsa: 'bolsa', pack: 'pack', caja: 'caja' };
-export const UNIDADES: Unidad[] = ['ud', 'm', 'bote', 'sobre', 'bolsa', 'pack', 'caja'];
+export const UNIT: Record<Unidad, string> = { m: 'm', ud: 'ud', bote: 'bote', sobre: 'sobre', bolsa: 'bolsa', pack: 'pack', caja: 'caja', rollo: 'rollo', bobina: 'bobina', barra: 'barra' };
+export const UNIDADES: Unidad[] = ['ud', 'm', 'rollo', 'bobina', 'barra', 'caja', 'pack', 'bote', 'sobre', 'bolsa'];
 
 /* Motivos de movimiento */
 export const REASONS: Record<TipoMov, string[]> = {

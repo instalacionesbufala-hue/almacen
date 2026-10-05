@@ -16,7 +16,8 @@ export function previsionAjuste(S: Estado, a: AjusteInput): { de: number; a: num
     if (!S.vehiculos.some(v => v.id === a.vehiculo)) throw new Error('Vehículo no encontrado');
     de = redondea(unidadesABordo(S, a.vehiculo, p.sku) / contenidoDe(p));
   } else {
-    if (formatoEntero(p) && a.qty !== Math.trunc(a.qty)) throw new Error(`En el almacén ${p.name} se mueve por ${p.unit} entero: indica un número sin decimales`);
+    // E-031: un formato en metros puede quedar empezado (un rollo abierto): el ajuste admite decimales
+    if (formatoEntero(p) && p.unidadContenido !== 'm' && a.qty !== Math.trunc(a.qty)) throw new Error(`En el almacén ${p.name} se mueve por ${p.unit} entero: indica un número sin decimales`);
     de = p.stock;
   }
   const hasta = redondea(de + a.qty);

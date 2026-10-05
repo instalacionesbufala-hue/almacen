@@ -1,5 +1,7 @@
 /* E-012 · Cierres de instalación recibidos del wizard: estado, líneas traducidas, pendientes que resuelve el administrador,
    consumo por equipo y periodo, discrepancias (vehículos en negativo) y recuento de vehículo. */
+import { Contado, lineasContadas } from '../../ui/contado';
+import { cantTxt } from '../../domain/formatos';
 import { Fragment, useState } from 'react';
 import type { CierreApp, EstadoCierre, LineaCierre, Unidad } from '../../data/tipos';
 import { conductoresSueltos, datosLinea, filtroRZ1K, mangueraRZ1K, reglaDeResolucion, type Propuesta } from '../../domain/resolucion';
@@ -211,7 +213,7 @@ function RecuentoVehiculo({ vehiculo }: { vehiculo: string }) {
   };
   if (!v) return <SheetHead title="Vehículo no encontrado" />;
   const guardar = () => {
-    const lineas = Object.entries(cont).filter(([, x]) => x.trim() !== '').map(([sku, x]) => ({ sku, contado: toNum(x) }));
+    const lineas = lineasContadas(cont, sku => find(E, sku));
     if (!lineas.length) return toast('Escribe lo que has contado de al menos un artículo.', 'warn');
     if (lineas.some(l => !(l.contado >= 0))) return toast('Revisa las cantidades: solo números de 0 en adelante (medio sobre: 0,5).', 'warn');
     if (ejecutar({ op: 'recuentoVehiculo', args: { id: nuevoId(), vehiculo, lineas } })) {
@@ -230,9 +232,9 @@ function RecuentoVehiculo({ vehiculo }: { vehiculo: string }) {
       {!skus.length && <Vacio>No consta material a bordo. Añade lo que lleva la furgoneta con los botones de arriba.</Vacio>}
       {skus.map(sku => { const p = find(E, sku)!, teorico = redondea(unidadesABordo(E, vehiculo, sku) / contenidoDe(p)); return (
         <div key={sku} className="flex items-center gap-3 py-2 border-b border-surface-container">
-          <span className="flex-1 min-w-0"><span className="block font-medium truncate">{p.name}</span><span className="text-body-sm text-secondary">Consta: <b className={teorico < 0 ? 'text-error' : ''}>{num(teorico)} {unidadTxt(p.unit, teorico)}</b></span></span>
-          <input value={cont[sku] ?? ''} onChange={e => setCont({ ...cont, [sku]: e.target.value })} inputMode="decimal" placeholder={num(Math.max(0, teorico))} className={`${INP} h-12 !w-28 text-right`} aria-label={`Contado de ${p.name}`} />
-          {extra.includes(sku) && !aBordo.includes(sku) && <button onClick={() => { setExtra(e => e.filter(x => x !== sku)); setCont(c => { const n = { ...c }; delete n[sku]; return n; }); }} className={`${BTN_S} h-12 w-12 shrink-0`} aria-label={`Quitar ${p.name} del recuento`}><Icon n="close" className="ico-20" /></button>}
+          <span className="flex-1 min-w-0"><span className="block font-medium truncate">{p.name}</span><span className="text-body-sm text-secondary">Consta: <b className={teorico < 0 ? 'text-error' : ''}>{cantTxt(p, teorico)}</b></span></span>
+          <Contado p={p} vals={cont} setVals={setCont} placeholder={Math.max(0, teorico)} />
+          {extra.includes(sku) && !aBordo.includes(sku) && <button onClick={() => { setExtra(e => e.filter(x => x !== sku)); setCont(c => { const n = { ...c }; delete n[sku]; delete n[sku + '|m']; return n; }); }} className={`${BTN_S} h-12 w-12 shrink-0`} aria-label={`Quitar ${p.name} del recuento`}><Icon n="close" className="ico-20" /></button>}
         </div>); })}
     </div>
     <SheetFoot><button onClick={guardar} className={`${BTN_P} h-14 w-full`}><Icon n="fact_check" className="ico-fill" />{E.rol === 'admin' ? 'Aplicar el recuento' : 'Enviar el recuento'}</button></SheetFoot>

@@ -938,7 +938,7 @@ Una tabla con una fila por apartado y casillas **Ver** y **Modificar**, en lengu
    - Hay pruebas de: resolución con 3 y con 5 artículos; atajo "Conductores sueltos" en mono y en trif, incluido un color que falta; deshacer resolución, que devuelve el stock, deja la línea pendiente y la registra en la versión y la auditoría.
    - El caso E2632246 se puede corregir desde la app.
 
-### E-031 · Formatos en metros (rollo, bobina, barra, caja) y conversión del stock al cambiar el formato · PENDIENTE
+### E-031 · Formatos en metros (rollo, bobina, barra, caja) y conversión del stock al cambiar el formato · HECHO
 **Petición del usuario (05/10):** el tubo corrugado (6200020032) se entrega **por rollos de 50 m**, pero los cierres lo consumen **en metros**. Hoy la ficha está en `unidades`: 150 ud en el almacén, −18 en Búfala 2, −9 en Búfala 1 y 40 en Búfala 3, que en realidad son **metros**.
 
 **Lo que falta**
@@ -2648,3 +2648,76 @@ En "Para el día a día" se explican el ajuste y el aviso.
 - `src/domain/e030.test.ts` (9): lectura de color y sección; atajo mono y trif con colores que faltan; manguera RZ1-K; la regla propuesta; resolver y deshacer en la app (también una resolución antigua); validación.
 - `tsc -b` y build correctos.
 - **En el navegador (demo con E2632246 como en producción):** "Deshacer resolución" → los 49 m vuelven a bordo; "Conductores sueltos (3)" → Aplicar → 49 m de cada uno y la regla propuesta. Comprobado también a 375 px.
+
+### 05/10/2026 · E-031 · HECHO
+**Aplicado en producción:** migración `20261021000100_e031_formatos_en_metros.sql`.
+
+**Comprobado en producción (solo lectura):**
+- `_aplicar_movimiento`, `_mover_vehiculo`, `preparar_entrega` y `_antes_del_ajuste` ya usan la regla nueva;
+- `guardar_producto` guarda los dos campos nuevos;
+- `cambiar_formato` tiene su permiso;
+- **el corrugado 6200020032 sigue como estaba** (ud, 150 en el almacén; −9, −18 y 40 en las furgonetas): no he tocado datos.
+
+**Para el usuario: dejar el corrugado en rollos de 50 m.**
+1. Inventario → abre **6200020032** → **Editar**.
+2. En "Se vende y se entrega por" elige **Rollos**. En "Cuánto trae cada rollo" escribe **50** y, a su lado, **m**. No marques "metros sueltos": el tubo se entrega por rollo entero.
+3. **Guardar cambios.** Sale "¿Cómo convierto el stock?". Pulsa **"El stock actual (150) está en metros"**.
+4. Resultado:
+   - almacén: **3 rollos (150 m)**;
+   - mínimo: de 100 a **2 rollos**;
+   - las furgonetas no cambian de cantidad porque ya cuentan en metros: 2690NKC −9 m = −0,18 rollos, 4299NGK −18 m = −0,36 rollos y 7463LVN 40 m = 0,8 rollos;
+   - queda un ajuste "Conversión de formato" en el historial y en la auditoría.
+
+**Modelo**
+- **No cambia el fondo:** el almacén guarda formatos y cada furgoneta, unidades de contenido.
+- Por eso los cierres **ya descontaban en metros**: 12 m de corrugado son 0,24 rollos, como los sobres de RJ45. Lo nuevo es poder decir "rollo de **50 m**".
+- **Formatos nuevos:** `rollo`, `bobina` y `barra`.
+- **Columna nueva `unidad_contenido`** (`m` o `ud`): `caja`, `pack` y los demás también admiten metros (Cat6: caja de 305 m).
+- **Columna nueva `metros_sueltos`**, por artículo.
+- **Formato entero por artículo, no por unidad** (`_es_formato_entero(pr)`):
+  - los metros admiten decimales;
+  - un formato en metros con "metros sueltos" también;
+  - los demás, enteros.
+- **Decisión de Code:** en los **ajustes y recuentos** de un formato en metros se admiten decimales aunque no tenga metros sueltos. Un rollo empezado existe: "2 rollos y 15 m" son 2,3 rollos. En las entregas y en las salidas sigue siendo por formato entero.
+- **Decisión de Code:** las 4 funciones que exigían formato entero, y `guardar_producto`, **se reescriben en el sitio** desde su definición actual (sustitución comprobada, que falla si no encuentra el texto). Así no copio cuerpos largos que podrían quedar desfasados.
+
+**1. Ficha**
+- "Se vende y se entrega por" incluye rollos, bobinas y barras.
+- "Cuánto trae cada …" va con un selector **ud / m** al lado.
+- Con contenido en metros aparece **"Permitir entregar metros sueltos"**.
+- En la ficha y en las furgonetas se ve "rollo de 50 m" y "3 rollos (150 m)".
+
+**2. Conversión al cambiar el formato** (`cambiar_formato(sku, unidad, contenido, unidad_contenido, modo)`)
+- Si la ficha tiene stock, en el almacén o en alguna furgoneta, se pregunta antes de guardar y se ven las cifras de cada opción:
+  - **"El stock actual (150) está en metros"** (o "conservar la cantidad física" si ya tenía contenido): el almacén se reexpresa, 150 → 3 rollos, y el mínimo y el objetivo también. Las furgonetas no cambian, porque ya guardan metros.
+  - **"El stock ya está en rollos (no convertir)":** el almacén se queda igual y lo de las furgonetas se reescala (40 → 40 rollos = 2000 m).
+- En los dos casos queda un **ajuste "Conversión de formato" enlazado** donde cambia la cifra (almacén o cada furgoneta), con la referencia "150 unidades → 3 rollo de 50 m (sin cambio físico)", y auditoría (`cambiar_formato`, antes, después y vehículos).
+- **Decisión de Code:** si hay **entregas preparadas** con ese artículo se rechaza, porque sus reservas están en el formato antiguo. Primero se firman o se anulan.
+- Sin stock en ningún sitio, el formato cambia sin preguntar.
+
+**3. Furgonetas:** "2,64 rollos (132 m)" en la ficha del artículo, en la vista de la furgoneta, en las tarjetas de equipo y en los desplegables de movimiento.
+
+**4. Entregas**
+- Por defecto, por formato entero: "1,3" se queda en 1 rollo.
+- Con "metros sueltos", la línea de la cesta tiene **rollos | metros**. En metros se escribe "15" y se guarda 0,3 rollos (en el servidor, un traspaso de 0,3 rollos = 15 m a bordo).
+
+**5. Recuentos** (de furgoneta y del almacén por categoría)
+- En los formatos en metros hay dos casillas: "**rollos + m**". "2 + 15" son 2,3 rollos.
+- Los demás artículos tienen una sola cifra, como antes.
+
+**6. CSV del inventario:** columnas nuevas "Unidad del contenido" y "Total en unidad del contenido" (3,44 rollos → 172 m).
+
+**No incluido:** la lectura con IA de etiquetas y albaranes (`_compartido/articulo.ts` y `clasificar.ts`) todavía no propone "rollo", "bobina" ni "barra". Las fichas se pueden ajustar a mano. Si se quiere, va en otro encargo.
+
+**Pruebas: 466 en verde** (+12):
+- `supabase/tests/e031.test.ts` (6):
+  - el caso real convertido "en metros" (almacén 3, furgonetas −18 y 40 sin cambio, mínimo 2, ajuste y auditoría);
+  - "ya en rollos" (furgonetas −900 y 2000 m);
+  - rollo de 50 → bobina de 500 (0,3), sin repetir y bloqueado con reservas;
+  - cierre de 12 m → 0,24 rollos;
+  - entrega por rollos (0,5 se rechaza) y por metros sueltos (0,3 rollos = 15 m a bordo), y guardar la ficha sin los campos nuevos no los borra;
+  - recuento mixto 2,3 en el almacén y en la furgoneta (un bote sigue exigiendo enteros).
+- `src/domain/e031.test.ts` (6): lo mismo en la app, más los textos ("−0,36 rollos (−18 m)", "rollo de 50 m") y el CSV.
+- `tsc -b` y build correctos.
+- **En el navegador (demo con el corrugado como en producción):** Editar → Rollos 50 m → la pregunta con las dos opciones y sus cifras → 3 rollos (150 m), mínimo 2, furgonetas −0,36 / −0,18 / 0,8 rollos. Con metros sueltos, la cesta en metros (15 m → 0,3 rollos).
+  - Fallo encontrado y corregido: el mínimo no se convertía, porque la ficha ya estaba actualizada al calcularlo.

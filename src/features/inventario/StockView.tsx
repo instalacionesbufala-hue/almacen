@@ -1,4 +1,5 @@
 /* Stock general: panel de escritorio, inventario móvil y stock a bordo de un vehículo (E-013: sin precios ni estanterías) */
+import { equivTxt } from '../../domain/formatos';
 import type { Estado, Producto } from '../../data/tipos';
 import { MARCA, UNIT, catDe, categoriasActivas, idsCategoriasActivas } from '../../data/catalogo';
 import { contenidoTxt, critical, esCustodia, find, nombreVehiculo, ORD, qtyTxt, searchProducts, status, stockDeVehiculo, stockTotal, unidadesABordo } from '../../domain/reglas';
@@ -338,7 +339,7 @@ function VanView() {
         <article key={x.sku} className={`${CARD} p-4 flex gap-3 items-center ${x.qty < 0 ? 'ring-1 ring-error/40' : ''}`}><Tile p={p} />
           <div className="flex-1 min-w-0"><div className="font-mono text-label-sm text-secondary">{p.sku}</div><div className="font-semibold truncate">{p.name}</div>
             {contenidoTxt(p) && <div className="font-mono text-label-sm text-secondary">{num(x.unidades)} ud sueltas</div>}{x.qty < 0 && <div className="text-body-sm text-error">Discrepancia: consta más gastado que entregado</div>}</div>
-          <div className="text-right"><div className={`text-headline-md font-bold ${x.qty < 0 ? 'text-error' : ''}`}>{qtyTxt(p, x.qty)}</div>
+          <div className="text-right"><div className={`text-headline-md font-bold ${x.qty < 0 ? 'text-error' : ''}`}>{qtyTxt(p, x.qty)}</div>{equivTxt(p, x.qty) && <div className="text-body-sm text-secondary">{equivTxt(p, x.qty)}</div>}
             {x.qty >= 1 && (perm.mod('movimientos')) && <button onClick={() => abrirMovimiento(p.sku, 'devolucion', { vehiculo: v.id, qty: Math.floor(x.qty), lock: true, ref: `Devuelto de ${v.matricula}` })} className="font-mono text-label-sm text-primary h-10">Devolver ↩</button>}</div>
         </article>); }) : <div className={`${CARD} p-8 text-center text-secondary md:col-span-2`}>Este vehículo no lleva material del almacén. Activa <b>Mostrar todo el catálogo</b> para asignarle artículos.</div>}</div>}
     </div>

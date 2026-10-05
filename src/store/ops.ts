@@ -2,6 +2,7 @@
    - aplicarse en local (validación previa con src/domain y respuesta inmediata en pantalla), y
    - traducirse a su función SQL del servidor (la fuente de verdad en modo nube).
    En modo nube la operación se guarda en la cola y se reaplica en local hasta que el servidor la confirma. */
+import { cambiarFormatoLocal, formatoTxt, type ModoConversion, type NuevoFormato } from '../domain/formatos';
 import { deshacerResolucionLocal, resolverVariosLocal, type ArticuloResolucion } from '../domain/resolucion';
 import { editarInicioAsignacionLocal, reprocesarCierresLocal, usarVehiculoActualLocal } from '../domain/asignaciones';
 import { gestiona } from '../domain/permisos';
@@ -95,6 +96,7 @@ export type Op =
   | { op: 'configCierres'; args: { kit: 'A' | 'B' | 'C'; apertura?: number; cargadoresHasta?: number } }
   | { op: 'revisarMaterialEspecial'; args: { id: string; nota: string } }
   | { op: 'resolverLinea'; args: { linea: string; sku: string; cantidad?: number } }
+  | { op: 'cambiarFormato'; args: { sku: string; formato: NuevoFormato; modo: ModoConversion } }
   | { op: 'resolverLineaVarios'; args: { linea: string; grupo: string; articulos: ArticuloResolucion[] } }
   | { op: 'deshacerResolucion'; args: { linea: string } }
   | { op: 'reprocesarCierre'; args: { id: string } }
@@ -193,7 +195,7 @@ export const OPS: Defs = {
       }
     },
     rpc: ({ producto: p, nuevo, stockInicial }) => ['guardar_producto', { p_producto: {
-      sku: p.sku, nuevo, ean: p.ean ?? '', ref_proveedor: p.supplierRef ?? '', nombre: p.name, categoria: p.cat, unidad: p.unit, contenido: p.contenido ?? 1,
+      sku: p.sku, nuevo, ean: p.ean ?? '', ref_proveedor: p.supplierRef ?? '', nombre: p.name, categoria: p.cat, unidad: p.unit, contenido: p.contenido ?? 1, unidad_contenido: p.unit === 'm' ? 'm' : p.unit === 'ud' ? 'ud' : p.unidadContenido || 'ud', metros_sueltos: !!p.metrosSueltos,
       formato_texto: p.packLabel ?? '', notas: p.notas ?? '', minimo: p.minimoDefinido === false ? '' : p.min, proveedor: p.supplier, stock_inicial: stockInicial,
       propiedad: p.propiedad || 'propia', propietario_id: p.propiedad === 'custodia' ? p.propietario : null,
       objetivo: p.objetivo ?? '', proveedor_habitual: p.proveedorHabitual ?? '', modelo: p.modelo ?? '', talla: p.talla ?? '' } }],
@@ -437,6 +439,12 @@ export const OPS: Defs = {
     },
     rpc: a => ['resolver_linea_cierre', { p_linea: a.linea, p_sku: a.sku, p_cantidad: a.cantidad ?? null }],
     desc: () => 'Resolver una línea de un cierre',
+  },
+  /* ---------- E-031 · Cambiar el formato convirtiendo el stock ---------- */
+  cambiarFormato: {
+    local: (S, a) => { if (!gestiona(S, 'inventario')) throw new Error('Solo el administrador cambia el formato'); cambiarFormatoLocal(S, a.sku, a.formato, a.modo, S.operator); },
+    rpc: a => ['cambiar_formato', { p_sku: a.sku, p_unidad: a.formato.unit, p_contenido: a.formato.contenido, p_unidad_contenido: a.formato.unidadContenido, p_modo: a.modo }],
+    desc: (_S, a) => `Formato de ${a.sku}: ${formatoTxt(a.formato)}`,
   },
   /* ---------- E-030 · Resolver con varios artículos y deshacer ---------- */
   resolverLineaVarios: {
