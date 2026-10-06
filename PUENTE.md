@@ -1008,9 +1008,51 @@ Contrato:
 3. **Revisar en producción** (solo lectura) si algún cierre con Policharger ya descontó U/UTP por esta regla. Si es así, explicarlo y ofrecer el arreglo (E-030 "Deshacer resolución" o "Recalcular cierres desde…"), **sin tocar datos**.
 4. **Hecho cuando:** hay pruebas de un Policharger con `cableDatos = U/UTP` que descuenta F/UTP, de un V2C que descuenta U/UTP, de un cierre sin `hardware` que usa `cableDatos`, y de que una prefactura con `cableDatos` no lo aplica.
 
+### E-034 · Usuarios de socio (Esmove, Instant Box…): solo ven su material en custodia · PENDIENTE
+**Petición del usuario (05/10):** dar acceso a la app a **Esmove** y a **otro socio**, de modo que **cada uno vea solo lo que tenemos en custodia de él**. No debe ver el material propio de Búfala, ni el de otros socios, ni nada interno. El usuario quiere **poder crear usuarios así**.
+El rol "Solo lectura" de E-027 no sirve: los permisos son por apartado (Ver/Modificar), **no filtran datos por propietario**.
+
+**1. Usuario de socio**
+- **Al crear o editar un usuario** (Configuración → Usuarios), un tipo nuevo, **"Socio de custodia"**, con un desplegable **Socio** (de la tabla `propietarios`, E-024: Esmove, Instant Box…). Se guarda en `perfiles.propietario_id`.
+- **Un rol de sistema "Socio (solo lectura)",** sin ningún permiso de modificar. El administrador puede crear variantes, pero **nunca con "Modificar"** en nada que no sea de custodia, y por defecto sin modificar nada.
+- **Se puede crear un usuario de socio con varios usuarios por socio** (por ejemplo, varias personas de Esmove).
+
+**2. Qué ve** (siempre filtrado por **su** `propietario_id`)
+- **Inventario de su custodia:** artículos con `propiedad = custodia` de ese socio, con foto, stock en el almacén, stock en cada vehículo (matrícula y equipo, sin datos personales) y mínimos.
+- **Movimientos de esos artículos:** entradas (albarán), entregas a vehículo, instalaciones, ajustes y recuentos, con fecha, cantidad, motivo y referencia de obra (`numInst`).
+- **Instalaciones de sus equipos:** de los cierres, **solo las líneas de sus artículos** (cargador o medidor instalado), con `numInst`, cliente, dirección y fecha. Las instalaciones son de sus clientes. Nada del resto del material del cierre.
+- **Informes de custodia** (E-008 y E-024): stock, instalaciones con número de serie cuando lo haya, incidencias, actas de recuento y solicitudes de reposición, **de su socio**, con exportación a PDF y CSV.
+- **"Instalados no entregados por el almacén"** (E-026) de sus artículos.
+
+**3. Qué NO ve**
+- **Material propio de Búfala**, ni el de **otros socios**.
+- **Datos internos:** técnicos (nombres, DNI, teléfonos, correos), firmas y PDF de entregas, dotación, usuarios, configuración, equivalencias, tokens, bandeja, avisos internos, albaranes de proveedores que no sean suyos, cierres completos y prefacturas de Holded.
+- **Menús:** no aparecen los apartados que no puede ver. Arriba se ve una etiqueta: "Acceso de socio: Esmove".
+
+**4. Seguridad en el servidor (obligatorio, no solo en la interfaz)**
+- **RLS** en todas las tablas que lee el socio (`productos`, `stock` del almacén y de los vehículos, `movimientos`, líneas de cierres, informes, actas y solicitudes de custodia), con la condición `propietario_id = perfil.propietario_id` y `propiedad = 'custodia'`. El resto de tablas, **denegadas** para este tipo de usuario.
+- **Vistas o funciones** que devuelvan solo las columnas permitidas (sin datos de técnicos).
+- **Storage:** solo las fotos de sus artículos y los PDF de sus informes.
+- **Escrituras:** denegadas siempre (E-028: denegar por defecto).
+- **Realtime:** no recibe cambios de otros datos.
+
+**5. Hecho cuando**
+- Hay pruebas de: un usuario de Esmove que no ve material propio ni de Instant Box (ni por la API ni en la interfaz), que no lee técnicos ni firmas, que ve las instalaciones de sus cargadores y que no puede escribir nada; y de dos usuarios de socios distintos aislados entre sí.
+- El administrador crea desde la app un usuario de Esmove y otro del segundo socio.
+- **"Probar como este usuario"** (E-027) muestra exactamente su vista.
+
 ---
 
 ## Revisión del chat
+
+### 05/10/2026 · Revisión de E-033 y nuevo E-034
+- **E-033:** verificado. **484 pruebas en verde.**
+- **Circuito comprobado en producción:**
+  - E2632263 se reenvió a las 19:02 con los atributos y quedó con equipo Búfala 1 (del calendario), los 3 conductores de 6 mm², U/UTP, RJ45, corrugado y `preinst` no gestionado;
+  - la resolución manual de 10 mm² quedó sustituida;
+  - E2632213 también correcto.
+- **E-034 (nuevo):** usuarios de socio (Esmove y otros) que solo ven su material en custodia.
+- **Orden: E-034.**
 
 ### 05/10/2026 · Revisión de E-032 y ajuste del cable de datos
 - **E-032:** verificado. **479 pruebas en verde** y `tsc` sin errores. Bien, incluida la decisión de que la regla sustituye la resolución manual.
