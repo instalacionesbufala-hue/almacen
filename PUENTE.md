@@ -1041,9 +1041,50 @@ El rol "Solo lectura" de E-027 no sirve: los permisos son por apartado (Ver/Modi
 - El administrador crea desde la app un usuario de Esmove y otro del segundo socio.
 - **"Probar como este usuario"** (E-027) muestra exactamente su vista.
 
+### E-035 · Corregir un cierre a mano en todo (datos y materiales) y regla del Policharger trifásico · PENDIENTE (urgente)
+**Caso real (06/10), cierre E2632405** (Búfala 1 · 2690NKC, desde la prefactura). El cargador del calendario es "POLICHARGER NW TRIFÁSICO DOBLE PROTECCIÓN M10 M5".
+- **Cargador mal:** la regla H6 (`policharger`) descontó el **POLICHARGER NW T2 (8906000665)**, que deja Búfala 1 en −1. El instalado es el **POLICHARGER NW-DBLT23F (SKU/EAN 8437024504283, custodia Esmove)**, entregado esta mañana a Búfala 1 y con 1 ud a bordo.
+- **Fase mal:** los técnicos cerraron en **monofásica** y la instalación es **trifásica**, así que `metrosLinea` (15 m) debe ser de **5 conductores**, no de 3.
+- `cajaReg` sin equivalencia (no hay artículo).
+- Material especial: módulo wifi, magnetotérmico 32 A 4P y diferencial 40 A. Ninguno está en stock; el usuario los marca como revisados.
+
+**Petición del usuario:** "Hay que poder **modificar todos los materiales aunque los coja bien** del cierre" y los datos del cierre, porque lo automático todavía falla.
+
+**1. Regla del Policharger trifásico**
+- Añadir, **antes** de H6, la regla **`policharger&trif` (o `policharger&dblt`) → 8437024504283**. Comprobar el SKU en la base.
+- H6 (`policharger` → 8906000665) queda para los monofásicos.
+- Migración con versión anterior, sobre las reglas reales.
+
+**2. "Corregir cierre" (administrador)**, botón en cada cierre:
+- **a) Datos del cierre:**
+  - campos: `fase` (mono/trif), `tipoLinea` (tubo/manguera), `seccion`, **cargador instalado** (selector de artículos en custodia, que sustituye lo deducido de `hardware`) y `equipo`/vehículo;
+  - al guardar, el cierre **se recalcula** con esos datos (por ejemplo, trifásica pasa a 5 conductores con el atajo de E-030);
+  - estas correcciones **prevalecen** sobre las versiones automáticas posteriores (wizard, histórico o prefactura) en esos campos, hasta que el administrador pulse "Volver a lo automático".
+- **b) Cada línea de material,** aunque esté resuelta por regla:
+  - cambiar el artículo, cambiar la cantidad, **añadir** artículos y **quitar** una línea (no descontar);
+  - lo corregido a mano queda fijado frente a recálculos y versiones posteriores, salvo "Volver a lo automático" en esa línea.
+- **c) Movimientos:** la diferencia con lo ya descontado se aplica con **ajustes enlazados** a la versión "Corrección manual por …". Así, si se devuelve el NW T2 y se descuenta el NW-DBLT23F, Búfala 1 queda en 0 y 0.
+- **d) Historial y auditoría:** cada corrección es una versión del cierre con quién, cuándo y qué cambió.
+- **e) Socios (E-034):** si se corrige un cargador en custodia, el informe del socio refleja el artículo corregido.
+
+**3. Caso real:** explicar en la respuesta los pasos para que el usuario deje E2632405 así:
+- trifásica, con la sección que él elija, 5 conductores × 15 m;
+- cargador **8437024504283**, devolviendo el NW T2 a Búfala 1;
+- `cajaReg` sin descontar, o el artículo si lo da de alta.
+
+**No tocar sus datos.**
+
+**4. Hecho cuando**
+- Hay pruebas de: corregir la fase con recálculo de 3 a 5 conductores; cambiar el cargador de una línea resuelta por regla, con ajustes enlazados; quitar y añadir líneas; que la corrección prevalece sobre una prefactura posterior; "Volver a lo automático"; y la regla nueva del Policharger trifásico.
+
 ---
 
 ## Revisión del chat
+
+### 06/10/2026 · Revisión de E-034 y nuevo E-035
+- **E-034:** verificado. **498 pruebas en verde.** La seguridad (RLS denegada por defecto para el socio y `datos_socio` con columnas permitidas) está bien.
+- **E-035 (urgente, nuevo):** corregir un cierre a mano en todo, y regla del Policharger trifásico (caso real E2632405).
+- **Orden: E-035.**
 
 ### 05/10/2026 · Revisión de E-033 y nuevo E-034
 - **E-033:** verificado. **484 pruebas en verde.**
