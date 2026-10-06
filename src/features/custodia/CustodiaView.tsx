@@ -64,8 +64,26 @@ export default function CustodiaView() {
           {!E.actas.some(a => a.propietario === prop) && <p className="text-body-sm text-secondary">Cuando {o?.nombre} venga a verificar, genera el acta con lo contado y su firma.</p>}</section>
         {perm.admin && o && <DatosPropietario id={o.id} />}
       </div>
+      <Instalaciones skus={new Set(prods.map(p => p.sku))} nombre={o?.nombre || prop} />
     </div>
   );
+}
+
+/* ---------- E-034 · Instalaciones con su material (de los cierres, solo las líneas de sus artículos) ---------- */
+function Instalaciones({ skus, nombre }: { skus: Set<string>; nombre: string }) {
+  const E = useAlmacen(), [n, setN] = useState(30);
+  const filas = E.lineasCierre.filter(l => l.sku && skus.has(l.sku) && ['aplicada', 'discrepancia', 'resuelta', 'no_entregado'].includes(l.estado))
+    .flatMap(l => { const c = E.cierres.find(x => x.id === l.cierre); const p = E.products.find(x => x.sku === l.sku); return c && p ? [{ l, c, p }] : []; }).sort((a, b) => b.c.fecha - a.c.fecha);
+  return (<section className={`${CARD} p-4 flex flex-col gap-2`}>
+    <div className="flex flex-wrap items-baseline justify-between gap-2"><h2 className="text-headline-sm font-semibold">Instalaciones con material de {nombre}</h2><span className="text-body-sm text-secondary">{filas.length} línea{filas.length === 1 ? '' : 's'}</span></div>
+    {filas.length ? <div className="overflow-x-auto"><table className="tabla w-full min-w-[640px]"><thead className="bg-surface-container-low"><tr><th>Fecha</th><th>Instalación</th><th>Cliente</th><th>Equipo</th><th>Artículo</th><th>Cantidad</th></tr></thead>
+      <tbody>{filas.slice(0, n).map(({ l, c, p }) => <tr key={l.id}>
+        <td className="whitespace-nowrap">{fechaHora(c.fecha)}</td><td className="font-mono">{c.numInst || '—'}</td><td>{c.cliente || '—'}{c.direccion ? <div className="text-body-sm text-secondary">{c.direccion}</div> : null}</td><td>{c.equipoWizard || '—'}</td>
+        <td>{p.name}{l.estado === 'no_entregado' && <Tag c="bg-violet-100 text-violet-800 ml-1">instalado, no entregado por el almacén</Tag>}</td>
+        <td className="whitespace-nowrap font-semibold">{qtyTxt(p, Math.round(l.cantidad / (p.contenido || 1) * 1000) / 1000)}</td></tr>)}</tbody></table></div>
+      : <p className="text-body-sm text-secondary">Aún no hay instalaciones con su material.</p>}
+    {filas.length > n && <button onClick={() => setN(n + 50)} className={`${BTN_S} h-11 self-start px-4`}>Ver más</button>}
+  </section>);
 }
 
 function DatosPropietario({ id }: { id: string }) {

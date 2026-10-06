@@ -63,7 +63,7 @@ export type OrigenFoto = 'Saltoki' | 'Esmove' | 'fabricante' | 'propia' | (strin
 /** E-027: id de un rol: 'admin', 'almacen', 'lectura' o uno propio */
 export type Rol = string;
 export interface RolApp { id: string; nombre: string; descripcion: string; sistema: boolean; permisos: Record<string, boolean> }
-export interface PerfilUsuario { id: string; nombre: string; email: string | null; rol: Rol; activo: boolean }
+export interface PerfilUsuario { id: string; nombre: string; email: string | null; rol: Rol; activo: boolean; /** E-034: usuario de un socio de custodia */ propietario?: string }
 /** Merma o diferencia de recuento del almacén que espera la validación del administrador (E-004) */
 export interface Pendiente {
   id: string; ts: number; tipo: 'merma' | 'recuento' | 'ajuste'; sku: string; qty: number; reason: string; ref: string; serials: string[];
@@ -338,6 +338,8 @@ export interface Estado {
   copias: CopiaEntrega[];
   actas: ActaCustodia[];
   /** E-011: entrega en curso (se conserva en el dispositivo si se cierra la app) */
+  /** E-034: el usuario es de este socio de custodia (solo ve su material) */
+  socio?: string;
   cesta: Cesta;
   seq: { ent: number };
 }

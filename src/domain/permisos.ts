@@ -1,7 +1,7 @@
 /* E-027 · Permisos en la app: qué puede ver y modificar el usuario según su rol (la base de datos lo vuelve a comprobar siempre).
    El administrador puede "probar como" otro rol: la app se ve como la vería ese usuario y no se puede modificar nada. */
 import type { Estado, RolApp } from '../data/tipos';
-import { APARTADOS, permite, PERMISOS_ALMACEN, PERMISOS_LECTURA, ROL_ADMIN, type Accion } from '../../supabase/functions/_compartido/permisos';
+import { APARTADOS, permite, PERMISOS_ALMACEN, PERMISOS_LECTURA, PERMISOS_SOCIO, ROL_ADMIN, type Accion } from '../../supabase/functions/_compartido/permisos';
 
 export { APARTADOS, type Accion } from '../../supabase/functions/_compartido/permisos';
 
@@ -10,14 +10,19 @@ export const ROLES_SISTEMA: RolApp[] = [
   { id: 'admin', nombre: 'Administrador', descripcion: 'Todo, también usuarios, roles y configuración.', sistema: true, permisos: {} },
   { id: 'almacen', nombre: 'Almacén', descripcion: 'Lo del día a día del almacén: movimientos, entregas, recuentos, albaranes y borradores de artículos.', sistema: true, permisos: PERMISOS_ALMACEN },
   { id: 'lectura', nombre: 'Solo lectura', descripcion: 'Para dirección: ve inventario, movimientos, albaranes, entregas, equipos, cierres, custodia y avisos, y exporta. No modifica nada.', sistema: true, permisos: PERMISOS_LECTURA },
+  { id: 'socio', nombre: 'Socio (solo lectura)', descripcion: 'Para un socio de custodia (Esmove, Instant Box…): ve solo su material en custodia, sus movimientos, instalaciones e informes. No modifica nada.', sistema: true, permisos: PERMISOS_SOCIO },
 ];
 export const rolesDe = (E: Pick<Estado, 'roles'>): RolApp[] => (E.roles?.length ? E.roles : ROLES_SISTEMA);
 export const rolDe = (E: Pick<Estado, 'roles'>, id: string): RolApp | undefined => rolesDe(E).find(r => r.id === id);
 
 /** Rol con el que se ve la app: el del usuario o, si el administrador está probando, el que prueba */
-let simulado: string | null = null;
+let simulado: string | null = null, socioSim: { propietario: string; nombre: string } | null = null;
 export const rolSimulado = () => simulado;
-export function simularRol(id: string | null) { simulado = id; }
+/** E-034: probando como un usuario de socio, también se filtran los datos a su custodia */
+export const socioSimulado = () => socioSim;
+export function simularRol(id: string | null, socio: { propietario: string; nombre: string } | null = null) { simulado = id; socioSim = id ? socio : null; }
+/** Socio con el que se ve la app: el del usuario de socio, o el que prueba el administrador */
+export const socioEfectivo = (E: Pick<Estado, 'socio'>) => socioSim?.propietario ?? E.socio;
 export const rolEfectivo = (E: Pick<Estado, 'rol'>) => simulado ?? E.rol;
 
 export function puede(E: Pick<Estado, 'rol' | 'roles'>, apartado: string, accion: Accion = 'ver'): boolean {
@@ -68,4 +73,4 @@ export function motivoSinPermiso(E: Pick<Estado, 'rol' | 'roles'>, op: string): 
 
 /** Qué apartado hay que poder ver para entrar en cada pantalla (Configuración siempre: enseña solo lo que el rol permite) */
 const VISTAS: Record<string, string | null> = { stock: 'inventario', albaranes: 'albaranes', equipos: 'equipos', entregas: 'entregas', dotacion: 'dotacion', custodia: 'custodia', scan: 'inventario', movimientos: 'movimientos', config: null };
-export const vistaPermitida = (E: Pick<Estado, 'rol' | 'roles'>, vista: string) => { const a = VISTAS[vista]; return a === undefined || a === null || puede(E, a, 'ver'); };
+export const vistaPermitida = (E: Pick<Estado, 'rol' | 'roles' | 'socio'>, vista: string) => { if (socioEfectivo(E) && vista === 'config') return false; const a = VISTAS[vista]; return a === undefined || a === null || puede(E, a, 'ver'); };

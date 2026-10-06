@@ -2,6 +2,7 @@
    - aplicarse en local (validación previa con src/domain y respuesta inmediata en pantalla), y
    - traducirse a su función SQL del servidor (la fuente de verdad en modo nube).
    En modo nube la operación se guarda en la cola y se reaplica en local hasta que el servidor la confirma. */
+import { rolValidoParaSocio } from '../../supabase/functions/_compartido/permisos';
 import { cambiarFormatoLocal, formatoTxt, type ModoConversion, type NuevoFormato } from '../domain/formatos';
 import { deshacerResolucionLocal, resolverVariosLocal, type ArticuloResolucion } from '../domain/resolucion';
 import { editarInicioAsignacionLocal, reprocesarCierresLocal, usarVehiculoActualLocal } from '../domain/asignaciones';
@@ -72,7 +73,7 @@ export type Op =
   | { op: 'archivarProducto'; args: { sku: string; motivo: string } }
   | { op: 'restaurarProducto'; args: { sku: string } }
   | { op: 'deshacerFusion'; args: { sku: string } }
-  | { op: 'perfil'; args: { id: string; nombre: string; rol: Rol; activo: boolean } }
+  | { op: 'perfil'; args: { id: string; nombre: string; rol: Rol; activo: boolean; propietario?: string } }
   | { op: 'guardarRol'; args: RolApp }
   | { op: 'borrarRol'; args: { id: string } }
   | { op: 'minimos'; args: { cambios: { sku: string; minimo: number; objetivo?: number | null; proveedorHabitual?: string }[] } }
@@ -695,12 +696,15 @@ export const OPS: Defs = {
   },
   perfil: {
     local: (S, a) => {
-      if (!rolDe(S, a.rol)) throw new Error('Rol no válido');
+      const r = rolDe(S, a.rol); if (!r) throw new Error('Rol no válido');
+      // E-034: usuario de socio ↔ rol de socio (la base lo comprueba igual)
+      if (a.propietario && !rolValidoParaSocio(r.id, r.permisos, r.sistema)) throw new Error('Un usuario de socio solo puede tener el rol «Socio (solo lectura)» o uno propio sin «Modificar» y solo de inventario, movimientos, custodia y exportar');
+      if (!a.propietario && r.id === 'socio') throw new Error('El rol «Socio (solo lectura)» es solo para usuarios de un socio de custodia: elige el socio');
       const u = S.perfiles.find(x => x.id === a.id);
       if (u && S.perfiles.every(x => (x === u ? !(a.rol === 'admin' && a.activo) : !(x.rol === 'admin' && x.activo)))) throw new Error('Tiene que quedar al menos un administrador activo');
-      if (u) Object.assign(u, { nombre: a.nombre, rol: a.rol, activo: a.activo });
+      if (u) Object.assign(u, { nombre: a.nombre, rol: a.rol, activo: a.activo, propietario: a.propietario || undefined });
     },
-    rpc: a => ['actualizar_perfil', { p_id: a.id, p_nombre: a.nombre, p_rol: a.rol, p_activo: a.activo }],
+    rpc: a => ['actualizar_perfil', { p_id: a.id, p_nombre: a.nombre, p_rol: a.rol, p_activo: a.activo, p_propietario: a.propietario || '' }],
     desc: (_S, a) => `Usuario ${a.nombre}`,
   },
   /* ---------- E-027 · Roles (solo el administrador; los de sistema no se tocan) ---------- */

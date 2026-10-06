@@ -5,6 +5,9 @@ import { Icon } from '../../ui/base';
 
 export function EtiquetaRol({ compacta = false }: { compacta?: boolean }) {
   const perm = usePermisos();
+  // E-034: un usuario de socio lo ve siempre arriba
+  if (perm.socio && !perm.probando) return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-violet-100 text-violet-800 font-mono text-label-sm whitespace-nowrap" title="Solo ves el material en custodia de tu empresa">
+    <Icon n="handshake" className="ico-16" />{compacta ? perm.socio : `Acceso de socio: ${perm.socio}`}</span>;
   if (!perm.soloLectura || perm.probando) return null;
   return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-surface-container-high text-secondary font-mono text-label-sm whitespace-nowrap" title="Tu rol permite ver, no modificar">
     <Icon n="visibility" className="ico-16" />{compacta ? 'Lectura' : 'Solo lectura'}</span>;
@@ -15,7 +18,7 @@ export function AvisoRol() {
   const perm = usePermisos();
   if (!perm.probando) return null;
   return <div className="fixed z-[70] top-16 inset-x-2 lg:top-auto lg:bottom-4 lg:left-80 lg:right-auto rounded-xl bg-amber-400 text-black px-4 py-2 flex flex-wrap items-center justify-center gap-3 text-body-sm font-semibold shadow-lg">
-    <span className="flex items-center gap-1"><Icon n="visibility" className="ico-18" />Estás viendo la app como «{perm.rol?.nombre || perm.probando}». No se puede modificar nada.</span>
+    <span className="flex items-center gap-1"><Icon n="visibility" className="ico-18" />Estás viendo la app como «{perm.rol?.nombre || perm.probando}»{perm.socio ? ` · acceso de socio: ${perm.socio}` : ''}. No se puede modificar nada.</span>
     <button onClick={() => { probarComo(null); ir('config'); }} className="h-9 px-3 rounded-lg bg-black text-white">Dejar de probar</button></div>;
 }
 

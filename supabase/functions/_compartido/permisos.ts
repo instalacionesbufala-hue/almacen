@@ -21,8 +21,10 @@ export const APARTADOS: Apartado[] = [
   { id: 'configuracion', nombre: 'Configuración', ver: 'ver', modificar: 'categorías, socios, equivalencias, avisos e integraciones' },
   { id: 'usuarios', nombre: 'Usuarios y roles', ver: 'solo el administrador', modificar: 'solo el administrador', soloAdmin: true },
 ];
-export const ROL_ADMIN = 'admin', ROL_ALMACEN = 'almacen', ROL_LECTURA = 'lectura';
-export const ROLES_SISTEMA = [ROL_ADMIN, ROL_ALMACEN, ROL_LECTURA];
+export const ROL_ADMIN = 'admin', ROL_ALMACEN = 'almacen', ROL_LECTURA = 'lectura', ROL_SOCIO = 'socio';
+export const ROLES_SISTEMA = [ROL_ADMIN, ROL_ALMACEN, ROL_LECTURA, ROL_SOCIO];
+/** E-034: lo único que puede ver un usuario de socio (siempre filtrado a su material en custodia) */
+export const APARTADOS_SOCIO = ['inventario', 'movimientos', 'custodia', 'exportar'];
 
 const todo = (ver: string[], modificar: string[]): Permisos =>
   Object.fromEntries(APARTADOS.flatMap(a => [[`${a.id}.ver`, ver.includes(a.id) || modificar.includes(a.id)], ...(a.modificar ? [[`${a.id}.modificar`, modificar.includes(a.id)]] : [])]));
@@ -33,6 +35,12 @@ export const PERMISOS_ALMACEN = todo(
 /** Solo lectura (dirección): ve casi todo y exporta; no modifica nada; no ve configuración, usuarios ni la bandeja de validación */
 export const PERMISOS_LECTURA = todo(
   ['inventario', 'movimientos', 'albaranes', 'entregas', 'equipos', 'recuentos', 'dotacion', 'custodia', 'cierres', 'bandeja', 'exportar'], []);
+
+/** E-034 · Socio (solo lectura): su inventario en custodia, sus movimientos, instalaciones e informes; exporta */
+export const PERMISOS_SOCIO = todo(APARTADOS_SOCIO, []);
+/** ¿Vale este rol para un usuario de socio? Sin ningún "Modificar" y solo apartados de su custodia (= _rol_de_socio en la base) */
+export const rolValidoParaSocio = (id: string, permisos: Permisos | undefined, sistema: boolean) =>
+  id === ROL_SOCIO || (!sistema && Object.entries(permisos || {}).every(([k, v]) => !v || (!k.endsWith('.modificar') && APARTADOS_SOCIO.includes(k.split('.')[0]))));
 
 /** ¿Este conjunto de permisos permite la acción? ("modificar" implica "ver"; usuarios y roles, nunca fuera del administrador) */
 export function permite(rol: string, permisos: Permisos | undefined, apartado: string, accion: Accion): boolean {

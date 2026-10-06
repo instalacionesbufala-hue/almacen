@@ -9,7 +9,7 @@ import { aEstado, COLUMNAS, TABLAS, type Tablas } from './mapeo';
 import { supabase } from './cliente';
 import { motivoLegible } from '../motivos';
 
-export interface Perfil { id: string; nombre: string; email: string | null; rol: string; activo: boolean }
+export interface Perfil { id: string; nombre: string; email: string | null; rol: string; activo: boolean; propietario_id?: string | null }
 export interface Sesion { estado: 'cargando' | 'sin-sesion' | 'lista'; perfil?: Perfil; error?: string; conexion: 'en-linea' | 'sin-conexion'; ultimaCarga?: number }
 export const sesion = crearStore<Sesion>({ estado: 'cargando', conexion: navigator.onLine ? 'en-linea' : 'sin-conexion' });
 
@@ -72,20 +72,30 @@ export function reaplicarCola(nuevo: Estado, items: ItemCola[]): Estado {
 /** Descarga todo lo visible para el usuario y reaplica encima lo que aún está en la cola */
 export async function recargar(): Promise<void> {
   if (!supabase || sesion.get().estado !== 'lista') return;
-  const res = await Promise.all(TABLAS.map(t => {
-    const q = supabase!.from(t).select(COLUMNAS[t] || '*');
-    return t === 'movimientos' ? q.order('ts', { ascending: false }).limit(2000) : t === 'envios_aviso' ? q.order('ts', { ascending: false }).limit(200) : t === 'avisos_reposicion' ? q.or(`estado.neq.cerrado,cerrado_ts.gt.${new Date(Date.now() - 30 * 864e5).toISOString()}`) : q;
-  }));
-  const fallo = res.find(r => r.error);
-  if (fallo?.error) { marcarConexion(!esErrorDeRed(fallo.status, fallo.error.message)); return; }
+  const socio = sesion.get().perfil?.propietario_id || undefined;
+  let tablas: Tablas;
+  if (socio) {
+    // E-034: un usuario de socio no lee las tablas (el servidor se lo niega): recibe solo su material, sin datos internos
+    const { data, error, status } = await supabase.rpc('datos_socio');
+    if (error) { marcarConexion(!esErrorDeRed(status, error.message)); return; }
+    tablas = Object.fromEntries(TABLAS.map(t => [t, (data as Record<string, unknown[]>)?.[t] || []])) as unknown as Tablas;
+  } else {
+    const res = await Promise.all(TABLAS.map(t => {
+      const q = supabase!.from(t).select(COLUMNAS[t] || '*');
+      return t === 'movimientos' ? q.order('ts', { ascending: false }).limit(2000) : t === 'envios_aviso' ? q.order('ts', { ascending: false }).limit(200) : t === 'avisos_reposicion' ? q.or(`estado.neq.cerrado,cerrado_ts.gt.${new Date(Date.now() - 30 * 864e5).toISOString()}`) : q;
+    }));
+    const fallo = res.find(r => r.error);
+    if (fallo?.error) { marcarConexion(!esErrorDeRed(fallo.status, fallo.error.message)); return; }
+    tablas = Object.fromEntries(TABLAS.map((t, i) => [t, res[i].data || []])) as unknown as Tablas;
+  }
   marcarConexion(true);
-  const tablas = Object.fromEntries(TABLAS.map((t, i) => [t, res[i].data || []])) as unknown as Tablas;
   // E-027: si el administrador le ha cambiado el rol, la app se recarga sola con lo que ahora puede ver y hacer
   const yo = (tablas.perfiles as { id: string; rol: string; activo: boolean }[]).find(x => x.id === sesion.get().perfil?.id);
   if (yo && sesion.get().perfil && (yo.rol !== sesion.get().perfil!.rol || !yo.activo)) { location.reload(); return; }
   const rol = sesion.get().perfil?.rol || 'almacen';
   const actual = obtenerEstado();
   const nuevo = aEstado(tablas, { cesta: actual.cesta, seq: actual.seq }, sesion.get().perfil?.nombre || '', rol);
+  if (socio) nuevo.socio = socio;
   fijarEstado(reaplicarCola(nuevo, cola.get()));
   sesion.get().ultimaCarga = Date.now(); sesion.emit();
 }
@@ -106,7 +116,8 @@ async function cargarPerfil(): Promise<boolean> {
 
 let canal: ReturnType<NonNullable<typeof supabase>['channel']> | null = null;
 function suscribir() {
-  if (!supabase || canal) return;
+  // E-034: un socio no recibe cambios en tiempo real (RLS no le deja ver nada): recarga al volver a la app
+  if (!supabase || canal || sesion.get().perfil?.propietario_id) return;
   canal = supabase.channel('almacen').on('postgres_changes', { event: '*', schema: 'public' }, recargarPronto).subscribe();
 }
 

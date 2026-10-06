@@ -12,7 +12,8 @@ import { aplicarLocal, nuevoId, type Op } from './ops';
 import { modoNube } from './nube/cliente';
 import { encolar, enlazar } from './nube/sync';
 import { toast } from '../ui/toast';
-import { motivoSinPermiso } from '../domain/permisos';
+import { motivoSinPermiso, socioSimulado } from '../domain/permisos';
+import { filtrarParaSocio } from '../domain/socio';
 
 // v4: datos de demostración con custodia, cuadros, ropa y EPIs (E-006/E-008)
 const LS = modoNube ? 'almacen-bufala-nube-cache-v1' : 'almacen-bufala-v5';
@@ -52,7 +53,15 @@ export const almacen = crearStore<Estado>(load());
 // E-016: el registro de categorías sigue siempre a las del estado
 fijarCategorias(almacen.get().categorias);
 almacen.subscribe(() => fijarCategorias(almacen.get().categorias));
-export const useAlmacen = almacen.use;
+/** E-034: probando como un usuario de socio, las pantallas ven solo lo que vería él (mismo filtro que datos_socio en el servidor) */
+let filtrado: { de: Estado; socio: string; v: Estado } | null = null;
+almacen.subscribe(() => { filtrado = null; });
+export function useAlmacen(): Estado {
+  const s = almacen.use(), sim = socioSimulado();
+  if (!sim) return s;
+  if (!filtrado || filtrado.de !== s || filtrado.socio !== sim.propietario) filtrado = { de: s, socio: sim.propietario, v: filtrarParaSocio(s, sim.propietario) };
+  return filtrado.v;
+}
 export const S = () => almacen.get();
 export let ultimoGuardado = Date.now();
 

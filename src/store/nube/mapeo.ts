@@ -106,7 +106,7 @@ export function aEstado(t: Tablas, base: Pick<Estado, 'cesta' | 'seq'>, operador
   const propietarios = t.propietarios.map(o => ({ id: o.id, nombre: o.nombre, contacto: o.contacto || '', correosReposicion: o.correos_reposicion || [], correosInformes: o.correos_informes || [], activo: o.activo !== false, color: o.color || 'violeta' })).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
   const pendientes: Pendiente[] = t.pendientes.map(p => ({ id: p.id, ts: ms(p.ts), tipo: p.tipo, sku: p.sku, qty: n(p.cantidad), reason: p.motivo, ref: p.referencia || '',
     serials: p.series || [], operator: p.operario, estado: p.estado, resueltoPor: p.resuelto_por ?? undefined, nota: p.nota_resolucion ?? undefined, ...(p.vehiculo_id ? { vehiculo: p.vehiculo_id } : {}) })).sort((a, b) => b.ts - a.ts);
-  const perfiles: PerfilUsuario[] = t.perfiles.map(p => ({ id: p.id, nombre: p.nombre, email: p.email ?? null, rol: p.rol, activo: !!p.activo }));
+  const perfiles: PerfilUsuario[] = t.perfiles.map(p => ({ id: p.id, nombre: p.nombre, email: p.email ?? null, rol: p.rol, activo: !!p.activo, ...(p.propietario_id ? { propietario: p.propietario_id } : {}) }));
   const roles = (t.roles || []).map(r => ({ id: r.id, nombre: r.nombre, descripcion: r.descripcion || '', sistema: !!r.sistema, permisos: r.permisos || {} }));
   return { v: 3, roles, products, movements, albaranes, equipos, tecnicos, entregas, herramientas, propietarios, pendientes, perfiles, rol, avisos, minimosHerramienta, configAvisos, envios, actas, vehiculos, asignaciones, aBordo, configApp, categorias, archivados, codigos, propuestas, portalEnlaces, copias, cierres, lineasCierre, equivalencias, kits, integraciones, operator: operador, pedidos, cesta: base.cesta, seq: base.seq };
 }

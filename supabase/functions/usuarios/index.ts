@@ -24,12 +24,14 @@ Deno.serve(conCors(async (req) => {
 
   if (cuerpo.accion === 'crear') {
     const alta = { email: String(cuerpo.email || '').trim().toLowerCase(), nombre: String(cuerpo.nombre || '').trim(), rol: String(cuerpo.rol || ''), clave: String(cuerpo.clave || '') };
+    // E-034: usuario de un socio de custodia (solo ve su material); la base comprueba que el rol cuadre
+    const propietario = String(cuerpo.propietario || '').trim() || null;
     const err = validarAlta(alta);
     if (err) return json({ error: err }, 400);
     const { data, error } = await admin.auth.admin.createUser({ email: alta.email, password: alta.clave, email_confirm: true, user_metadata: { nombre: alta.nombre } });
     if (error || !data.user) return json({ error: error?.message?.includes('already') ? 'Ya existe un usuario con ese correo' : (error?.message || 'No se pudo crear') }, 400);
-    const { error: e2 } = await admin.from('perfiles').insert({ id: data.user.id, nombre: alta.nombre, email: alta.email, rol: alta.rol, activo: true });
-    if (e2) { await admin.auth.admin.deleteUser(data.user.id); return json({ error: /perfiles_rol_fkey/.test(e2.message) ? 'Rol no válido' : e2.message }, 400); }
+    const { error: e2 } = await admin.from('perfiles').insert({ id: data.user.id, nombre: alta.nombre, email: alta.email, rol: alta.rol, activo: true, propietario_id: propietario });
+    if (e2) { await admin.auth.admin.deleteUser(data.user.id); return json({ error: /perfiles_rol_fkey/.test(e2.message) ? 'Rol no válido' : /perfiles_propietario_id_fkey/.test(e2.message) ? 'Socio no encontrado' : e2.message }, 400); }
     return json({ ok: true, id: data.user.id });
   }
 

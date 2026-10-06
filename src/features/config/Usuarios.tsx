@@ -2,9 +2,9 @@
    E-027: roles configurables con una matriz Ver / Modificar por apartado, roles de sistema fijos (se duplican para personalizarlos)
    y "Probar como este rol" para ver la app como la ve ese usuario. */
 import { useState } from 'react';
-import type { RolApp } from '../../data/tipos';
+import type { Estado, PerfilUsuario, RolApp } from '../../data/tipos';
 import { APARTADOS, rolDe, rolesDe } from '../../domain/permisos';
-import { idRol, normalizarPermisos } from '../../../supabase/functions/_compartido/permisos';
+import { idRol, normalizarPermisos, rolValidoParaSocio } from '../../../supabase/functions/_compartido/permisos';
 import { ejecutar, useAlmacen } from '../../store/almacen';
 import { supabase, modoNube } from '../../store/nube/cliente';
 import { recargar, sesion } from '../../store/nube/sync';
@@ -25,7 +25,24 @@ async function llamar(cuerpo: Record<string, string>): Promise<string | null> {
   return (data as { error?: string })?.error || null;
 }
 
-const colorRol = (id: string) => (id === 'admin' ? 'bg-primary-fixed text-primary' : id === 'lectura' ? 'bg-amber-100 text-amber-800' : 'bg-surface-container-high text-secondary');
+const colorRol = (id: string) => (id === 'admin' ? 'bg-primary-fixed text-primary' : id === 'lectura' ? 'bg-amber-100 text-amber-800' : id === 'socio' ? 'bg-violet-100 text-violet-800' : 'bg-surface-container-high text-secondary');
+/** E-034: un usuario de socio solo puede tener roles de socio (sin "Modificar", solo su custodia); uno interno, cualquiera menos "socio" */
+const rolesPara = (E: Pick<Estado, 'roles'>, socio: boolean) => rolesDe(E).filter(r => socio ? rolValidoParaSocio(r.id, r.permisos, r.sistema) : r.id !== 'socio');
+const nombreSocio = (E: Pick<Estado, 'propietarios'>, id?: string) => E.propietarios.find(o => o.id === id)?.nombre || id || '';
+/** "Probar como este usuario": su rol y, si es de un socio, solo los datos de ese socio */
+export const probarUsuario = (E: Pick<Estado, 'propietarios'>, u: Pick<PerfilUsuario, 'nombre' | 'rol' | 'propietario'>) => {
+  probarComo(u.rol, u.propietario ? { propietario: u.propietario, nombre: nombreSocio(E, u.propietario) } : null);
+  ir(u.propietario ? 'custodia' : 'stock');
+  toast(`Viendo la app como ${u.nombre}${u.propietario ? ` (socio ${nombreSocio(E, u.propietario)})` : ''}. Para salir, «Dejar de probar».`, 'ok', 6000);
+};
+function CampoSocio({ E, valor, onChange }: { E: Pick<Estado, 'propietarios'>; valor: string; onChange: (v: string) => void }) {
+  return (<>
+    <Campo label="Tipo de usuario"><select value={valor ? 'socio' : 'interno'} onChange={e => onChange(e.target.value === 'socio' ? (E.propietarios.find(o => o.activo !== false)?.id || '') : '')} className={`${INP} h-12`}>
+      <option value="interno">Usuario de Búfala</option><option value="socio">Socio de custodia (solo ve su material)</option></select></Campo>
+    {valor && <Campo label="Socio"><select value={valor} onChange={e => onChange(e.target.value)} className={`${INP} h-12`}>{E.propietarios.filter(o => o.activo !== false || o.id === valor).map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</select></Campo>}
+    {valor && <p className="text-body-sm text-secondary -mt-1">Solo verá el material de {nombreSocio(E, valor)} en custodia: su stock (almacén y furgonetas), movimientos, instalaciones e informes. Nada de Búfala ni de otros socios, ni técnicos, firmas o configuración. No puede modificar nada.</p>}
+  </>);
+}
 
 /** Configuración → Usuarios y permisos: pestañas Usuarios y Roles */
 export function UsuariosYRoles() {
@@ -38,11 +55,11 @@ export function UsuariosYRoles() {
 }
 
 export function Usuarios() {
-  const E = useAlmacen(), yo = sesion.use().perfil?.id, roles = rolesDe(E);
+  const E = useAlmacen(), yo = sesion.use().perfil?.id;
   const cambiarRol = (id: string, rol: string) => {
     const u = E.perfiles.find(x => x.id === id)!, r = rolDe(E, rol);
     if (!confirm(`¿Pasar a ${u.nombre} al rol «${r?.nombre || rol}»? El cambio es inmediato: su app se recarga sola.`)) return;
-    if (ejecutar({ op: 'perfil', args: { id, nombre: u.nombre, rol, activo: u.activo } })) toast(`${u.nombre} ahora tiene el rol «${r?.nombre || rol}».`, 'ok');
+    if (ejecutar({ op: 'perfil', args: { id, nombre: u.nombre, rol, activo: u.activo, propietario: u.propietario } })) toast(`${u.nombre} ahora tiene el rol «${r?.nombre || rol}».`, 'ok');
   };
   return (
     <div className="flex flex-col gap-2">
@@ -50,9 +67,11 @@ export function Usuarios() {
         <div key={u.id} className={`flex flex-wrap items-center gap-3 rounded-xl p-3 ${u.activo ? 'bg-surface-container-low' : 'bg-surface-container-low opacity-60'}`}>
           <Avatar n={u.nombre} />
           <div className="flex-1 min-w-[140px]"><div className="font-semibold">{u.nombre}{u.id === yo ? ' (tú)' : ''}</div><div className="font-mono text-label-sm text-secondary">{u.email}</div></div>
+          {u.propietario && <Tag c="bg-violet-100 text-violet-800">Socio: {nombreSocio(E, u.propietario)}</Tag>}
           {u.id === yo ? <Tag c={colorRol(u.rol)}>{rolDe(E, u.rol)?.nombre || u.rol}</Tag>
             : <select value={u.rol} onChange={e => cambiarRol(u.id, e.target.value)} className={`${INP} h-10 !w-auto`} aria-label={`Rol de ${u.nombre}`}>
-              {roles.map(r => <option key={r.id} value={r.id}>{r.nombre}</option>)}</select>}
+              {rolesPara(E, !!u.propietario).map(r => <option key={r.id} value={r.id}>{r.nombre}</option>)}</select>}
+          {u.id !== yo && u.rol !== 'admin' && <button onClick={() => probarUsuario(E, u)} className="text-primary text-body-sm font-semibold h-10">Probar como este usuario</button>}
           {!u.activo && <Tag c="bg-error-container text-error">Desactivado</Tag>}
           <button onClick={() => openModal(<EditarUsuario id={u.id} />)} className="text-primary text-body-sm font-semibold h-10">Editar</button>
         </div>))}
@@ -63,7 +82,7 @@ export function Usuarios() {
 
 function NuevoUsuario() {
   const E = useAlmacen();
-  const [f, setF] = useState({ nombre: '', email: '', rol: 'almacen', clave: '' }), [enviando, setEnviando] = useState(false);
+  const [f, setF] = useState({ nombre: '', email: '', rol: 'almacen', clave: '', propietario: '' }), [enviando, setEnviando] = useState(false);
   const crear = async () => {
     setEnviando(true); const err = await llamar({ accion: 'crear', ...f }); setEnviando(false);
     if (err) return toast(err, 'err');
@@ -74,7 +93,8 @@ function NuevoUsuario() {
     <div className="p-5 grid grid-cols-1 gap-3">
       <Campo label="Nombre y apellidos"><input autoFocus value={f.nombre} onChange={e => setF({ ...f, nombre: e.target.value })} className={`${INP} h-12`} /></Campo>
       <Campo label="Correo (será su usuario)"><input type="email" value={f.email} onChange={e => setF({ ...f, email: e.target.value })} className={`${INP} h-12`} /></Campo>
-      <Campo label="Rol"><select value={f.rol} onChange={e => setF({ ...f, rol: e.target.value })} className={`${INP} h-12`}>{rolesDe(E).map(r => <option key={r.id} value={r.id}>{r.nombre}</option>)}</select></Campo>
+      <CampoSocio E={E} valor={f.propietario} onChange={p => setF({ ...f, propietario: p, rol: p ? 'socio' : 'almacen' })} />
+      <Campo label="Rol"><select value={f.rol} onChange={e => setF({ ...f, rol: e.target.value })} className={`${INP} h-12`}>{rolesPara(E, !!f.propietario).map(r => <option key={r.id} value={r.id}>{r.nombre}</option>)}</select></Campo>
       <p className="text-body-sm text-secondary -mt-1">{rolDe(E, f.rol)?.descripcion}</p>
       <Campo label="Contraseña inicial (10 caracteres, letras y números)"><input value={f.clave} onChange={e => setF({ ...f, clave: e.target.value })} className={`${INP} h-12 font-mono`} autoComplete="new-password" /></Campo>
     </div>
@@ -84,7 +104,7 @@ function NuevoUsuario() {
 
 function EditarUsuario({ id }: { id: string }) {
   const E = useAlmacen(), u = E.perfiles.find(x => x.id === id)!;
-  const [f, setF] = useState({ nombre: u.nombre, rol: u.rol, activo: u.activo }), [clave, setClave] = useState('');
+  const [f, setF] = useState({ nombre: u.nombre, rol: u.rol, activo: u.activo, propietario: u.propietario || '' }), [clave, setClave] = useState('');
   const guardar = async () => {
     if (!ejecutar({ op: 'perfil', args: { id, ...f } })) return;
     if (f.activo !== u.activo) { const err = await llamar({ accion: 'bloqueo', id, activo: String(f.activo) }); if (err) toast(`Perfil guardado, pero no se pudo bloquear el acceso: ${err}`, 'warn', 7000); }
@@ -95,7 +115,8 @@ function EditarUsuario({ id }: { id: string }) {
     <SheetHead title={u.nombre} sub={u.email || ''} />
     <div className="p-5 grid grid-cols-1 gap-3">
       <Campo label="Nombre"><input value={f.nombre} onChange={e => setF({ ...f, nombre: e.target.value })} className={`${INP} h-12`} /></Campo>
-      <Campo label="Rol"><select value={f.rol} onChange={e => setF({ ...f, rol: e.target.value })} className={`${INP} h-12`}>{rolesDe(E).map(r => <option key={r.id} value={r.id}>{r.nombre}</option>)}</select></Campo>
+      <CampoSocio E={E} valor={f.propietario} onChange={p => setF({ ...f, propietario: p, rol: p ? (rolValidoParaSocio(f.rol, rolDe(E, f.rol)?.permisos, !!rolDe(E, f.rol)?.sistema) ? f.rol : 'socio') : (f.rol === 'socio' ? 'almacen' : f.rol) })} />
+      <Campo label="Rol"><select value={f.rol} onChange={e => setF({ ...f, rol: e.target.value })} className={`${INP} h-12`}>{rolesPara(E, !!f.propietario).map(r => <option key={r.id} value={r.id}>{r.nombre}</option>)}</select></Campo>
       <label className="flex items-center gap-3 bg-surface-container-low rounded-lg px-3 h-12"><input type="checkbox" checked={f.activo} onChange={e => setF({ ...f, activo: e.target.checked })} className="w-5 h-5 accent-primary" />Puede entrar en la app</label>
       <div className="flex gap-2 items-end"><Campo label="Nueva contraseña" className="flex-1"><input value={clave} onChange={e => setClave(e.target.value)} className={`${INP} h-12 font-mono`} autoComplete="new-password" /></Campo>
         <button onClick={cambiarClave} disabled={!clave} className={`${BTN_S} h-12 px-4`}>Cambiar</button></div>
@@ -108,7 +129,10 @@ function EditarUsuario({ id }: { id: string }) {
 function Roles() {
   const E = useAlmacen(), roles = rolesDe(E);
   const borrar = (r: RolApp) => { if (confirm(`¿Borrar el rol «${r.nombre}»?`) && ejecutar({ op: 'borrarRol', args: { id: r.id } })) toast('Rol borrado.', 'ok'); };
-  const probar = (r: RolApp) => { probarComo(r.id); ir('stock'); toast(`Viendo la app como «${r.nombre}». Para salir, «Dejar de probar» arriba.`, 'ok', 6000); };
+  const probar = (r: RolApp) => {
+    // E-034: el rol de socio se prueba con los datos de un socio (el primero); para uno concreto, desde su usuario
+    if (rolValidoParaSocio(r.id, r.permisos, r.sistema) && E.propietarios.length) { const o = E.propietarios[0]; probarUsuario(E, { nombre: `«${r.nombre}»`, rol: r.id, propietario: o.id }); return; }
+    probarComo(r.id); ir('stock'); toast(`Viendo la app como «${r.nombre}». Para salir, «Dejar de probar» arriba.`, 'ok', 6000); };
   return (<div className="flex flex-col gap-2">
     <p className="text-body-sm text-secondary">Cada rol dice qué apartados ve cada usuario y en cuáles puede modificar. Los de sistema no se cambian: <b>duplícalos</b> para hacer uno a tu medida. Usuarios y roles son siempre solo del administrador.</p>
     {roles.map(r => { const n = E.perfiles.filter(p => p.rol === r.id).length; return (

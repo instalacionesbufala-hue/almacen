@@ -51,8 +51,8 @@ export function Sidebar({ vista }: { vista: Vista }) {
         </div>
         <div className="px-space-md pt-space-md pb-space-xs"><span className={LBLS}>Operaciones</span></div>
         <nav className="flex flex-col gap-space-xs px-space-sm">{([['stock', nCrit], ['albaranes', 0], ['equipos', 0], ['entregas', 0], ['dotacion', nDot], ['custodia', nCust], ['scan', 0], ['movimientos', 0]] as [Vista, number][]).filter(([v]) => vistaPermitida(E, v)).map(([v, n]) => item(v, n))}</nav>
-        <div className="px-space-md pt-space-lg pb-space-xs"><span className={LBLS}>Sistema</span></div>
-        <nav className="flex flex-col gap-space-xs px-space-sm">{item('config')}</nav>
+        {vistaPermitida(E, 'config') && <><div className="px-space-md pt-space-lg pb-space-xs"><span className={LBLS}>Sistema</span></div>
+        <nav className="flex flex-col gap-space-xs px-space-sm">{item('config')}</nav></>}
       </div>
       <div className="p-space-md bg-surface-container-low m-space-sm rounded-xl flex items-center justify-between">
         <div className="flex items-center gap-space-sm"><span className="h-2.5 w-2.5 rounded-full bg-tertiary-container pulso" />

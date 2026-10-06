@@ -1,7 +1,7 @@
 /* Permisos en la interfaz (E-004, E-027). El servidor los vuelve a comprobar siempre: ocultar un botón no basta.
    En modo demostración (sin nube) se actúa como administrador. El administrador puede "probar como" otro rol. */
 import { almacen, useAlmacen } from './almacen';
-import { gestiona, puede, rolDe, rolEfectivo, rolSimulado, simularRol, soloLectura, type Accion } from '../domain/permisos';
+import { gestiona, puede, rolDe, rolEfectivo, rolSimulado, simularRol, socioEfectivo, soloLectura, type Accion } from '../domain/permisos';
 
 export function usePermisos() {
   const E = useAlmacen(), probando = rolSimulado();
@@ -27,8 +27,10 @@ export function usePermisos() {
     /** ningún "Modificar": se ocultan todos los botones de acción */
     soloLectura: soloLectura(E),
     rol: rolDe(E, rolEfectivo(E)), probando,
+    /** E-034: socio cuyo material se ve (usuario de socio o probando como él) */
+    socio: socioEfectivo(E) ? (E.propietarios.find(o => o.id === socioEfectivo(E))?.nombre || socioEfectivo(E)) : null,
   };
 }
 
 /** "Probar como este rol": la app se ve como la vería ese usuario, sin poder modificar nada */
-export function probarComo(id: string | null) { simularRol(id); almacen.emit(); }
+export function probarComo(id: string | null, socio: { propietario: string; nombre: string } | null = null) { simularRol(id, socio); almacen.emit(); }

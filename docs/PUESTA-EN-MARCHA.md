@@ -388,6 +388,10 @@ La primera carga se hizo leyendo los albaranes con la IA y dejó algunas fichas 
   - Al dar de alta material en custodia, **elige el socio** (si solo hay uno activo, sale ya puesto).
   - Custodia tiene una pestaña por socio, con su solicitud de reposición, su informe sin importes y su acta.
 - **Recuadros del inventario** (E-024): al pulsar uno (*N por completar*, *En custodia* o un socio, *Bajo mínimo*) se quitan los demás filtros, se aplica el suyo y la vista baja a la lista. Arriba de la lista sale un chip con el filtro (p. ej. *Sin mínimo ×*) para quitarlo.
+- **Usuarios de socio** (E-034): Configuración → **Usuarios y permisos** → **Dar de alta un usuario** → Tipo **"Socio de custodia"** y elige el socio (Esmove, Instant Box…). Rol: **Socio (solo lectura)**.
+  - Ve **solo** el material en custodia de su empresa: stock en el almacén y en cada furgoneta, movimientos, instalaciones con sus artículos (n.º, cliente, dirección, fecha) e informes con PDF y CSV.
+  - No ve nada de Búfala ni de otros socios, ni técnicos, firmas, entregas, dotación o configuración, y **no puede modificar nada**. Lo impide el servidor, no solo la pantalla.
+  - Puede haber varios usuarios por socio. Con **"Probar como este usuario"** ves exactamente lo que verá.
 - **Roles y permisos** (E-027): Configuración → **Usuarios y permisos**.
   - **Usuarios:** cada uno tiene un desplegable con su rol; el cambio es inmediato (su app se recarga sola).
   - **Solo lectura**, para dirección: ve inventario, movimientos, albaranes, entregas y sus PDF, equipos, cierres, custodia y avisos, y exporta; no ve la configuración ni la bandeja de validación y **no puede modificar nada** (el servidor lo rechaza aunque se intente por otro camino).

@@ -1008,7 +1008,7 @@ Contrato:
 3. **Revisar en producción** (solo lectura) si algún cierre con Policharger ya descontó U/UTP por esta regla. Si es así, explicarlo y ofrecer el arreglo (E-030 "Deshacer resolución" o "Recalcular cierres desde…"), **sin tocar datos**.
 4. **Hecho cuando:** hay pruebas de un Policharger con `cableDatos = U/UTP` que descuenta F/UTP, de un V2C que descuenta U/UTP, de un cierre sin `hardware` que usa `cableDatos`, y de que una prefactura con `cableDatos` no lo aplica.
 
-### E-034 · Usuarios de socio (Esmove, Instant Box…): solo ven su material en custodia · PENDIENTE
+### E-034 · Usuarios de socio (Esmove, Instant Box…): solo ven su material en custodia · HECHO
 **Petición del usuario (05/10):** dar acceso a la app a **Esmove** y a **otro socio**, de modo que **cada uno vea solo lo que tenemos en custodia de él**. No debe ver el material propio de Búfala, ni el de otros socios, ni nada interno. El usuario quiere **poder crear usuarios así**.
 El rol "Solo lectura" de E-027 no sirve: los permisos son por apartado (Ver/Modificar), **no filtran datos por propietario**.
 
@@ -2919,3 +2919,74 @@ Las versiones anteriores de P-UTP-F y P-UTP-U (órdenes 48 y 49) están en el hi
   - sin cargador → el `cableDatos` del wizard;
   - una prefactura con `cableDatos` no lo aplica, ni sola ni sobre el wizard.
 - `tsc -b`, `deno check` y build correctos.
+
+### 06/10/2026 · E-034 · HECHO
+**Buzón integrado** (`0a2487d`): `PUENTE-chat.md` se escribió sobre `69df38c`, que era la versión actual; se ha sustituido entero y se ha borrado del Escritorio.
+
+**Aplicado en producción:**
+- migración `20261024000100_e034_usuarios_socio.sql`;
+- `usuarios` desplegada.
+
+**Comprobado en producción (solo lectura):**
+- existe el rol `socio`;
+- `es_usuario_activo` ya distingue a los socios;
+- la política de fotos del socio está creada;
+- los socios activos son ESMOVE e INSTANTBOX;
+- **los usuarios actuales no cambian** (admin y lectura).
+- No he creado usuarios: los da de alta el usuario.
+
+**Para el usuario:** Configuración → Usuarios y permisos → **Dar de alta un usuario** → Tipo **"Socio de custodia"** → Socio **Esmove** (y otro con **Instant Box**). El rol se pone solo: **Socio (solo lectura)**. Antes de darle el acceso, en la lista: **"Probar como este usuario"**.
+
+**1. Usuario de socio**
+- **Columna nueva `perfiles.propietario_id`.** Al crear o editar un usuario: "Tipo de usuario" (de Búfala o socio de custodia) y "Socio". Puede haber varios usuarios por socio.
+- **Rol de sistema `socio`, "Socio (solo lectura)":** solo "Ver" de inventario, movimientos, custodia y exportar. Mismos permisos en la base y en la app (hay prueba).
+- **Variantes:** un rol propio vale para un socio solo si **no tiene ningún "Modificar"** y solo usa esos apartados.
+- **Trigger en `perfiles`:** socio ↔ rol de socio. Un socio no puede tener Almacén ni Solo lectura, y el rol `socio` exige un socio.
+- **Trigger en `roles`:** un rol que ya usa un socio no puede ganar "Modificar" ni otros apartados.
+- **`actualizar_perfil`** tiene una versión con el socio (5 parámetros). La función `usuarios` acepta `propietario` al crear.
+
+**2 y 4. Seguridad en el servidor** (decisión de Code, la parte importante)
+- **Todas las políticas RLS** (tablas y storage) pasan por `es_usuario_activo()`, `es_admin()` o `tiene_permiso()`; lo he comprobado listando `pg_policies`. Las tres devuelven **falso para un socio**, así que **no lee ninguna tabla directamente**, ni por la API ni por tiempo real.
+  - Solo ve su propia fila de `perfiles`.
+- **`perfil_actual()`** le niega **cualquier función de la API** salvo consultar su propio perfil: "Acceso de socio: solo se consulta el material en custodia, no se modifica nada".
+  - Las escrituras se deniegan siempre, también por inserción directa (RLS).
+- **Las tres funciones que se podían llamar sin `perfil_actual`** (`reservado`, `skus_no_validos` y `vehiculo_de_equipo`) no le devuelven nada. La clave de servicio, sin usuario, sigue funcionando, porque la usan los cierres.
+- **Lo que ve llega por `datos_socio()`:** solo sus filas y columnas permitidas.
+  - Sus artículos en custodia (sin notas internas), su stock en el almacén y en los vehículos.
+  - Los vehículos (matrícula y equipo) y los equipos (solo id, nombre y estado; **sin técnicos**).
+  - Sus movimientos: operario "Búfala", sin usuario.
+  - Los cierres que tienen alguno de sus artículos (n.º, cliente, dirección, fecha y equipo; **sin datos del wizard, prefactura ni material especial**) y **solo las líneas de sus artículos**.
+  - Sus actas (sin firma), sus solicitudes de reposición, su socio (sin correos), las categorías, su rol y su perfil.
+- **Storage:** solo las fotos de sus artículos (`fotos_leer_socio`). Los PDF de los informes se generan en la app con esos mismos datos.
+- **En la app,** un socio no lee las tablas: carga con `datos_socio()` y no se suscribe al tiempo real (recarga al volver a la app).
+
+**2 y 3. Qué ve en la app**
+- **Menú:** Inventario, Custodia, Escanear (solo consulta) y Movimientos. Sin Configuración ni lo demás.
+- **Arriba,** la etiqueta "**Acceso de socio: Esmove**".
+- **En Custodia:**
+  - solo su socio, con stock, mínimos y dónde está;
+  - la sección nueva **"Instalaciones con material de …"** (fecha, n.º de instalación, cliente y dirección, equipo, artículo y cantidad, con la marca "instalado, no entregado por el almacén" de E-026);
+  - el **informe** con PDF y CSV.
+- Esta sección de instalaciones también la ve el administrador.
+
+**"Probar como este usuario"** (lista de usuarios; también "Probar como este rol" con el rol de socio, con el primer socio)
+- Además del rol, **filtra los datos** con `filtrarParaSocio`, el mismo filtro que `datos_socio()`. La franja dice "… · acceso de socio: Esmove".
+
+**Pruebas: 498 en verde** (+14):
+- `supabase/tests/e034.test.ts` (8):
+  - el socio de Esmove no lee ninguna tabla (productos, técnicos, entregas, movimientos, cierres…; de perfiles, solo el suyo);
+  - por `datos_socio` ve solo lo suyo: ni lo propio de Búfala ni lo de Instant Box, operario "Búfala", sin técnicos ni entregas;
+  - instalaciones: el cierre con su cargador y **solo esa línea**, no el cable;
+  - no escribe nada (movimiento, artículo, acta, foto, inserción directa), y las funciones sueltas no le dan nada;
+  - el rol de sistema es igual en la base y en la app;
+  - Instant Box aislado de Esmove, y un usuario interno no puede usar `datos_socio`;
+  - rol ↔ socio, y el administrador pasa un usuario a socio y de vuelta;
+  - un rol propio con "Modificar" no vale para un socio.
+- `src/domain/e034.test.ts` (6): el filtro, las pantallas, "probar como", los roles válidos y el alta/edición.
+- Las 277 pruebas de base de datos anteriores siguen en verde con el cambio de `es_usuario_activo`, `es_admin` y `tiene_permiso`.
+- `tsc -b`, `deno check` y build correctos.
+- **En el navegador** ("Probar como" un usuario de Esmove):
+  - menú con solo Inventario, Custodia, Escanear y Movimientos;
+  - en Custodia, solo la pestaña de Esmove;
+  - en Inventario y Movimientos, ni cable, tacos, bridas ni técnicos, solo lo de Esmove;
+  - consola sin errores.
