@@ -21,7 +21,7 @@ export const TABLAS: (keyof Tablas)[] = ['productos', 'equipos', 'tecnicos', 'mo
 export const COLUMNAS: Partial<Record<keyof Tablas, string>> = {
   portal_enlaces: 'tecnico_id, entrega_id, creado, creado_por, revocado',
   integraciones: 'id, nombre, creado, creado_por, revocado, ultimo_uso',
-  cierres: 'id, clave, version, num_inst, cliente, direccion, fecha_cierre, equipo_wizard, equipo_id, vehiculo_id, hardware, desp_fallido, estado, origen, recibido, datos_wizard, holded, material_especial, material_revisado',
+  cierres: 'id, clave, version, num_inst, cliente, direccion, fecha_cierre, equipo_wizard, equipo_id, vehiculo_id, hardware, desp_fallido, estado, origen, recibido, datos_wizard, holded, material_especial, material_revisado, correccion',
   cierre_versiones: 'id, cierre_id, n, origen, documento, recibido, diferencia',
   pendientes: 'id, ts, tipo, sku, cantidad, motivo, referencia, series, operario, estado, resuelto_por, nota_resolucion, vehiculo_id',
 };
@@ -58,10 +58,10 @@ export function aEstado(t: Tablas, base: Pick<Estado, 'cesta' | 'seq'>, operador
   const copias: CopiaEntrega[] = (t.copias_entrega || []).map(c => ({ id: c.id, entrega: c.entrega_id, canal: c.canal, destino: c.destino || '', ts: ms(c.ts), operator: c.operario }));
   const cierres: CierreApp[] = (t.cierres || []).map(c => ({ id: c.id, clave: c.clave, version: c.version, numInst: c.num_inst, cliente: c.cliente, direccion: c.direccion, fecha: ms(c.fecha_cierre),
     equipoWizard: c.equipo_wizard, equipo: c.equipo_id ?? undefined, vehiculo: c.vehiculo_id ?? undefined, hardware: c.hardware, despFallido: !!c.desp_fallido, estado: c.estado, origen: c.origen, recibido: ms(c.recibido),
-    datosWizard: c.datos_wizard ?? undefined, holded: c.holded ?? undefined, materialEspecial: c.material_especial || '', materialRevisado: c.material_revisado !== false,
+    datosWizard: c.datos_wizard ?? undefined, holded: c.holded ?? undefined, ...(c.correccion ? { correccion: c.correccion } : {}), materialEspecial: c.material_especial || '', materialRevisado: c.material_revisado !== false,
     versiones: (t.cierre_versiones || []).filter(v => v.cierre_id === c.id).map(v => ({ n: v.n, origen: v.origen, documento: v.documento || '', recibido: ms(v.recibido), diferencia: (v.diferencia || []).map((d: Fila) => ({ sku: d.sku, unidades: n(d.unidades) })) })).sort((x, y) => x.n - y.n) }))
     .sort((a, b) => b.fecha - a.fecha);
-  const lineasCierre: LineaCierre[] = (t.cierre_lineas || []).map(l => ({ id: l.id, cierre: l.cierre_id, campo: l.campo, formula: l.formula, valor: n(l.valor), sku: l.sku ?? undefined, cantidad: n(l.cantidad), estimada: !!l.estimada, estado: l.estado, nota: l.nota || '',
+  const lineasCierre: LineaCierre[] = (t.cierre_lineas || []).map(l => ({ id: l.id, cierre: l.cierre_id, campo: l.campo, formula: l.formula, valor: n(l.valor), sku: l.sku ?? undefined, cantidad: n(l.cantidad), estimada: !!l.estimada, estado: l.estado, nota: l.nota || '', ...(l.manual ? { manual: true } : {}),
     ...(l.resolucion ? { resolucion: l.resolucion } : {}), ...(l.previo ? { previo: { estado: l.previo.estado, sku: l.previo.sku ?? undefined, cantidad: n(l.previo.cantidad), nota: l.previo.nota || '' } } : {}) }));
   const equivalencias: Equivalencia[] = (t.equivalencias_cierre || []).map(r => ({ id: r.id, campo: r.campo, formula: r.formula, condiciones: r.condiciones || {}, articulos: r.articulos || [], kit: r.kit, estimada: !!r.estimada, activa: !!r.activa, orden: r.orden, nota: r.nota || '', confirmada: !!r.confirmada, ...(r.sin_descuento ? { sinDescuento: r.sin_descuento } : {}) }))
     .sort((a, b) => a.orden - b.orden);

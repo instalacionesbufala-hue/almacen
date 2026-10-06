@@ -92,7 +92,15 @@ export function normalizarAtributos(raw: unknown): Record<string, string> {
   return out;
 }
 /** Lo que ya se sabe del cierre: los últimos datos del wizard (o del histórico), la última prefactura y qué orígenes han llegado */
-export interface PrevioCierre { version: number; wizard: Record<string, unknown> | null; holded: PrefacturaHolded | null; origenes: string[] }
+export interface PrevioCierre { version: number; wizard: Record<string, unknown> | null; holded: PrefacturaHolded | null; origenes: string[]; correccion?: Record<string, string> | null }
+/** E-035 · Datos que el administrador corrige a mano: mandan sobre lo automático hasta "Volver a lo automático" */
+export const CAMPOS_CORREGIBLES = ['fase', 'tipoLinea', 'seccion', 'equipo'] as const;
+export function aplicarCorreccion(c: Cierre, corr?: Record<string, string> | null): Cierre {
+  if (!corr) return c;
+  const out = { ...c };
+  for (const k of CAMPOS_CORREGIBLES) if (txt(corr[k])) out[k] = txt(corr[k]);
+  return out;
+}
 export interface Version { accion: 'nueva' | 'duplicado' | 'obsoleto'; origen: OrigenVersion; documento: string; wizard: Cierre | null; holded: PrefacturaHolded | null; efectivo: Cierre; avisos: string[] }
 
 /** Prefactura de Holded tal como la manda el Apps Script → solo campos facturables, como números */
@@ -146,7 +154,7 @@ export function prepararVersion(previo: PrevioCierre | null, origen: OrigenVersi
       if (accion === 'nueva') wizard = { ...wizard, ...Object.fromEntries(Object.entries(c).filter(([, v]) => v !== '' && v !== undefined && v !== null)), esbrainUuid: c.esbrainUuid || wizard.esbrainUuid } as Cierre;
     } else wizard = c;
   }
-  const efectivo = cierreEfectivo(wizard, holded);
+  const efectivo = aplicarCorreccion(cierreEfectivo(wizard, holded), previo?.correccion);
   return { accion, origen, documento, wizard, holded, efectivo, avisos };
 }
 
@@ -239,6 +247,8 @@ export const EQUIVALENCIAS_PROPUESTA: Regla[] = [
   R('hardware', 'unidad', { 'hardware~': ['trydan&trif', 'trydan&22'] }, [['8900500025', 1]], { nota: 'Trydan 22 kW 5 m' }),
   R('hardware', 'unidad', { 'hardware~': 'trydan&m10' }, [['8900500020', 1]], { nota: 'Trydan 7,4 kW 10 m' }),
   R('hardware', 'unidad', { 'hardware~': 'trydan' }, [['8900590300', 1]], { nota: 'Trydan 7,4 kW 5 m (el más habitual)' }),
+  // E-035: el trifásico (NW-DBLT23F) antes que el genérico, que queda para los monofásicos
+  R('hardware', 'unidad', { 'hardware~': ['policharger&trif', 'policharger&dblt'] }, [['8437024504283', 1]], { nota: 'Policharger NW-DBLT23F trifásico' }),
   R('hardware', 'unidad', { 'hardware~': 'policharger' }, [['8906000665', 1]], { nota: 'Policharger NW T2' }),
   // E-032/E-033: el cable de datos del wizard, solo como último recurso (sin cargador reconocido): manda el cargador (V2C → U/UTP, Policharger → F/UTP).
   // F/UTP antes que U/UTP, porque "utp" también está en "f/utp"

@@ -2,6 +2,7 @@
    - aplicarse en local (validación previa con src/domain y respuesta inmediata en pantalla), y
    - traducirse a su función SQL del servidor (la fuente de verdad en modo nube).
    En modo nube la operación se guarda en la cola y se reaplica en local hasta que el servidor la confirma. */
+import { corregirCierreLocal, type Correccion } from '../domain/corregir';
 import { rolValidoParaSocio } from '../../supabase/functions/_compartido/permisos';
 import { cambiarFormatoLocal, formatoTxt, type ModoConversion, type NuevoFormato } from '../domain/formatos';
 import { deshacerResolucionLocal, resolverVariosLocal, type ArticuloResolucion } from '../domain/resolucion';
@@ -97,6 +98,7 @@ export type Op =
   | { op: 'configCierres'; args: { kit: 'A' | 'B' | 'C'; apertura?: number; cargadoresHasta?: number } }
   | { op: 'revisarMaterialEspecial'; args: { id: string; nota: string } }
   | { op: 'resolverLinea'; args: { linea: string; sku: string; cantidad?: number } }
+  | { op: 'corregirCierre'; args: { id: string; correccion: Correccion } }
   | { op: 'cambiarFormato'; args: { sku: string; formato: NuevoFormato; modo: ModoConversion } }
   | { op: 'resolverLineaVarios'; args: { linea: string; grupo: string; articulos: ArticuloResolucion[] } }
   | { op: 'deshacerResolucion'; args: { linea: string } }
@@ -380,8 +382,10 @@ export const OPS: Defs = {
       const antes = new Map<string, number>(); for (const m of S.movements) if (m.cierre === a.id) antes.set(m.sku, (antes.get(m.sku) || 0) - (m.unidades || 0));
       quitarResueltasCubiertas(S, a.id, a.lineas);
       const resueltos = new Set(S.lineasCierre.filter(l => l.cierre === a.id && l.estado === 'resuelta').map(l => l.campo));
-      S.lineasCierre = S.lineasCierre.filter(l => l.cierre !== a.id || l.estado === 'resuelta');
+      S.lineasCierre = S.lineasCierre.filter(l => l.cierre !== a.id || l.estado === 'resuelta' || l.manual);
+      const fijadas = new Set(S.lineasCierre.filter(l => l.cierre === a.id && l.manual).map(l => l.campo));
       for (const l of a.lineas) {
+        if (fijadas.has(l.campo)) continue;
         if (l.estado !== 'aplicable' && resueltos.has(l.campo)) continue;
         const sku = l.sku && find(S, l.sku) && !find(S, l.sku)!.borrador ? l.sku : undefined;
         S.lineasCierre.push({ id: uid('L'), cierre: a.id, campo: l.campo, formula: l.formula, valor: l.valor, sku, cantidad: l.cantidad, estimada: l.estimada,
@@ -441,6 +445,12 @@ export const OPS: Defs = {
     },
     rpc: a => ['resolver_linea_cierre', { p_linea: a.linea, p_sku: a.sku, p_cantidad: a.cantidad ?? null }],
     desc: () => 'Resolver una línea de un cierre',
+  },
+  /* ---------- E-035 · Corregir un cierre a mano en todo ---------- */
+  corregirCierre: {
+    local: (S, a) => { if (!gestiona(S, 'cierres')) throw new Error('Solo el administrador corrige los cierres'); corregirCierreLocal(S, a.id, a.correccion, S.operator); },
+    rpc: a => ['corregir_cierre', { p_cierre: a.id, p: a.correccion }],
+    desc: (S, a) => `Corregir el cierre ${S.cierres.find(c => c.id === a.id)?.numInst || ''}`,
   },
   /* ---------- E-031 · Cambiar el formato convirtiendo el stock ---------- */
   cambiarFormato: {

@@ -52,7 +52,7 @@ export interface EnvioCierre { efectivo: Cierre; lineas: LineaTraducida[]; meta:
 /** Lo que ya se sabe de esa instalación en este dispositivo */
 export function previoLocal(S: Estado, clave: string): PrevioCierre | null {
   const ci = S.cierres.find(c => c.clave === clave);
-  return ci ? { version: ci.version, wizard: ci.datosWizard || ci.datos || null, holded: ci.holded || null, origenes: [...new Set((ci.versiones || []).map(v => v.origen))] } : null;
+  return ci ? { version: ci.version, wizard: ci.datosWizard || ci.datos || null, holded: ci.holded || null, origenes: [...new Set((ci.versiones || []).map(v => v.origen))], correccion: ci.correccion || null } : null;
 }
 /** Prepara lo que se envía (o se aplica en local): la decisión de versión, los datos efectivos y su traducción */
 export function prepararEnvio(S: Estado, raw: Record<string, unknown>, origen: OrigenVersion, previo?: PrevioCierre | null): EnvioCierre {
@@ -69,7 +69,7 @@ export const estadoLinea = (l: LineaTraducida, sku?: string): LineaCierre['estad
 /** E-032: una partida que una regla ya cubre sustituye su resolución manual (si no, se sumarían las dos) */
 export function quitarResueltasCubiertas(S: Estado, cierre: string, lineas: LineaTraducida[]) {
   const cubiertos = new Set(lineas.filter(l => l.estado === 'aplicable' && l.sku && find(S, l.sku) && !find(S, l.sku)!.borrador).map(l => l.campo));
-  if (cubiertos.size) S.lineasCierre = S.lineasCierre.filter(l => l.cierre !== cierre || l.estado !== 'resuelta' || !cubiertos.has(l.campo));
+  if (cubiertos.size) S.lineasCierre = S.lineasCierre.filter(l => l.cierre !== cierre || l.estado !== 'resuelta' || l.manual || !cubiertos.has(l.campo));
 }
 
 /** Guarda una versión de un cierre en el estado local (= _registrar_version_cierre) */
@@ -100,8 +100,10 @@ export function registrarVersionLocal(S: Estado, a: EnvioCierre): { estado: stri
   const id = ci.id, antes = consumoDe(S, id);
   quitarResueltasCubiertas(S, id, lineas);
   const resueltos = new Set(S.lineasCierre.filter(l => l.cierre === id && l.estado === 'resuelta').map(l => l.campo));
-  S.lineasCierre = S.lineasCierre.filter(l => l.cierre !== id || l.estado === 'resuelta');
+  S.lineasCierre = S.lineasCierre.filter(l => l.cierre !== id || l.estado === 'resuelta' || l.manual);
+  const fijadas = new Set(S.lineasCierre.filter(l => l.cierre === id && l.manual).map(l => l.campo));      // E-035: lo corregido a mano no se toca
   for (const l of lineas) {
+    if (fijadas.has(l.campo)) continue;
     if (l.estado !== 'aplicable' && resueltos.has(l.campo)) continue;
     const sku = l.sku && find(S, l.sku) && !find(S, l.sku)!.borrador ? l.sku : undefined;
     S.lineasCierre.push({ id: uid('L'), cierre: id, campo: l.campo, formula: l.formula, valor: l.valor, sku, cantidad: l.cantidad, estimada: l.estimada,

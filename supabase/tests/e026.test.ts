@@ -141,7 +141,7 @@ describe('reglas de cargadores del calendario', () => {
       ('P16', 'hardware', 'unidad', '{"hardware~": "trydan&schuko"}', '[{"sku": "8900500015", "factor": 1}]', 160, true),
       ('P18', 'hardware', 'unidad', '{"hardware~": ["trydan&7,4", "trydan&7.4"]}', '[{"sku": "8900590300", "factor": 1}]', 180, true);` } });
     await superusuario(db);
-    expect(await valor(db, "select string_agg(id, ',' order by orden) from equivalencias_cierre where campo = 'hardware' and activa and confirmada")).toBe('H1,H2,H3,H4,H5,H6');
+    expect(await valor(db, "select string_agg(id, ',' order by orden) from equivalencias_cierre where campo = 'hardware' and activa and confirmada")).toBe('H1,H2,H3,H4,H5,H7,H6');   // E-035: H7 (Policharger trifásico) antes de H6
     expect(await valor(db, "select count(*)::int from equivalencias_historial where operario = 'Migración E-026'")).toBe(2);
     expect(await valor(db, "select activa from equivalencias_cierre where id = 'P18'")).toBe(false);
   });

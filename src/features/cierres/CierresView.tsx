@@ -1,5 +1,6 @@
 /* E-012 · Cierres de instalación recibidos del wizard: estado, líneas traducidas, pendientes que resuelve el administrador,
    consumo por equipo y periodo, discrepancias (vehículos en negativo) y recuento de vehículo. */
+import { abrirCorregirCierre } from './Corregir';
 import { Contado, lineasContadas } from '../../ui/contado';
 import { cantTxt } from '../../domain/formatos';
 import { Fragment, useState } from 'react';
@@ -101,14 +102,17 @@ function FilaCierre({ c, abierto, alternar, puede }: { c: CierreApp; abierto: bo
         {c.versiones!.map(v => <div key={v.n} className="flex flex-wrap gap-x-2 py-0.5"><b>{v.n}.</b><span>{v.origen === 'admin' && v.documento ? v.documento : `${ORIGEN_VERSION[v.origen] || v.origen}${v.documento ? ` nº ${v.documento}` : ''}`}</span><span className="text-secondary">{fechaHora(v.recibido)}</span>
           <span className={v.diferencia.length ? 'font-semibold' : 'text-secondary'}>{v.n === 1 ? (v.diferencia.length ? textoDiferencia(E, v.diferencia) : 'alta del cierre') : textoDiferencia(E, v.diferencia)}</span></div>)}</div>}
       {c.estado === 'sin_vehiculo' && puede && <AccionesSinVehiculo c={c} />}
+      {puede && c.estado !== 'ignorado' && <div className="flex flex-wrap items-center gap-2"><button onClick={() => abrirCorregirCierre(c.id)} className={`${BTN_S} h-11 px-4`}><Icon n="edit_note" className="ico-20" />Corregir cierre</button>
+        {c.correccion && <Tag c="bg-primary-fixed text-primary">datos corregidos: {Object.entries(c.correccion).map(([k, v]) => `${k} ${v}`).join(', ')}</Tag>}</div>}
       {!lineas.length ? <p className="text-body-sm text-secondary">{c.despFallido ? 'Desplazamiento fallido: sin consumo.' : 'Sin material declarado.'}</p> :
         <table className="w-full text-body-sm"><thead><tr className={`text-left ${LBL}`}><th className="py-1">Partida</th><th>Artículo</th><th className="text-right">Cantidad</th><th /></tr></thead>
           <tbody>{lineas.map(l => { const p = l.sku ? find(E, l.sku) : undefined; const resolver = puede && (l.estado === 'pendiente' || l.estado === 'sin_equivalencia'); return (<Fragment key={l.id}>
             <tr className="border-t border-surface-container align-top">
               <td className="py-1.5 font-mono text-label-sm">{l.campo}{l.formula !== 'directa' && l.formula !== 'unidad' ? ` (${l.formula})` : ''}<div className="text-secondary">{num(l.valor)}</div></td>
-              <td className="py-1.5">{p ? p.name : l.estado === 'no_gestionado' ? <span className="text-secondary">—</span> : <span className="text-amber-800">{l.estado === 'pendiente' ? 'Por elegir' : 'Sin equivalencia'}</span>}
+              <td className="py-1.5">{p ? p.name : l.estado === 'no_gestionado' || l.estado === 'quitada' ? <span className="text-secondary">—</span> : <span className="text-amber-800">{l.estado === 'pendiente' ? 'Por elegir' : 'Sin equivalencia'}</span>}
                 {l.estado === 'no_entregado' && <Tag c="bg-violet-100 text-violet-800 ml-1">no entregado por el almacén: no se descuenta</Tag>}
                 {l.estado === 'no_gestionado' && <Tag c="bg-surface-container-high text-secondary ml-1">material no gestionado en el almacén: no descuenta</Tag>}
+                {l.manual && <Tag c="bg-primary-fixed text-primary ml-1">{l.estado === 'quitada' ? 'quitada a mano: no descuenta' : 'corregida a mano'}</Tag>}
                 {l.estimada && <Tag c="bg-amber-100 text-amber-800 ml-1">estimado</Tag>}{l.estado === 'discrepancia' && <Tag c="bg-error-container text-error ml-1">deja el vehículo en negativo</Tag>}
                 {l.nota && <div className="text-label-sm text-secondary">{l.nota}</div>}
                 {puede && l.estado === 'resuelta' && (!l.resolucion || l.previo) && <button onClick={() => deshacer(E, l)} className="text-error text-body-sm font-semibold h-10 flex items-center gap-1"><Icon n="undo" className="ico-18" />Deshacer resolución</button>}</td>

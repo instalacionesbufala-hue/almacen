@@ -1041,7 +1041,7 @@ El rol "Solo lectura" de E-027 no sirve: los permisos son por apartado (Ver/Modi
 - El administrador crea desde la app un usuario de Esmove y otro del segundo socio.
 - **"Probar como este usuario"** (E-027) muestra exactamente su vista.
 
-### E-035 · Corregir un cierre a mano en todo (datos y materiales) y regla del Policharger trifásico · PENDIENTE (urgente)
+### E-035 · Corregir un cierre a mano en todo (datos y materiales) y regla del Policharger trifásico · HECHO
 **Caso real (06/10), cierre E2632405** (Búfala 1 · 2690NKC, desde la prefactura). El cargador del calendario es "POLICHARGER NW TRIFÁSICO DOBLE PROTECCIÓN M10 M5".
 - **Cargador mal:** la regla H6 (`policharger`) descontó el **POLICHARGER NW T2 (8906000665)**, que deja Búfala 1 en −1. El instalado es el **POLICHARGER NW-DBLT23F (SKU/EAN 8437024504283, custodia Esmove)**, entregado esta mañana a Búfala 1 y con 1 ud a bordo.
 - **Fase mal:** los técnicos cerraron en **monofásica** y la instalación es **trifásica**, así que `metrosLinea` (15 m) debe ser de **5 conductores**, no de 3.
@@ -3031,3 +3031,62 @@ Las versiones anteriores de P-UTP-F y P-UTP-U (órdenes 48 y 49) están en el hi
   - en Custodia, solo la pestaña de Esmove;
   - en Inventario y Movimientos, ni cable, tacos, bridas ni técnicos, solo lo de Esmove;
   - consola sin errores.
+
+### 06/10/2026 · E-035 · HECHO
+**Aplicado en producción:**
+- migración `20261025000100_e035_corregir_cierre.sql`;
+- `registrar-cierre` desplegada (aplica la corrección en las versiones nuevas).
+
+**Comprobado en producción (solo lectura):**
+- regla **H7** (`policharger&trif` / `policharger&dblt` → 8437024504283, orden 1055) por delante de H6 (1060);
+- `corregir_cierre` con su permiso y `previo_cierre` con la corrección;
+- **E2632405 sigue como estaba** (discrepancia, versión 1): no he tocado datos.
+
+**Nota sobre el caso real.** E2632405 ya llega como **trifásica** (`fase = trif`, `tipoLinea = manguera`, `seccion = 6`). No hay regla para "manguera trifásica 6", por eso `metrosLinea` quedó "sin equivalencia". El NW-DBLT23F (8437024504283) existe, en custodia de Esmove, con 1 ud a bordo de 2690NKC.
+
+**Para el usuario: dejar E2632405 bien.** Equipos → Cierres → abre **E2632405** → **"Corregir cierre"**.
+1. **Datos:** en "Tipo de línea" elige **Bajo tubo (conductores)**. La fase ya es trifásica y la sección, 6; cámbiala si es otra.
+   - Con eso, la regla de tubo trifásico 6 mm² pone **5 conductores × 15 m**.
+   - Si prefieres dejar "manguera": en Materiales → `metrosLinea` → **"Conductores sueltos (5 × 6 mm²)"**.
+2. **Cargador instalado:** elige **POLICHARGER NW-DBLT23F**.
+3. **`cajaReg`:** déjala como está (no descuenta mientras no tenga artículo), pulsa **"Quitar (no descontar)"** o elige el artículo si lo das de alta.
+4. **Guardar y recalcular.**
+
+Resultado:
+- vuelve el NW T2 a Búfala 1, que queda en 0;
+- se descuenta el NW-DBLT23F, que también queda en 0;
+- se descuentan los 5 conductores.
+
+Todo queda en una versión "Corrección manual por …" con la diferencia, y en la auditoría.
+
+**1. Regla del Policharger trifásico**
+- **H7**, por delante de H6, que queda para los monofásicos. Va en la base real y en la propuesta del módulo compartido.
+- Las versiones nuevas del cierre ya salen bien sin corregir.
+
+**2. "Corregir cierre"** (botón en cada cierre, administrador; ventana con tres partes)
+- **a) Datos:**
+  - fase, tipo de línea, sección y equipo; cada uno "Automático (valor)" o corregido;
+  - se guardan en `cierres.correccion` y el cierre se recalcula con ellos;
+  - **mandan sobre las versiones automáticas posteriores** (`previo_cierre` los devuelve y `prepararVersion` los aplica al efectivo) hasta "Volver a lo automático";
+  - si cambia el **equipo**, todo lo descontado vuelve a la furgoneta anterior con ajustes enlazados y se descuenta de la nueva.
+- **Cargador instalado:** selector de cargadores o artículos en custodia. Fija la partida `hardware`.
+- **b) Cada partida,** aunque la haya resuelto una regla:
+  - cambiar artículo o cantidad, añadir artículos, **"Quitar (no descontar)"** (estado nuevo `quitada`) y el atajo de conductores en `metrosLinea`;
+  - queda **fijada a mano** (`cierre_lineas.manual`): las versiones y recálculos posteriores no la tocan ni añaden otra para esa partida, hasta "Volver a lo automático" en esa partida.
+- **c y d) Movimientos e historial:** `corregir_cierre` recalcula. La diferencia con lo descontado se aplica con **ajustes enlazados al cierre**, y queda una versión "Corrección manual por …: datos: … · hardware: 1 × …" con la diferencia, más la auditoría `corregir_cierre`.
+- **e) Socios:** el informe y `datos_socio` (E-034) toman las líneas del cierre, así que el socio ve el cargador corregido (hay prueba).
+- **En la lista:** etiquetas "corregida a mano" / "quitada a mano: no descuenta" en las líneas, y "datos corregidos: …" en el cierre.
+
+**Cómo se ha hecho en la base:** `_registrar_version_cierre`, `recalcular_cierre_admin` y `previo_cierre` se reescriben en el sitio (texto comprobado) para respetar las líneas manuales y devolver la corrección.
+
+**Pruebas: 510 en verde** (+12; la de E-026 que lista las reglas de cargador incluye ahora H7).
+- `supabase/tests/e035.test.ts` (7):
+  - regla trifásica y monofásica, y la migración sobre reglas como las de producción (H7 1055, antes que H6 1060);
+  - el caso real: tubo trifásico 6 (5 × 15 m) y el NW-DBLT23F; Búfala 1 en 0 y 0, con ajuste enlazado, versión y auditoría;
+  - quitar `cajaReg` y fijar `corr32` con dos artículos (el cierre no queda "parcial");
+  - la corrección prevalece sobre una prefactura posterior (20 m: 5 conductores y el NW-DBLT23F), y "volver a lo automático";
+  - cambio de equipo (todo vuelve a Búfala 1 y se descuenta de Búfala 2);
+  - un artículo inexistente no toca nada.
+- `src/domain/e035.test.ts` (5): lo mismo en la app, el paso de 3 a 5 conductores solo cambiando la fase, y el informe del socio con el cargador corregido.
+- `tsc -b`, `deno check` y build correctos.
+- **En el navegador (demo con E2632405):** "Corregir cierre" → Bajo tubo + NW-DBLT23F → Guardar → 5 conductores, cargador fijado, 2690NKC en 0 y 0, y la versión "Corrección manual por …".

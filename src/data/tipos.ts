@@ -187,6 +187,8 @@ export interface CierreApp {
   equipo?: string; vehiculo?: string; hardware: string; despFallido: boolean; estado: EstadoCierre; origen: 'integracion' | 'historico' | 'holded'; recibido: number;
   /** datos EFECTIVOS (wizard + partidas de la prefactura; en local; en la nube se piden al servidor cuando hacen falta: probar o recalcular) */
   datos?: Record<string, unknown>;
+  /** E-035: datos corregidos a mano (fase, tipoLinea, seccion, equipo): mandan sobre lo automático */
+  correccion?: Record<string, string>;
   /** E-026: últimos datos del wizard o del histórico, última prefactura de Holded, material especial y versiones */
   datosWizard?: Record<string, unknown>; holded?: { documento: string; fechaAprobacion: string; lineas: Record<string, number> };
   materialEspecial?: string; materialRevisado?: boolean; versiones?: VersionCierre[];
@@ -196,7 +198,9 @@ export interface LineaCierre {
   id: string; cierre: string; campo: string; formula: string; valor: number; sku?: string; cantidad: number; estimada: boolean;
   /** E-026: no_entregado = cargador instalado que no salió del almacén gestionado (antes del 05/10): no se descuenta */
   /** E-032: no_gestionado = la partida lleva material que aún no gestiona el almacén: se cuenta, no descuenta ni queda pendiente */
-  estado: 'aplicada' | 'discrepancia' | 'sin_equivalencia' | 'pendiente' | 'resuelta' | 'no_entregado' | 'no_gestionado'; nota: string;
+  estado: 'aplicada' | 'discrepancia' | 'sin_equivalencia' | 'pendiente' | 'resuelta' | 'no_entregado' | 'no_gestionado' | 'quitada'; nota: string;
+  /** E-035: fijada a mano (artículo y cantidad, o quitada): las versiones automáticas no la tocan hasta "Volver a lo automático" */
+  manual?: boolean;
   /** E-030: resolución manual (grupo de líneas) y cómo estaba la línea original, para deshacerla */
   resolucion?: string; previo?: { estado: LineaCierre['estado']; sku?: string; cantidad: number; nota: string };
 }
