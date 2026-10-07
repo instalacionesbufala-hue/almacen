@@ -12,6 +12,7 @@ import { descargarCsv } from '../../domain/csv';
 import { fechaHora, hoyISO, num, redondea, toNum } from '../../domain/formato';
 import { contenidoDe, contenidoTxt, enVista, tieneContenido, find, lineaCierreTxt, nombreVehiculo, qtyTxt, unidadTxt, unidadesABordo, vista, vistaUnidades } from '../../domain/reglas';
 import { ejecutar, useAlmacen } from '../../store/almacen';
+import { setUI, ui } from '../../store/ui';
 import { nuevoId } from '../../store/ops';
 import { usePermisos } from '../../store/permisos';
 import { closeModal, openModal, SheetFoot, SheetHead } from '../../ui/modal';
@@ -33,8 +34,11 @@ const cantConsumo = (E: Estado, x: { sku: string; formatos: number; unidad: stri
 export default function CierresView() {
   const E = useAlmacen(), { gestionarCierres: validar, exportar: puedeExportar } = usePermisos();
   // E-029: por defecto desde la apertura del inventario (o los últimos 30 días), para que no se queden fuera cierres recién llegados del histórico
-  const [f, setF] = useState(() => ({ equipo: 'all', desde: desdeCierresPorDefecto(E), hasta: hoyISO(), estado: 'all' }));
-  const [abierto, setAbierto] = useState<string | null>(null);
+  // E-037: al llegar desde un extracto, ese cierre abierto (y dentro del periodo) con la línea del artículo resaltada
+  const [foco] = useState(() => { const x = ui.get().cierreFoco; if (x) setUI({ cierreFoco: null }); return x || null; });
+  const fFoco = foco ? E.cierres.find(c => c.id === foco.id)?.fecha : undefined;
+  const [f, setF] = useState(() => { const d = desdeCierresPorDefecto(E), fd = fFoco ? new Date(fFoco).toISOString().slice(0, 10) : d; return { equipo: 'all', desde: fd < d ? fd : d, hasta: hoyISO(), estado: 'all' }; });
+  const [abierto, setAbierto] = useState<string | null>(foco?.id ?? null);
   const equipos = [...new Set(E.cierres.map(c => c.equipoWizard).filter(Boolean))].sort();
   // sin useMemo: el estado se modifica en el sitio (misma referencia), y la lista y el consumo se quedarían viejos tras procesar un cierre
   const lista = E.cierres.filter(c => (f.equipo === 'all' || c.equipoWizard === f.equipo) && (f.estado === 'all' || c.estado === f.estado)
@@ -60,7 +64,7 @@ export default function CierresView() {
     {validar && sinVehiculo.length > 0 && <SinVehiculo cierres={sinVehiculo} />}
     <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
       <section className="xl:col-span-2 flex flex-col gap-2">
-        {lista.length ? lista.slice(0, n).map(c => <FilaCierre key={c.id} c={c} abierto={abierto === c.id} alternar={() => setAbierto(abierto === c.id ? null : c.id)} puede={validar} />) : <Vacio>No hay cierres con estos filtros.</Vacio>}
+        {lista.length ? lista.slice(0, n).map(c => <FilaCierre key={c.id} c={c} abierto={abierto === c.id} alternar={() => setAbierto(abierto === c.id ? null : c.id)} puede={validar} foco={foco?.id === c.id ? foco.sku : undefined} />) : <Vacio>No hay cierres con estos filtros.</Vacio>}
         <CargarMas visibles={n} total={lista.length} mas={mas} que="cierres" />
       </section>
       <aside className="flex flex-col gap-4">
@@ -87,7 +91,7 @@ export default function CierresView() {
   </div>);
 }
 
-function FilaCierre({ c, abierto, alternar, puede }: { c: CierreApp; abierto: boolean; alternar: () => void; puede: boolean }) {
+function FilaCierre({ c, abierto, alternar, puede, foco }: { c: CierreApp; abierto: boolean; alternar: () => void; puede: boolean; foco?: string }) {
   const E = useAlmacen(), lineas = lineasDe(E, c.id);
   return (<article className={`${CARD} overflow-hidden`}>
     <button onClick={alternar} className="w-full text-left p-4 flex flex-wrap items-center gap-3">
@@ -109,7 +113,7 @@ function FilaCierre({ c, abierto, alternar, puede }: { c: CierreApp; abierto: bo
       {!lineas.length ? <p className="text-body-sm text-secondary">{c.despFallido ? 'Desplazamiento fallido: sin consumo.' : 'Sin material declarado.'}</p> :
         <table className="w-full text-body-sm"><thead><tr className={`text-left ${LBL}`}><th className="py-1">Partida</th><th>Artículo</th><th className="text-right">Cantidad</th><th /></tr></thead>
           <tbody>{lineas.map(l => { const p = l.sku ? find(E, l.sku) : undefined; const resolver = puede && (l.estado === 'pendiente' || l.estado === 'sin_equivalencia'); return (<Fragment key={l.id}>
-            <tr className="border-t border-surface-container align-top">
+            <tr className={`border-t border-surface-container align-top ${foco && l.sku === foco ? 'bg-amber-50' : ''}`} ref={foco && l.sku === foco ? (el => { el?.scrollIntoView({ block: 'center' }); }) : undefined}>
               <td className="py-1.5 font-mono text-label-sm">{l.campo}{l.formula !== 'directa' && l.formula !== 'unidad' ? ` (${l.formula})` : ''}<div className="text-secondary">{num(l.valor)}</div></td>
               <td className="py-1.5">{p ? p.name : l.estado === 'no_gestionado' || l.estado === 'quitada' ? <span className="text-secondary">—</span> : <span className="text-amber-800">{l.estado === 'pendiente' ? 'Por elegir' : 'Sin equivalencia'}</span>}
                 {l.estado === 'no_entregado' && <Tag c="bg-violet-100 text-violet-800 ml-1">no entregado por el almacén: no se descuenta</Tag>}

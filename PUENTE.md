@@ -1108,7 +1108,7 @@ El usuario se vuelve loco y necesita verlo claro.
    - La captura del usuario se ve en metros.
    - El 3G10 queda explicado.
 
-### E-037 · Desplegable de cada material de una furgoneta con todos sus movimientos y el saldo acumulado · PENDIENTE
+### E-037 · Desplegable de cada material de una furgoneta con todos sus movimientos y el saldo acumulado · HECHO
 **Petición del usuario (07/10):** al revisar el stock de cada equipo, **pinchar en cada material** y que salga un **desplegable con todas las entregas y descuentos** que llevan a la cifra que se muestra. Así puede ver si hay algún error en los cálculos.
 
 **Qué hacer**
@@ -1136,7 +1136,7 @@ El usuario se vuelve loco y necesita verlo claro.
    - Hay pruebas de: el saldo acumulado del extracto coincide con el stock a bordo (con entregas, consumos, piezas enteras, ajustes, recuento y conversión); se detecta una diferencia provocada; los enlaces llevan a la entrega y al cierre; y el socio no ve nombres.
    - El usuario abre el H07Z1-K 10 mm² de una furgoneta y ve cómo se llega a "−319 m".
 
-### E-038 · Retirada de material en custodia por el socio (o por un tercero en su nombre) · PENDIENTE (después de E-037)
+### E-038 · Retirada de material en custodia por el socio (o por un tercero en su nombre) · EN CURSO
 **Petición del usuario (07/10):** poder registrar que **Esmove**, o cualquier socio con material en custodia (E-024), **retira material suyo** del almacén: él mismo o un tercero autorizado en su nombre (otro instalador, un transportista…).
 
 **1. Nuevo movimiento "Retirada por el socio"** (administrador y almacén con permiso de movimientos):
@@ -3283,3 +3283,64 @@ Todo queda en una versión "Corrección manual por …" con la diferencia, y en 
 - **En el navegador** (demo con la captura reproducida):
   - la furgoneta muestra "−319 m / ≈ −3,19 cajas de 100 m", "−250 ud", "−62 m / ≈ −20,67 barras de 3 m" y "0,8 m";
   - el aviso de Inventario propone +79,2 m y, al confirmarlo, deja 80 m y desaparece.
+
+### E-037 · Extracto por material y furgoneta con saldo acumulado · HECHO (07/10/2026)
+
+**Dónde:**
+- **Furgoneta → material a bordo:** cada tarjeta es desplegable (▸ "Ver movimientos y saldo"); al abrirla, el extracto sale debajo, a todo el ancho.
+- **"Mostrar todo el catálogo" de la furgoneta:** botón de extracto (icono de recibo) en cada fila.
+- **Equipos → tarjeta del equipo → "A bordo de …":** cada material abre el extracto en una ventana.
+- **Ficha del artículo → "Dónde está":** la píldora de cada vehículo (con ›) abre el extracto de ese artículo en esa furgoneta.
+
+**Qué muestra** (`src/features/equipos/Extracto.tsx`):
+- **Filtros:** desde y hasta (por defecto, desde la apertura de cierres) y "Todo / Solo entregas / Solo cierres / Solo ajustes y recuentos". **CSV** del extracto.
+- **Resumen:** entregado, consumido por cierres, ajustes y recuentos, y saldo (y devoluciones, retiradas y otros, si los hay).
+- **Tabla, del más antiguo al más reciente:** fecha y hora, tipo y referencia, cantidad (+/−), **saldo acumulado** y quién. Con filtro de fecha, primero va el "Saldo anterior al …".
+- **Tipos:**
+  - Entrega: **ENT-… · firmó …**, enlace al justificante;
+  - Consumo de cierre: **E26… · v2 · Wizard · cliente**, enlace al cierre, que se abre en Equipos → Cierres con **la línea de ese artículo resaltada**; debajo, el texto de la versión (por ejemplo, "Corrección manual por …");
+  - Corrección de cierre (correcciones manuales, deshacer resolución, recálculos y cambios de equipo);
+  - Ajuste, con su motivo;
+  - Recuento: "Constaba 40 m · contado 30 m · diferencia −10 m";
+  - Conversión de formato (también la corrección de E-036);
+  - Devolución, merma y retirada por el socio (E-038).
+- **Pieza entera:** "Por pieza entera: 62 m → 63 m (21 barras)".
+- **Cantidades** en la unidad base (m o ud), con el formato en pequeño en el resumen (E-036).
+- **Comprobación al final:**
+  - "Saldo calculado: −319 m · Stock mostrado: −319 m ✓";
+  - si no coinciden, aviso en rojo ("Diferencia de X: revisar").
+  - Los descuadres salen también en la **comprobación de Inventario de E-036**, con un botón "Ver el extracto". Allí, en la nube, los calcula el servidor (`descuadres_a_bordo()`); en local, la app.
+- **Paginado:** 200 filas y "Ver más".
+
+**Servidor** (migración `20261027000100_e037_extracto_vehiculo.sql`, aplicada):
+- **`extracto_vehiculo(vehículo, sku, desde, hasta, tipo, límite, desplazamiento)`:**
+  - saldo con función de ventana sobre todo el historial, resumen, filas paginadas y comprobación, todo en el servidor;
+  - permiso `movimientos.ver`: administrador, almacén y solo lectura;
+  - **socio:** solo sus artículos en custodia ("Solo puedes ver el material en custodia de tu empresa"), y en lugar de nombres, "Técnico del equipo" (entregas) y "Búfala".
+- **`descuadres_a_bordo()`** (`inventario.ver`).
+- `_tipo_extracto` clasifica igual que la app (`src/domain/extracto.ts`, que da el mismo resultado en modo local).
+
+**Revisado en producción (solo lectura):**
+- Las 75 filas de stock a bordo coinciden con la suma de sus movimientos: hoy no hay ningún descuadre.
+- **El "−319 m" del H07Z1-K 10 mm²** (amarillo/verde, azul y marrón) es **7463LVN**. No tiene ninguna entrega de ese cable, solo seis consumos de cierre:
+  - E2631952: −43 m y −1 m;
+  - E2632105: −82 m;
+  - E2632213: −80 m;
+  - E2632109: −51 m;
+  - E2632095: −62 m.
+  - Es decir: el equipo gastó cable que, en la app, nunca se le entregó. Para corregirlo hay que registrar la entrega (o un recuento de la furgoneta).
+  - **4299NGK** está igual: −187 m, de tres cierres y sin entregas.
+
+**Pruebas: 530 en verde.**
+- `supabase/tests/e037.test.ts` (5):
+  - entrega, cierre, ajuste, recuento y conversión, con saldo final = stock;
+  - enlaces (ENT- y quién firmó; cierre, versión y origen);
+  - pieza entera 62 → 63;
+  - filtros, paginado y saldo inicial;
+  - descuadre provocado (+5) en el extracto y en `descuadres_a_bordo`;
+  - solo lectura lo ve; el socio, solo lo suyo y sin nombres.
+- `src/domain/e037.test.ts` (4): lo mismo en la app, y la comprobación de Inventario con el descuadre.
+- `tsc -b` y build correctos.
+- **En el navegador:**
+  - el desplegable de la manguera de la furgoneta de ejemplo: "ENT-2026-0412 · firmó …, +150 m, saldo 150 m" y la comprobación con ✓;
+  - el enlace de un cierre abre Equipos → Cierres con ese cierre desplegado y la línea resaltada.

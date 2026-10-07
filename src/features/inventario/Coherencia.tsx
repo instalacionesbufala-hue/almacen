@@ -1,6 +1,10 @@
 /* E-036 · Aviso de la comprobación de formatos (solo el administrador): artículos cuya unidad, contenido y stock no cuadran,
    con el arreglo propuesto (un ajuste en la furgoneta) que se aplica solo si lo confirmas. */
+import { useEffect, useState } from 'react';
 import { incoherenciasFormato, type Incoherencia } from '../../domain/coherencia';
+import { descuadresLocal } from '../../domain/extracto';
+import { modoNube, supabase } from '../../store/nube/cliente';
+import type { Estado } from '../../data/tipos';
 import { contenidoDe, find, nombreVehiculo, unidadesABordo } from '../../domain/reglas';
 import { num, redondea } from '../../domain/formato';
 import { ucDe } from '../../domain/formatos';
@@ -11,19 +15,32 @@ import { closeModal, openModal, SheetFoot, SheetHead } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 import { BTN_P, BTN_S, Icon } from '../../ui/base';
 import { abrirFicha } from './hojas';
+import { abrirExtracto } from '../equipos/Extracto';
+
+type Descuadre = { vehiculo: string; sku: string; stock: number; calculado: number };
+/** E-037: en la nube los calcula el servidor (la app no tiene todo el historial); en local, con los movimientos */
+function useDescuadres(E: Estado, activo: boolean): Descuadre[] {
+  const [nube, setNube] = useState<Descuadre[]>([]);
+  useEffect(() => {
+    if (!activo || !modoNube || !supabase) return;
+    void supabase.rpc('descuadres_a_bordo').then(({ data }) => setNube(((data || []) as { vehiculo_id: string; sku: string; stock: number; calculado: number }[]).map(d => ({ vehiculo: d.vehiculo_id, sku: d.sku, stock: Number(d.stock), calculado: Number(d.calculado) }))));
+  }, [activo, E.aBordo.length, E.movements.length]);
+  return !activo ? [] : modoNube ? nube : descuadresLocal(E);
+}
 
 export function AvisoCoherencia() {
-  const E = useAlmacen(), perm = usePermisos();
-  if (E.rol !== 'admin' || !perm.mod('inventario')) return null;
-  const lista = incoherenciasFormato(E); if (!lista.length) return null;
+  const E = useAlmacen(), perm = usePermisos(), activo = E.rol === 'admin' && perm.mod('inventario');
+  const descuadres = useDescuadres(E, activo);
+  if (!activo) return null;
+  const lista = incoherenciasFormato(E, descuadres); if (!lista.length) return null;
   const n = new Set(lista.map(i => i.sku)).size;
-  return <div className="px-4 lg:px-gutter pt-4"><button onClick={() => openModal(<Revision />, { ancha: true })} className="w-full text-left flex items-center gap-3 bg-amber-50 text-amber-900 rounded-xl p-3 ring-1 ring-amber-200">
+  return <div className="px-4 lg:px-gutter pt-4"><button onClick={() => openModal(<Revision descuadres={descuadres} />, { ancha: true })} className="w-full text-left flex items-center gap-3 bg-amber-50 text-amber-900 rounded-xl p-3 ring-1 ring-amber-200">
     <Icon n="rule" className="ico-24 shrink-0" /><span className="flex-1 min-w-0"><b>{n} artículo{n === 1 ? '' : 's'} con unidad, contenido o stock que no cuadran</b>
       <span className="block text-body-sm truncate">{lista[0].nombre}: {lista[0].texto}</span></span><span className="font-semibold text-body-sm shrink-0">Revisar</span></button></div>;
 }
 
-function Revision() {
-  const E = useAlmacen(), lista = incoherenciasFormato(E);
+function Revision({ descuadres }: { descuadres: Descuadre[] }) {
+  const E = useAlmacen(), lista = incoherenciasFormato(E, descuadres);
   return (<>
     <SheetHead title="Comprobación de formatos" sub="Artículos cuya unidad, contenido y stock no cuadran. Nada se cambia sin que lo confirmes." />
     <div className="p-5 flex flex-col gap-3">
@@ -44,6 +61,7 @@ function Fila({ i }: { i: Incoherencia }) {
   return <div className="rounded-lg bg-surface-container-low p-3 flex flex-col gap-2">
     <button onClick={() => { closeModal(); abrirFicha(p.sku); }} className="text-left"><span className="font-semibold">{p.name}</span> <span className="font-mono text-label-sm text-secondary">{p.sku}</span></button>
     <p className="text-body-sm">{i.texto}</p>
+    {i.tipo === 'descuadre' && i.vehiculo && <button onClick={() => { closeModal(); abrirExtracto(i.vehiculo!, i.sku); }} className={`${BTN_S} h-11 px-4 self-start`}><Icon n="receipt_long" className="ico-20" />Ver el extracto</button>}
     {i.arreglo && <button onClick={arreglar} className={`${BTN_P} h-11 px-4 self-start`}><Icon n="build" className="ico-20" />Corregir: {i.arreglo.unidades > 0 ? '+' : ''}{num(i.arreglo.unidades)} {ucDe(p)} en {nombreVehiculo(E, i.arreglo.vehiculo).split(' · ')[0]}</button>}
   </div>;
 }

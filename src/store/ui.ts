@@ -25,6 +25,8 @@ export interface UI {
   eqTab: 'equipos' | 'vehiculos' | 'tecnicos' | 'historial' | 'cierres';
   /** E-019: orden de la lista de inventario y agrupada por categoría */
   orden: Orden; agrupar: boolean;
+  /** E-037: cierre que hay que abrir (y el artículo cuya línea se resalta) al llegar desde un extracto */
+  cierreFoco?: { id: string; sku?: string } | null;
 }
 export const ui = crearStore<UI>({ q: '', est: 'all', ubi: 'all', cat: 'all', prop: 'all', page: 1, catTab: 'cargadores', filtros: false, almacen: 'central', eqTab: 'equipos', orden: ORDEN_DEFECTO, agrupar: false });
 export const useUI = ui.use;
@@ -37,6 +39,8 @@ export function useVista(): Vista {
   return v;
 }
 export const ir = (v: Vista) => { if (location.hash.slice(1) !== v) location.hash = v; };
+/** E-037 · Abre un cierre (Equipos → Cierres) con la línea de ese artículo resaltada */
+export const irACierre = (id: string, sku?: string) => { setUI({ eqTab: 'cierres', cierreFoco: { id, sku } }); ir('equipos'); };
 
 export function useEsEscritorio() {
   const mq = '(min-width:1024px)';

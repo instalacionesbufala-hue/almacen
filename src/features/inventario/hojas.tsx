@@ -1,6 +1,7 @@
 /* Hojas (modales) del inventario: ficha, movimiento, alta/edición, recuento, selector, avisos.
    E-013: sin precios, sin números de serie y sin pasillo/estantería; el material está en el almacén o en un vehículo. */
 import { Contado, lineasContadas } from '../../ui/contado';
+import { abrirExtracto } from '../equipos/Extracto';
 import { useMemo, useState } from 'react';
 import qrcode from 'qrcode-generator';
 import type { Movimiento, Producto, TipoMov } from '../../data/tipos';
@@ -63,9 +64,13 @@ function imprimirEtiqueta(p: Producto) {
 /** Dónde está: almacén y cada vehículo (E-013) */
 export function Ubicaciones({ p }: { p: Producto }) {
   const E = useAlmacen(), u = ubicaciones(E, p);
-  return <div className="flex flex-wrap gap-1.5">{u.map(x => <span key={x.vehiculo || 'almacen'} className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-body-sm ${x.vehiculo ? (x.qty < 0 ? 'bg-error-container text-error' : 'bg-violet-50 text-violet-900') : 'bg-surface-container-low'}`}>
-    <Icon n={x.vehiculo ? 'local_shipping' : 'warehouse'} className="ico-16" />{x.donde} <b>{qtyTxt(p, x.qty)}</b></span>)}</div>;
+  return <div className="flex flex-wrap gap-1.5">{u.map(x => <Pildora key={x.vehiculo || 'almacen'} vehiculo={x.vehiculo} sku={p.sku} className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-body-sm ${x.vehiculo ? (x.qty < 0 ? 'bg-error-container text-error' : 'bg-violet-50 text-violet-900') : 'bg-surface-container-low'}`}>
+    <Icon n={x.vehiculo ? 'local_shipping' : 'warehouse'} className="ico-16" />{x.donde} <b>{qtyTxt(p, x.qty)}</b>{x.vehiculo && <Icon n="chevron_right" className="ico-16" />}</Pildora>)}</div>;
 }
+
+/** E-037: la de un vehículo abre el extracto de ese artículo en esa furgoneta */
+const Pildora = ({ vehiculo, sku, className, children }: { vehiculo?: string; sku: string; className: string; children: React.ReactNode }) =>
+  vehiculo ? <button onClick={() => abrirExtracto(vehiculo, sku)} className={`${className} hover:ring-1 hover:ring-primary`} title="Ver sus movimientos en esta furgoneta">{children}</button> : <span className={className}>{children}</span>;
 
 /* ---------- Ficha ---------- */
 export const abrirFicha = (sku: string) => openModal(<Ficha sku={sku} />);

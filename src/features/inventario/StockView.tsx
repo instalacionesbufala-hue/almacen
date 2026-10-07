@@ -1,5 +1,6 @@
 /* Stock general: panel de escritorio, inventario móvil y stock a bordo de un vehículo (E-013: sin precios ni estanterías) */
 import { AvisoCoherencia } from './Coherencia';
+import { abrirExtracto, ExtractoArticulo } from '../equipos/Extracto';
 import { Cantidad } from '../../ui/cantidad';
 import type { Estado, Producto } from '../../data/tipos';
 import { MARCA, UNIT, catDe, categoriasActivas, idsCategoriasActivas } from '../../data/catalogo';
@@ -321,7 +322,7 @@ function CardMob({ p, pedido }: { p: Producto; pedido: boolean }) {
 
 function VanView() {
   const E = useAlmacen(), u = useUI(), v = E.vehiculos.find(x => x.id === u.almacen), perm = usePermisos();
-  const [todo, setTodo] = useState(false);
+  const [todo, setTodo] = useState(false), [abierto, setAbierto] = useState<string | null>(null);
   if (!v) { setTimeout(() => setUI({ almacen: 'central' })); return null; }
   const eq = E.equipos.find(e => e.vehiculo === v.id), vs = stockDeVehiculo(E, v.id);
   return (
@@ -337,11 +338,12 @@ function VanView() {
         <input type="checkbox" checked={todo} onChange={e => setTodo(e.target.checked)} className="w-5 h-5 accent-primary" />Mostrar todo el catálogo</label>
       {todo ? <CatalogoVehiculo vehiculo={v.id} equipo={eq?.id} />
         : <div className="grid grid-cols-1 md:grid-cols-2 gap-3">{vs.length ? vs.map(x => { const p = find(E, x.sku)!; return (
-        <article key={x.sku} className={`${CARD} p-4 flex gap-3 items-center ${x.qty < 0 ? 'ring-1 ring-error/40' : ''}`}><Tile p={p} />
-          <div className="flex-1 min-w-0"><div className="font-mono text-label-sm text-secondary">{p.sku}</div><div className="font-semibold truncate">{p.name}</div>
-            {x.qty < 0 && <div className="text-body-sm text-error">Discrepancia: consta más gastado que entregado</div>}</div>
+        <article key={x.sku} className={`${CARD} p-4 flex flex-wrap gap-3 items-center ${x.qty < 0 ? 'ring-1 ring-error/40' : ''} ${abierto === x.sku ? 'md:col-span-2' : ''}`}><Tile p={p} />
+          <button onClick={() => setAbierto(abierto === x.sku ? null : x.sku)} className="flex-1 min-w-0 text-left" aria-expanded={abierto === x.sku}><div className="font-mono text-label-sm text-secondary flex items-center gap-1"><Icon n={abierto === x.sku ? 'expand_more' : 'chevron_right'} className="ico-16 text-primary" />{p.sku}</div><div className="font-semibold truncate">{p.name}</div>
+            {x.qty < 0 && <div className="text-body-sm text-error">Discrepancia: consta más gastado que entregado</div>}<div className="text-label-sm text-primary">{abierto === x.sku ? 'Ocultar movimientos' : 'Ver movimientos y saldo'}</div></button>
           <div className="text-right"><Cantidad p={p} unidades={x.unidades} className={`text-headline-md font-bold whitespace-nowrap ${x.qty < 0 ? 'text-error' : ''}`} />
             {x.qty >= 1 && (perm.mod('movimientos')) && <button onClick={() => abrirMovimiento(p.sku, 'devolucion', { vehiculo: v.id, qty: Math.floor(x.qty), lock: true, ref: `Devuelto de ${v.matricula}` })} className="font-mono text-label-sm text-primary h-10">Devolver ↩</button>}</div>
+          {abierto === x.sku && <div className="w-full border-t border-surface-container pt-3"><ExtractoArticulo vehiculo={v.id} sku={p.sku} /></div>}
         </article>); }) : <div className={`${CARD} p-8 text-center text-secondary md:col-span-2`}>Este vehículo no lleva material del almacén. Activa <b>Mostrar todo el catálogo</b> para asignarle artículos.</div>}</div>}
     </div>
   );
@@ -383,6 +385,7 @@ function CatalogoVehiculo({ vehiculo, equipo: eqId }: { vehiculo: string; equipo
       <div key={p.sku} className={`${CARD} p-3 flex items-center gap-3 ${marcado ? 'ring-2 ring-primary' : ''}`}>
         {equipo && <input type="checkbox" checked={marcado} onChange={() => alternar(p.sku)} className="w-6 h-6 accent-primary shrink-0" aria-label={`Seleccionar ${p.name}`} />}
         <Tile p={p} size="w-11 h-11" />
+        <button onClick={() => abrirExtracto(vehiculo, p.sku)} className="w-10 h-11 shrink-0 grid place-items-center text-primary" aria-label={`Movimientos de ${p.name} en este vehículo`} title="Movimientos y saldo"><Icon n="receipt_long" className="ico-20" /></button>
         <button onClick={() => abrirFicha(p.sku)} className="flex-1 min-w-0 text-left"><div className="font-semibold truncate">{p.name}</div>
           <div className="font-mono text-label-sm text-secondary">{p.sku} · almacén {qtyTxt(p, p.stock)}</div></button>
         <div className={`text-right whitespace-nowrap font-semibold ${q2 < 0 ? 'text-error' : q2 === 0 ? 'text-secondary' : ''}`}><Cantidad p={p} unidades={ud} sub="font-mono text-label-sm text-secondary font-normal" /><div className={LBL}>a bordo</div></div>

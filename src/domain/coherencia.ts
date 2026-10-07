@@ -8,9 +8,9 @@ import { fechaHora, num, redondea } from './formato';
 import { contenidoDe, find, formatoEntero, nombreVehiculo } from './reglas';
 import { ucDe } from './formatos';
 
-export type TipoIncoherencia = 'conversion' | 'fraccion_almacen' | 'contenido_en_base' | 'formato_sin_contenido' | 'diminuto_a_bordo';
+export type TipoIncoherencia = 'descuadre' | 'conversion' | 'fraccion_almacen' | 'contenido_en_base' | 'formato_sin_contenido' | 'diminuto_a_bordo';
 export interface Incoherencia {
-  sku: string; nombre: string; tipo: TipoIncoherencia; texto: string;
+  sku: string; nombre: string; tipo: TipoIncoherencia; texto: string; vehiculo?: string;
   /** Ajuste propuesto en un vehículo (en unidades de contenido): el administrador lo confirma */
   arreglo?: { vehiculo: string; unidades: number; motivo: string };
 }
@@ -38,8 +38,12 @@ function conversionesSospechosas(S: Estado): Incoherencia[] {
   return out;
 }
 
-export function incoherenciasFormato(S: Estado): Incoherencia[] {
-  const out = conversionesSospechosas(S), conAviso = new Set(out.map(i => `${i.sku}|${i.arreglo?.vehiculo}`));
+/** E-037: descuadres = furgonetas cuyo stock a bordo no coincide con la suma de sus movimientos (extracto) */
+export function incoherenciasFormato(S: Estado, descuadres: { vehiculo: string; sku: string; stock: number; calculado: number }[] = []): Incoherencia[] {
+  const out: Incoherencia[] = descuadres.map(d => { const p = find(S, d.sku); const u = p ? ucDe(p) : 'ud'; return { sku: d.sku, vehiculo: d.vehiculo, nombre: p?.name || d.sku, tipo: 'descuadre' as const,
+    texto: `${nombreVehiculo(S, d.vehiculo)}: el stock a bordo (${num(d.stock)} ${u}) no coincide con la suma de sus movimientos (${num(d.calculado)} ${u}). Diferencia de ${num(redondea(d.stock - d.calculado))} ${u}: revísalo en su extracto.` }; });
+  out.push(...conversionesSospechosas(S));
+  const conAviso = new Set(out.map(i => `${i.sku}|${i.arreglo?.vehiculo}`));
   for (const p of S.products as Producto[]) {
     if (p.borrador) continue;
     const c = contenidoDe(p), base = p.unit === 'm' || p.unit === 'ud';
