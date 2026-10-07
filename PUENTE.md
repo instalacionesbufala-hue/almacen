@@ -1108,9 +1108,42 @@ El usuario se vuelve loco y necesita verlo claro.
    - La captura del usuario se ve en metros.
    - El 3G10 queda explicado.
 
+### E-037 · Desplegable de cada material de una furgoneta con todos sus movimientos y el saldo acumulado · PENDIENTE
+**Petición del usuario (07/10):** al revisar el stock de cada equipo, **pinchar en cada material** y que salga un **desplegable con todas las entregas y descuentos** que llevan a la cifra que se muestra. Así puede ver si hay algún error en los cálculos.
+
+**Qué hacer**
+1. **Dónde:**
+   - en Equipos y técnicos → furgoneta → "A bordo" (y "Ver todo" / catálogo, E-025), cada fila de material es **desplegable** (▸). Al abrirla, se ve el **extracto** de ese artículo **en esa furgoneta**;
+   - lo mismo desde la ficha del artículo → "Dónde está" → la píldora de cada vehículo.
+2. **Extracto** (tabla, del más antiguo al más reciente, con saldo acumulado):
+   - **Columnas:** fecha y hora · tipo · referencia · cantidad (+/−) · **saldo** · quién.
+   - **Tipos y referencias:**
+     - **Entrega**: ENT-… y quién la firmó;
+     - **Consumo de cierre**: E26… · versión y origen (wizard, histórico, prefactura o corrección manual) · cliente;
+     - **Pieza entera** (E-036), con la cifra real y la redondeada: "62 m → 63 m (21 barras)";
+     - **Ajuste**, con su motivo;
+     - **Recuento**: lo contado frente a lo que constaba, y la diferencia;
+     - **Conversión de formato** (E-031);
+     - **Devolución, traspaso, corrección manual (E-035) y deshacer resolución (E-030).**
+   - **Cantidades** en la unidad base (m o ud), con el formato en pequeño (E-036).
+   - **Cada referencia es un enlace** a su entrega o a su cierre. En el cierre, abre directamente la línea de ese artículo.
+3. **Comprobación automática:** al final del extracto, "**Saldo calculado: −319 m · Stock mostrado: −319 m ✓**". Si no coinciden, aviso en rojo ("Diferencia de X: revisar") y aparece en la comprobación de incoherencias de E-036.
+4. **Resumen arriba del extracto:** total entregado · total consumido por cierres · ajustes y recuentos · saldo.
+5. **Filtros:** desde y hasta (por defecto, desde la apertura); solo entregas, solo cierres o solo ajustes. **Exportar CSV** del extracto.
+6. **Rendimiento:** la consulta va por servidor (una función por vehículo y artículo, paginada) para no cargar todo el historial.
+7. **Permisos:** administrador y almacén. Solo lectura (E-027) sí lo ve; el socio (E-034) solo para sus artículos en custodia, **sin nombres de técnicos** (quién firmó aparece como "técnico del equipo").
+8. **Hecho cuando:**
+   - Hay pruebas de: el saldo acumulado del extracto coincide con el stock a bordo (con entregas, consumos, piezas enteras, ajustes, recuento y conversión); se detecta una diferencia provocada; los enlaces llevan a la entrega y al cierre; y el socio no ve nombres.
+   - El usuario abre el H07Z1-K 10 mm² de una furgoneta y ve cómo se llega a "−319 m".
+
 ---
 
 ## Revisión del chat
+
+### 07/10/2026 · Revisión de E-036 y nuevo E-037
+- **E-036:** verificado. **521 pruebas en verde.** Bien explicado el caso del 3G10: el usuario corregirá las dos furgonetas con los botones del aviso.
+- **E-037 (nuevo):** desplegable por material de cada furgoneta con todos sus movimientos y el saldo acumulado.
+- **Orden: E-037.**
 
 ### 07/10/2026 · Revisión de E-035 y nuevo E-036
 - **E-035:** verificado. **510 pruebas en verde** (se han pasado en tandas porque ya superan los 5 minutos de una sola ejecución).
