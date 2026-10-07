@@ -1136,7 +1136,7 @@ El usuario se vuelve loco y necesita verlo claro.
    - Hay pruebas de: el saldo acumulado del extracto coincide con el stock a bordo (con entregas, consumos, piezas enteras, ajustes, recuento y conversión); se detecta una diferencia provocada; los enlaces llevan a la entrega y al cierre; y el socio no ve nombres.
    - El usuario abre el H07Z1-K 10 mm² de una furgoneta y ve cómo se llega a "−319 m".
 
-### E-038 · Retirada de material en custodia por el socio (o por un tercero en su nombre) · EN CURSO
+### E-038 · Retirada de material en custodia por el socio (o por un tercero en su nombre) · HECHO
 **Petición del usuario (07/10):** poder registrar que **Esmove**, o cualquier socio con material en custodia (E-024), **retira material suyo** del almacén: él mismo o un tercero autorizado en su nombre (otro instalador, un transportista…).
 
 **1. Nuevo movimiento "Retirada por el socio"** (administrador y almacén con permiso de movimientos):
@@ -3344,3 +3344,64 @@ Todo queda en una versión "Corrección manual por …" con la diferencia, y en 
 - **En el navegador:**
   - el desplegable de la manguera de la furgoneta de ejemplo: "ENT-2026-0412 · firmó …, +150 m, saldo 150 m" y la comprobación con ✓;
   - el enlace de un cierre abre Equipos → Cierres con ese cierre desplegado y la línea resaltada.
+
+### E-038 · Retirada de material en custodia por el socio (o un tercero en su nombre) · HECHO (07/10/2026)
+
+**Dónde:** Custodia → pestaña del socio → sección **"Retiradas de …"** → **"Registrar retirada"** (administrador y almacén con permiso de movimientos). Funciona en el móvil; lo he probado a 375 px.
+
+**1. La retirada** (`src/features/custodia/Retirada.tsx`):
+- **Socio**, y **"Sale de"**: el almacén o un vehículo. Solo se ofrecen los vehículos que llevan material de ese socio.
+- **Cesta:**
+  - buscador con solo los artículos en custodia de ese socio que hay en el origen elegido;
+  - **escáner** (cámara en lectura seguida, o código escrito): un código de otro socio o material propio se rechaza con aviso;
+  - cantidad en formato, con su equivalencia (E-036);
+  - "hay X" y aviso en rojo si se pasa del stock (en el almacén, descontando lo reservado para entregas preparadas).
+- **Quién recoge:**
+  - nombre (obligatorio) y DNI o empresa;
+  - **en nombre de**: el socio, o un **tercero autorizado** (nombre obligatorio y empresa);
+  - **motivo**: devolución al socio, traslado a otro instalador, garantía o RMA, u otro (con texto obligatorio);
+  - referencia del socio, matrícula o transportista, y notas.
+- **Firma en pantalla** de quien recoge → **"Firmar y registrar la retirada"**.
+
+**2. Justificante:** al registrar, se abre la retirada con **"Compartir PDF"** y **"Descargar"** (`retiradaPdf.ts`). Es el **"Albarán de retirada de material en custodia RET-AAAA-NNNN"** y lleva:
+- el socio, de dónde sale, quién recoge y en nombre de quién;
+- el motivo y la referencia;
+- las líneas (artículo, código, cantidad en formato y unidad base);
+- la firma y la huella SHA-256;
+- si está anulada, lo indica.
+
+**3. Dónde se refleja:**
+- **Stock:** baja en el almacén (movimiento de salida "Retirada por el socio · RET-…") o a bordo del vehículo (movimiento con `vehiculo_id`, que no toca el almacén). Todos los movimientos llevan `retirada_id`.
+- **Extracto de E-037:** la línea sale como "Retirada por el socio · RET-…", y la comprobación sigue cuadrando.
+- **Informe de custodia** (el de la app y el del correo):
+  - sección nueva **"Retirado por el socio"**, con el albarán y el origen;
+  - las retiradas ya no se mezclan con "Instalado en obra";
+  - las anulaciones aparecen con su motivo.
+- **Lo que ve el socio (E-034):** su sección de retiradas y el PDF. `datos_socio` devuelve sus retiradas **con la firma y quién recogió**, sin el usuario interno, y las de otro socio no las ve.
+- **Acta de recuento y reposición:** trabajan con el stock ya descontado.
+
+**4. Reglas:**
+- **Historial inalterable:** un disparador impide modificar o borrar una retirada; solo puede pasar una vez de firmada a anulada.
+- **Anular** (solo administrador, con motivo; botón en la retirada): crea movimientos inversos enlazados (`corrige`) que devuelven el stock al almacén o al vehículo, y queda "Anulada por … el …: motivo".
+- **Idempotencia:** el UUID lo genera la app; si se reenvía, el resultado es "duplicado" y no se mueve nada.
+- **Auditoría:** `registrar_retirada` y `anular_retirada`.
+
+**Servidor** (migración `20261028000100_e038_retiradas_socio.sql`):
+- tabla `retiradas` (RLS: `movimientos.ver` o `custodia.ver`), secuencia RET y `movimientos.retirada_id`;
+- `registrar_retirada(id, datos)` (`movimientos.modificar`): valida todo antes de mover nada;
+- `anular_retirada(id, motivo)`;
+- `datos_socio` y `limpiar_demostracion` reescritas en el sitio, con los anclajes comprobados.
+- La función `notificar` se ha redesplegado por el cambio del informe.
+
+**Pruebas: 539 en verde** (240 de la app y 299 de la base).
+- `supabase/tests/e038.test.ts` (5):
+  - desde el almacén: número RET-0001, huella, stock, movimiento enlazado, idempotencia y auditoría;
+  - rechaza material de otro socio, material propio, más del stock, la falta de firma y la falta del tercero; respeta lo reservado;
+  - desde un vehículo: baja a bordo y sale en el extracto con el saldo cuadrado;
+  - el almacén la registra, pero no la anula; el administrador la anula, el stock vuelve y la retirada no se puede modificar ni borrar;
+  - el socio la ve en `datos_socio`, con firma y sin usuario, y no puede leer la tabla ni registrar.
+- `src/domain/e038.test.ts` (4): lo mismo en la app, y el informe con la sección "Retirado por el socio".
+- `tsc -b`, `deno check` de `notificar` y build correctos.
+- **En el navegador, con tamaño de móvil y datos inventados:**
+  - retirada de 1 Wallbox de Esmove desde Búfala 1, recogida por un tercero en su nombre, con firma → RET-2026-0001, Búfala 1 de 2 a 1 y PDF generado;
+  - después, anulada con motivo → vuelve a 2, con el movimiento inverso.

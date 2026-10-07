@@ -100,6 +100,17 @@ export interface EnvioAviso { id: string; ts: number; canal: 'correo' | 'push' |
   entrega?: string; destinatarios?: string[]; reintentos?: number }
 export interface ActaCustodia { id: string; numero?: string; ts: number; propietario: string; representante: string; firma: string; lineas: { sku: string; sistema: number; contado: number }[]; hash?: string; operator: string }
 
+/** E-038 · Retirada de material en custodia por el socio (o un tercero en su nombre), con firma y número RET-AAAA-NNNN */
+export interface Retirada {
+  id: string; numero?: string; ts: number; socio: string;
+  /** Origen: vacío = almacén */ vehiculo?: string;
+  recoge: string; recogeDoc?: string; enNombre: 'socio' | 'tercero'; tercero?: string; terceroEmpresa?: string;
+  motivo: 'devolucion' | 'traslado' | 'garantia' | 'otro'; motivoTexto?: string; referencia?: string; transporte?: string; notas?: string;
+  /** cantidad en formatos; unidades en la unidad del contenido */
+  lineas: { sku: string; nombre: string; cantidad: number; unidades: number }[];
+  firma: string; hash?: string; estado: 'firmada' | 'anulada'; anuladaTs?: number; anuladaPor?: string; anulacionMotivo?: string; operator: string;
+}
+
 export interface Propietario { id: string; nombre: string; contacto: string; correosReposicion: string[]; correosInformes: string[];
   /** E-024: socio desactivado (sin artículos); se conserva para el historial */ activo?: boolean;
   /** E-024: color de su etiqueta (clave de COLORES_SOCIO) */ color?: string }
@@ -127,6 +138,8 @@ export interface Movimiento {
   /** E-016: albarán de una entrada y movimiento que corrige (reasignación, fusión) */
   albaran?: string;
   corrige?: string;
+  /** E-038: retirada por el socio a la que pertenece */
+  retirada?: string;
 }
 
 /** E-020: código alternativo de un artículo (un código, un solo artículo) */
@@ -345,6 +358,8 @@ export interface Estado {
   portalEnlaces: EnlacePortal[];
   copias: CopiaEntrega[];
   actas: ActaCustodia[];
+  /** E-038 */
+  retiradas?: Retirada[];
   /** E-011: entrega en curso (se conserva en el dispositivo si se cierra la app) */
   /** E-034: el usuario es de este socio de custodia (solo ve su material) */
   socio?: string;

@@ -20,6 +20,7 @@ import { abrirReposicion } from '../reposicion/Reposicion';
 import { fotosInforme } from '../fotos/servicio';
 import { colorSocio } from '../../domain/socios';
 import { ir } from '../../store/ui';
+import { ListaRetiradas } from './Retirada';
 
 export default function CustodiaView() {
   const E = useAlmacen(), perm = usePermisos();
@@ -64,6 +65,7 @@ export default function CustodiaView() {
           {!E.actas.some(a => a.propietario === prop) && <p className="text-body-sm text-secondary">Cuando {o?.nombre} venga a verificar, genera el acta con lo contado y su firma.</p>}</section>
         {perm.admin && o && <DatosPropietario id={o.id} />}
       </div>
+      <ListaRetiradas socio={prop} />
       <Instalaciones skus={new Set(prods.map(p => p.sku))} nombre={o?.nombre || prop} />
     </div>
   );

@@ -19,7 +19,10 @@ const numero = (n: number) => new Intl.NumberFormat('es-ES', { maximumFractionDi
 export function construirInforme(d: DatosInforme): Informe {
   const skus = new Set(d.productos.map(p => p.sku));
   const nombre = new Map(d.productos.map(p => [p.sku, p.nombre]));
-  const mov = d.movimientos.filter(m => skus.has(m.sku) && m.ts >= d.desde && m.ts < d.hasta).sort((a, b) => a.ts - b.ts);
+  const enPeriodo = d.movimientos.filter(m => skus.has(m.sku) && m.ts >= d.desde && m.ts < d.hasta).sort((a, b) => a.ts - b.ts);
+  // E-038: lo que retiró el socio (o un tercero en su nombre) y sus anulaciones, en su propia sección
+  const esRetirada = (m: MovimientoInforme) => m.motivo === 'Retirada por el socio' || (m.motivo || '').startsWith('Anulación de retirada');
+  const retiradas = enPeriodo.filter(esRetirada), mov = enPeriodo.filter(m => !esRetirada(m));
   const entradas = mov.filter(m => m.tipo === 'entrada');
   // instalado en obra: salidas del almacén y consumos desde el vehículo (cierres, E-012)
   const salidas = mov.filter(m => m.tipo === 'salida' || m.tipo === 'consumo');
@@ -39,6 +42,9 @@ export function construirInforme(d: DatosInforme): Informe {
       filas: salidas.map(m => fila(m, [m.referencia, m.vehiculo ? `vehículo ${m.vehiculo}` : ''].filter(Boolean).join(' · ') || m.motivo)) },
     ...(sinGestion.length ? [{ titulo: 'Instalado (antes de la gestión del almacén)', columnas: ['Fecha', 'Referencia', 'Descripción', 'Cantidad', 'Obra', 'Equipo'],
       filas: sinGestion.map(x => [fechaHora(x.ts), x.sku, nombre.get(x.sku) || x.sku, numero(x.cantidad), x.referencia, x.equipo || '']) }] : []),
+    ...(retiradas.length ? [{ titulo: 'Retirado por el socio', columnas: ['Fecha', 'Referencia', 'Descripción', 'Cantidad', 'Albarán de retirada', 'Desde'],
+      filas: retiradas.map(m => [fechaHora(m.ts), m.sku, nombre.get(m.sku) || m.sku, (m.motivo === 'Retirada por el socio' ? '−' : '+') + numero(Math.abs(m.cantidad)),
+        m.motivo === 'Retirada por el socio' ? m.referencia : `${m.motivo} (${m.referencia})`, m.vehiculo ? `vehículo ${m.vehiculo}` : 'almacén']) }] : []),
     { titulo: 'Incidencias (daños y pérdidas)', columnas: ['Fecha', 'Referencia', 'Descripción', 'Cantidad', 'Motivo', 'Registrado por'],
       filas: incidencias.map(m => fila(m, [m.motivo, m.referencia].filter(Boolean).join(' · '))) },
     { titulo: 'Entregado a equipos y devuelto', columnas: ['Fecha', 'Referencia', 'Descripción', 'Cantidad', 'Movimiento', 'Registrado por'],

@@ -2,6 +2,7 @@
    - aplicarse en local (validación previa con src/domain y respuesta inmediata en pantalla), y
    - traducirse a su función SQL del servidor (la fuente de verdad en modo nube).
    En modo nube la operación se guarda en la cola y se reaplica en local hasta que el servidor la confirma. */
+import { anularRetiradaLocal, registrarRetiradaLocal, type DatosRetirada } from '../domain/retiradas';
 import { recalcularConsumoPiezasLocal } from '../domain/cierres';
 import { corregirCierreLocal, type Correccion } from '../domain/corregir';
 import { rolValidoParaSocio } from '../../supabase/functions/_compartido/permisos';
@@ -101,6 +102,8 @@ export type Op =
   | { op: 'resolverLinea'; args: { linea: string; sku: string; cantidad?: number } }
   | { op: 'corregirCierre'; args: { id: string; correccion: Correccion } }
   | { op: 'recalcularConsumoPiezas'; args: { sku: string; desde: number } }
+  | { op: 'retirada'; args: { id: string; datos: DatosRetirada } }
+  | { op: 'anularRetirada'; args: { id: string; motivo: string } }
   | { op: 'cambiarFormato'; args: { sku: string; formato: NuevoFormato; modo: ModoConversion } }
   | { op: 'resolverLineaVarios'; args: { linea: string; grupo: string; articulos: ArticuloResolucion[] } }
   | { op: 'deshacerResolucion'; args: { linea: string } }
@@ -835,6 +838,18 @@ export const OPS: Defs = {
     },
     rpc: a => ['encolar_envio', { p_canal: a.canal, p_tipo: a.tipo, p_asunto: a.asunto, p_cuerpo: a.cuerpo, p_destinatarios: a.destinatarios, p_adjunto_csv: a.csv ?? null }],
     desc: (_S, a) => `Envío (${a.canal}): ${a.asunto}`,
+  },
+  /* ---------- E-038 · Retirada de material en custodia por el socio ---------- */
+  retirada: {
+    local: (S, a) => { registrarRetiradaLocal(S, a.id, a.datos, S.operator); },
+    rpc: ({ id, datos: d }) => ['registrar_retirada', { p_id: id, p: { socio: d.socio, vehiculo: d.vehiculo || null, recoge: d.recoge, recogeDoc: d.recogeDoc || '', enNombre: d.enNombre, tercero: d.tercero || '',
+      terceroEmpresa: d.terceroEmpresa || '', motivo: d.motivo, motivoTexto: d.motivoTexto || '', referencia: d.referencia || '', transporte: d.transporte || '', notas: d.notas || '', firma: d.firma, lineas: d.lineas } }],
+    desc: (S, a) => `Retirada de ${S.propietarios.find(o => o.id === a.datos.socio)?.nombre || a.datos.socio} (${a.datos.lineas.length} artículo${a.datos.lineas.length === 1 ? '' : 's'})`,
+  },
+  anularRetirada: {
+    local: (S, a) => { anularRetiradaLocal(S, a.id, a.motivo, S.operator); },
+    rpc: a => ['anular_retirada', { p_id: a.id, p_motivo: a.motivo }],
+    desc: (S, a) => `Anular la retirada ${S.retiradas?.find(r => r.id === a.id)?.numero || ''}`,
   },
   acta: {
     local: (S, a) => {
