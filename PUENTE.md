@@ -1077,9 +1077,48 @@ El rol "Solo lectura" de E-027 no sirve: los permisos son por apartado (Ver/Modi
 **4. Hecho cuando**
 - Hay pruebas de: corregir la fase con recálculo de 3 a 5 conductores; cambiar el cargador de una línea resuelta por regla, con ajustes enlazados; quitar y añadir líneas; que la corrección prevalece sobre una prefactura posterior; "Volver a lo automático"; y la regla nueva del Policharger trifásico.
 
+### E-036 · Ver el material en metros (o unidades), consumo por pieza entera y la incoherencia del RZ1-K 3G10 · PENDIENTE (urgente)
+**Captura del usuario (07/10, stock a bordo de una furgoneta).** Los cierres llegan en **metros**, pero muchos artículos están en cajas, rollos o barras (E-031), y la vista principal muestra el formato:
+- "**−3,19 cajas**" (en pequeño "−319 m") del cable H07Z1-K 10 mm²;
+- "−0,19 cajas" de Cat6;
+- "−0,5 cajas" de clavos;
+- "**−20,67 barras**" (−62 m) de tubo PVC;
+- "**0,8 m**" en el **RZ1-K 3G10 (6040615310)**, que **no se sabe si son 0,8 m u 80 m**.
+
+El usuario se vuelve loco y necesita verlo claro.
+
+**Decisiones del usuario:**
+1. **El material que se gasta en metros se ve siempre en metros.** "−319 m", y el formato solo como dato secundario ("≈ 3,19 cajas de 100 m"). Igual para lo que se gasta en unidades sueltas: "−250 ud" (≈ 0,5 cajas de 500).
+2. **El tubo PVC rígido se descuenta por barras enteras de 3 m.** No puede haber 20,67 barras: deben ser **21**.
+
+**Qué hacer**
+1. **Unidad de visualización = unidad de consumo.** Para artículos con contenido (E-031), la cantidad **principal** en **todas** las vistas (inventario, furgonetas, cierres, consumo del periodo, recuentos, informes, CSV y portal del socio) es la **unidad base** (m o ud), y el formato va en pequeño: "−319 m · ≈ 3,19 cajas de 100 m".
+   - **Excepción, en el almacén y en las entregas:** se sigue entregando por formato entero ("Entregar 2 cajas = 200 m"), mostrando siempre la equivalencia.
+   - Opción por artículo **"Mostrar en formato"**, para el que lo prefiera (por ejemplo, botes de tacos). Por defecto: unidad base.
+2. **Consumo por pieza entera** (opción por artículo, **"Se gasta por pieza entera"**). Con ella, **cada cierre descuenta piezas enteras redondeando hacia arriba**: 62 m de PVC son **21 barras (63 m)**.
+   - Activarla por defecto en los formatos `barra` (PVC rígido 6201000032 y acero 6203000032).
+   - La línea del cierre muestra "62 m → 21 barras (63 m)".
+   - Los cierres ya aplicados **no** se recalculan solos; ofrecer "Recalcular cierres desde…" para esos artículos.
+3. **RZ1-K 3G10 (6040615310) con "0,8 m":** revisar en producción, **en solo lectura**, su unidad, contenido, stock y movimientos, y explicar qué pasa (¿formato con contenido 100 mal convertido?, ¿etiqueta de unidad equivocada?).
+   - Proponer el arreglo, **sin tocar datos**: por ejemplo, un ajuste de conversión que el usuario confirme.
+   - Añadir una **comprobación** que avise de artículos cuya unidad, contenido y stock sean incoherentes.
+4. **Recuentos:** se cuenta en la unidad base (metros) o en formato ("3 cajas y 40 m"), y la app muestra las dos.
+5. **Hecho cuando:**
+   - Hay pruebas de: la vista en metros con el formato secundario; el redondeo por barra entera en un cierre (62 m → 21 barras), sin redondear los artículos sin la opción; y la detección de incoherencias.
+   - La captura del usuario se ve en metros.
+   - El 3G10 queda explicado.
+
 ---
 
 ## Revisión del chat
+
+### 07/10/2026 · Revisión de E-035 y nuevo E-036
+- **E-035:** verificado. **510 pruebas en verde** (se han pasado en tandas porque ya superan los 5 minutos de una sola ejecución).
+- **E-036 (urgente, nuevo):**
+  - el material se ve en metros (o unidades), con el formato como dato secundario;
+  - el PVC se gasta por barra entera;
+  - hay que explicar el "0,8 m" del RZ1-K 3G10.
+- **Orden: E-036.**
 
 ### 06/10/2026 · Revisión de E-034 y nuevo E-035
 - **E-034:** verificado. **498 pruebas en verde.** La seguridad (RLS denegada por defecto para el socio y `datos_socio` con columnas permitidas) está bien.
