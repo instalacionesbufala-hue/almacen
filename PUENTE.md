@@ -1136,6 +1136,37 @@ El usuario se vuelve loco y necesita verlo claro.
    - Hay pruebas de: el saldo acumulado del extracto coincide con el stock a bordo (con entregas, consumos, piezas enteras, ajustes, recuento y conversión); se detecta una diferencia provocada; los enlaces llevan a la entrega y al cierre; y el socio no ve nombres.
    - El usuario abre el H07Z1-K 10 mm² de una furgoneta y ve cómo se llega a "−319 m".
 
+### E-038 · Retirada de material en custodia por el socio (o por un tercero en su nombre) · PENDIENTE (después de E-037)
+**Petición del usuario (07/10):** poder registrar que **Esmove**, o cualquier socio con material en custodia (E-024), **retira material suyo** del almacén: él mismo o un tercero autorizado en su nombre (otro instalador, un transportista…).
+
+**1. Nuevo movimiento "Retirada por el socio"** (administrador y almacén con permiso de movimientos):
+- **Origen:** el almacén y, opcionalmente, un vehículo (si el socio lo recoge directamente de una furgoneta).
+- **Socio:** desplegable de socios activos. Solo se pueden añadir a la retirada **artículos en custodia de ese socio**; nunca material propio de Búfala ni de otro socio.
+- **Cesta** igual que la de las entregas (E-011): buscador y escáner, cantidades en formato con su equivalencia (E-036), y aviso si se intenta retirar más de lo que hay.
+- **Datos de la retirada:**
+  - **quién recoge**: nombre, y DNI o empresa (opcional);
+  - **"En nombre de"**: el socio (por defecto) o un tercero autorizado, con su empresa;
+  - **motivo**: devolución al socio, traslado a otro instalador, garantía o RMA, u otro (texto);
+  - **referencia del socio** (n.º de pedido, RMA o albarán, opcional);
+  - matrícula o transportista (opcional) y notas.
+- **Firma en pantalla** de quien recoge, como en las entregas.
+
+**2. Justificante:** PDF **"Albarán de retirada de material en custodia"** con número propio (RET-AAAA-NNNN), datos del socio, quién recoge y en nombre de quién, líneas (artículo, código, cantidad en unidad y formato), motivo, referencia y firma. Botones **"Compartir PDF"** y **"Descargar"**, como en E-011.
+
+**3. Dónde se refleja:**
+- **El stock en custodia** del socio baja en el almacén o en el vehículo de origen.
+- **El extracto de E-037** (y los movimientos) muestra "Retirada por Esmove · RET-…".
+- **Informe de custodia y portal del socio (E-034):** la retirada con su justificante, y el socio puede descargar el PDF. En el portal del socio aparece quién recogió, porque es un dato de la retirada, no de un técnico de Búfala.
+- **Acta de recuento y solicitudes de reposición:** cuentan con el stock ya descontado.
+
+**4. Reglas:**
+- **Historial inalterable:** una retirada mal hecha se **anula** con un movimiento inverso enlazado (solo administrador, con motivo), igual que una entrega.
+- **Idempotencia:** UUID de cliente, como el resto de operaciones.
+
+**5. Hecho cuando**
+- Hay pruebas de: la retirada solo admite artículos de ese socio; no se puede retirar más del stock; el stock y el extracto bajan; el PDF lleva firma y número; el socio ve su retirada en el portal; y una anulación devuelve el stock.
+- El usuario registra desde el móvil una retirada de cargadores de Esmove recogidos por un tercero en su nombre.
+
 ---
 
 ## Revisión del chat
@@ -1143,7 +1174,8 @@ El usuario se vuelve loco y necesita verlo claro.
 ### 07/10/2026 · Revisión de E-036 y nuevo E-037
 - **E-036:** verificado. **521 pruebas en verde.** Bien explicado el caso del 3G10: el usuario corregirá las dos furgonetas con los botones del aviso.
 - **E-037 (nuevo):** desplegable por material de cada furgoneta con todos sus movimientos y el saldo acumulado.
-- **Orden: E-037.**
+- **E-038 (nuevo, 07/10):** retirada de material en custodia por el socio o por un tercero en su nombre, con firma y albarán de retirada.
+- **Orden: E-037 → E-038.**
 
 ### 07/10/2026 · Revisión de E-035 y nuevo E-036
 - **E-035:** verificado. **510 pruebas en verde** (se han pasado en tandas porque ya superan los 5 minutos de una sola ejecución).
