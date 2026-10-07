@@ -1077,7 +1077,7 @@ El rol "Solo lectura" de E-027 no sirve: los permisos son por apartado (Ver/Modi
 **4. Hecho cuando**
 - Hay pruebas de: corregir la fase con recálculo de 3 a 5 conductores; cambiar el cargador de una línea resuelta por regla, con ajustes enlazados; quitar y añadir líneas; que la corrección prevalece sobre una prefactura posterior; "Volver a lo automático"; y la regla nueva del Policharger trifásico.
 
-### E-036 · Ver el material en metros (o unidades), consumo por pieza entera y la incoherencia del RZ1-K 3G10 · PENDIENTE (urgente)
+### E-036 · Ver el material en metros (o unidades), consumo por pieza entera y la incoherencia del RZ1-K 3G10 · HECHO
 **Captura del usuario (07/10, stock a bordo de una furgoneta).** Los cierres llegan en **metros**, pero muchos artículos están en cajas, rollos o barras (E-031), y la vista principal muestra el formato:
 - "**−3,19 cajas**" (en pequeño "−319 m") del cable H07Z1-K 10 mm²;
 - "−0,19 cajas" de Cat6;
@@ -3129,3 +3129,92 @@ Todo queda en una versión "Corrección manual por …" con la diferencia, y en 
 - `src/domain/e035.test.ts` (5): lo mismo en la app, el paso de 3 a 5 conductores solo cambiando la fase, y el informe del socio con el cargador corregido.
 - `tsc -b`, `deno check` y build correctos.
 - **En el navegador (demo con E2632405):** "Corregir cierre" → Bajo tubo + NW-DBLT23F → Guardar → 5 conductores, cargador fijado, 2690NKC en 0 y 0, y la versión "Corrección manual por …".
+
+### E-036 · Material en metros, consumo por pieza entera y el RZ1-K 3G10 · HECHO (07/10/2026)
+
+**1. Se ve en la unidad en que se gasta.**
+- Para los artículos con formato y contenido (caja de 100 m, bote de 500 ud, barra de 3 m), la cifra **principal es la unidad base** y el formato va debajo, en pequeño:
+  - "−319 m" / "≈ −3,19 cajas de 100 m";
+  - "−250 ud" / "≈ −0,5 cajas de 500 ud";
+  - "−62 m" / "≈ −20,67 barras de 3 m".
+- Está en todas las vistas:
+  - furgonetas y su catálogo;
+  - lista y tarjetas del inventario (almacén, mínimo y en vehículos);
+  - ficha y "dónde está";
+  - cierres: líneas, consumo del periodo, no entregados, discrepancias y "consta" del recuento;
+  - custodia y, por tanto, lo que ve el socio;
+  - avisos;
+  - CSV del inventario, CSV del stock y CSV de consumos, más la vista de impresión.
+- **Los CSV cambian de columnas:** "Almacén", cada vehículo, "Total" y "Mínimo" van en la unidad base, con "Unidad" (m o ud), "Formato" ("caja de 100 m") y "Total en formatos".
+- **Excepción, entregas:** en la cesta, el justificante y la hoja de entrega se sigue entregando por formato entero, con la equivalencia: "2 cajas (200 m)".
+  - En los formularios de entrada, salida y ajuste del almacén se escribe en formatos, como siempre, y el texto muestra las dos cifras.
+- **Opción por artículo "Mostrar en formato"** (al editar la ficha): lo invierte ("0,5 cajas" / "250 ud"). Por defecto está desactivada.
+- Funciones nuevas en `src/domain/reglas.ts`: `vista` / `vistaUnidades` / `qtyTxt` (cifra principal y secundaria) y `enVista` (para los CSV). Componente nuevo `src/ui/cantidad.tsx`.
+
+**2. Consumo por pieza entera.**
+- Columna nueva `productos.pieza_entera`.
+- **`_sincronizar_cierre` redondea hacia arriba, por cierre, el objetivo de ese artículo** (reescrito en el sitio, con el texto comprobado):
+  - 62 m de PVC son 21 barras (63 m);
+  - 63 m siguen siendo 21 barras, sin redondear de más;
+  - los artículos sin la opción no se redondean (el corrugado, 62 m justos).
+- La línea del cierre muestra "62 m → 21 barras (63 m)". El consumo del periodo cuenta lo que de verdad se descontó.
+- **Activada por defecto en las barras:**
+  - la migración la ha puesto en producción en el PVC rígido (6201000032) y el acero (6203000032), los dos únicos productos en barra;
+  - `guardar_producto` la pone en las altas en barra;
+  - en la ficha es una casilla, "Se gasta por pieza entera".
+- **Los cierres ya aplicados no cambian solos.** La ficha de cada artículo con formato tiene **"Recalcular cierres desde [fecha]"** (`recalcular_consumo_piezas(sku, desde)`, solo administrador, con permiso `cierres.modificar`):
+  - vuelve a sincronizar los cierres de ese artículo;
+  - deja una versión "Consumo de … recalculado por … (por pieza entera)" con la diferencia;
+  - lo registra en la auditoría.
+  - **No lo he lanzado en producción:** lo decides tú.
+
+**3. El "0,8 m" del RZ1-K 3G10 (6040615310), revisado en solo lectura.**
+- **Qué pasó:**
+  - El artículo estaba en metros. El 05/10 a las 15:13 se cambió a "rollo de 100 m" conservando la cantidad: el almacén pasó de 200 m a 2 rollos, bien.
+  - El 06/10 a las 07:20 entró el albarán 3.346.020 con 83 (estando aún en rollos, eran 83 rollos).
+  - A las 07:22 se volvió a "metros" eligiendo **"El stock ya está en metros (no convertir)"**. Esa opción conserva el número de formatos:
+    - en el almacén, 84 rollos pasaron a ser 84 m (luego lo arreglaste con el ajuste "Error" de +199);
+    - **las furgonetas, que siempre guardan metros, se dividieron entre 100: 7463LVN pasó de 80 m a 0,8 m y 4299NGK, de 131 m a 1,31 m.**
+- **Qué hay ahora:**
+  - 7463LVN tiene **0,8 m y deberían ser 80 m**;
+  - 4299NGK tiene **184,31 m y deberían ser 314 m** (131 + 83 + 100);
+  - Búfala 1 (100 m) está bien;
+  - el almacén (200 m) cuadra con los movimientos.
+  - Ni la unidad ni el contenido están mal ahora: el error está en lo que se convirtió en las dos furgonetas.
+- **Arreglo propuesto (no he tocado nada):** en Inventario sale el aviso **"1 artículo con unidad, contenido o stock que no cuadran → Revisar"**. Tiene dos botones:
+  - "Corregir: +79,2 m en 7463LVN";
+  - "Corregir: +129,69 m en 4299NGK".
+  - Cada uno pide confirmación y hace un ajuste en esa furgoneta ("Corrección de conversión de formato del 06/10…", sin cambio físico).
+  - Si prefieres contarlas, el recuento de la furgoneta sirve igual.
+- **Comprobación nueva** (`src/domain/coherencia.ts`, aviso en Inventario solo para el administrador). Avisa de:
+  - conversiones que multiplicaron o dividieron por 10 o más lo que llevaba una furgoneta, sin corregir después (es el caso del 3G10);
+  - artículos en m o ud con contenido distinto de 1;
+  - formatos sin contenido;
+  - fracciones de formato en el almacén cuando se mueven formatos enteros;
+  - menos de 1 m a bordo en un artículo en metros.
+  - En producción hoy solo sale el 3G10.
+- **Para que no vuelva a pasar:** al cambiar el formato, la opción "no convertir" avisa en rojo si las furgonetas fueran a multiplicar o dividir su cantidad física por 10 o más.
+- **Otra cosa que he visto:** el albarán 3.353.758 (07/10, 09:18) tiene **dos entradas de 100 m** del 3G10 a la misma hora. Si era una sola línea, hay 100 m de más en el almacén.
+
+**4. Recuentos.**
+- En el recuento de una furgoneta (y en el del almacén, en los formatos con metros sueltos) se puede contar **en formatos más sueltos o solo en la unidad base**: "3 cajas + 40 m", o "0 + 340 m".
+  - Ahora también en formatos de unidades: "1 caja + 250 ud".
+- Debajo se ve el total con las dos cifras: "= 340 m · ≈ 3,4 cajas de 100 m".
+
+**Producción:** migración `20261026000100_e036_pieza_entera.sql` aplicada. Solo cambia la opción en las dos barras; no se ha tocado ningún stock ni ningún cierre. No hay cambios en las funciones de Supabase.
+
+**Pruebas: 521 en verde** (232 de la app y 289 de la base).
+- `src/domain/e036.test.ts` (7):
+  - la captura del usuario en metros, con "Mostrar en formato" y la excepción de las entregas;
+  - el CSV;
+  - 62 m → 21 barras frente al corrugado sin redondear;
+  - "Recalcular cierres desde…" con versión;
+  - el caso del 3G10 reproducido (80 m → 0,8 m), con el aviso y el ajuste propuesto que lo devuelve a 80 m;
+  - los otros tipos de incoherencia;
+  - el recuento en metros o en formato.
+- `supabase/tests/e036.test.ts` (4): pieza entera por defecto en las barras, y las opciones que se conservan; 62 m → 63 m en la base; el recálculo con versión y auditoría; solo el administrador.
+- Se han actualizado 3 pruebas antiguas (E-013 y E-031) que esperaban el formato como cifra principal.
+- `tsc -b` y build correctos.
+- **En el navegador** (demo con la captura reproducida):
+  - la furgoneta muestra "−319 m / ≈ −3,19 cajas de 100 m", "−250 ud", "−62 m / ≈ −20,67 barras de 3 m" y "0,8 m";
+  - el aviso de Inventario propone +79,2 m y, al confirmarlo, deja 80 m y desaparece.

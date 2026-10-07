@@ -30,8 +30,8 @@ describe('formatos de venta (E-013)', () => {
   it('bote, sobre, bolsa y caja con su contenido; se escriben en plural', () => {
     const tacos = find(S, 'BF-FIX-SX6')!, rj = find(S, '7280040020')!;
     expect(contenidoTxt(tacos)).toBe('bote de 1000 ud');
-    expect(qtyTxt(tacos, 3)).toBe('3 botes');
-    expect(qtyTxt(rj, 1)).toBe('1 sobre');
+    expect(qtyTxt(tacos, 3)).toBe('3000 ud · 3 botes de 1000 ud');   // E-036: en la unidad en que se gasta
+    expect(qtyTxt(rj, 1)).toBe('25 ud · 1 sobre de 25 ud');
     expect(qtyTxt(find(S, 'CAB-RZ1K-5G6')!, 12.5)).toBe('12,5 m');
   });
   it('en el almacén se mueven formatos enteros (el bote completo); los metros admiten decimales', () => {

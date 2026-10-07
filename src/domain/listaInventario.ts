@@ -1,9 +1,7 @@
 /* E-019 · Inventario completo en una sola lista: orden por columna, agrupado por categoría, CSV y vista de impresión de la lista filtrada */
-import { ucDe } from './formatos';
 import type { Estado, Producto } from '../data/tipos';
 import { UNIT, catDe } from '../data/catalogo';
-import { ORD, status, stockTotal, unidadesABordo, contenidoDe, nombreVehiculo } from './reglas';
-import { redondea } from './formato';
+import { ORD, status, stockTotal, unidadesABordo, contenidoDe, contenidoTxt, enVista, nombreVehiculo, qtyTxt, vista, vistaUnidades } from './reglas';
 
 export type ColOrden = 'sku' | 'nombre' | 'stock' | 'estado';
 export interface Orden { col: ColOrden; dir: 1 | -1 }
@@ -33,12 +31,12 @@ export function agruparPorCategoria(lista: Producto[]): { cat: string; label: st
 export function filasCsvInventario(E: Estado, lista: Producto[]): (string | number)[][] {
   const vs = E.vehiculos;
   return [
-    ['SKU', 'Nombre', 'Categoría', 'Propiedad', 'Almacén', ...vs.map(v => `Vehículo ${nombreVehiculo(E, v.id)}`), 'En vehículos', 'Total', 'Unidad', 'Contenido', 'Unidad del contenido', 'Total en unidad del contenido', 'Mínimo almacén', 'Estado', 'Proveedor', 'Código proveedor', 'EAN'],
+    ['SKU', 'Nombre', 'Categoría', 'Propiedad', 'Almacén', ...vs.map(v => `Vehículo ${nombreVehiculo(E, v.id)}`), 'En vehículos', 'Total', 'Unidad', 'Formato', 'Total en formatos', 'Mínimo almacén', 'Estado', 'Proveedor', 'Código proveedor', 'EAN'],
     ...lista.map(p => {
-      const t = stockTotal(E, p);
+      const t = stockTotal(E, p), x = (f: number) => enVista(p, f).n;      // E-036: en la unidad en que se ve (m o ud), el formato aparte
       return [p.sku, p.name, catDe(p.cat).label, p.propiedad === 'custodia' ? `Custodia ${E.propietarios.find(o => o.id === p.propietario)?.nombre || ''}` : 'Propio',
-        p.stock, ...vs.map(v => redondea(unidadesABordo(E, v.id, p.sku) / contenidoDe(p))), redondea(t - p.stock), t, UNIT[p.unit], p.contenido || 1, ucDe(p), redondea(t * contenidoDe(p)),
-        p.minimoDefinido === false ? '' : p.min, { red: 'Crítico', amber: 'Bajo', green: 'Correcto' }[status(p)], p.supplier, p.supplierRef || '', p.ean || ''];
+        x(p.stock), ...vs.map(v => x(unidadesABordo(E, v.id, p.sku) / contenidoDe(p))), x(t - p.stock), x(t), enVista(p, 1).u, contenidoTxt(p) || UNIT[p.unit], t,
+        p.minimoDefinido === false ? '' : x(p.min), { red: 'Crítico', amber: 'Bajo', green: 'Correcto' }[status(p)], p.supplier, p.supplierRef || '', p.ean || ''];
     }),
   ];
 }
@@ -47,8 +45,8 @@ const esc = (s: unknown) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&am
 /** Vista limpia para imprimir: código, descripción, categoría, almacén, cada vehículo y mínimo. Sin fotos. */
 export function htmlImprimirInventario(E: Estado, lista: Producto[], titulo: string, filtros = ''): string {
   const vs = E.vehiculos.filter(v => lista.some(p => unidadesABordo(E, v.id, p.sku) !== 0));
-  const n = (x: number) => new Intl.NumberFormat('es-ES', { maximumFractionDigits: 3 }).format(x);
-  const filas = lista.map(p => `<tr><td class="m">${esc(p.sku)}</td><td>${esc(p.name)}</td><td>${esc(catDe(p.cat).label)}</td><td class="n">${n(p.stock)} ${esc(UNIT[p.unit])}</td>${vs.map(v => { const q = redondea(unidadesABordo(E, v.id, p.sku) / contenidoDe(p)); return `<td class="n">${q ? n(q) : ''}</td>`; }).join('')}<td class="n">${p.minimoDefinido === false ? '—' : n(p.min)}</td></tr>`).join('');
+
+  const filas = lista.map(p => `<tr><td class="m">${esc(p.sku)}</td><td>${esc(p.name)}</td><td>${esc(catDe(p.cat).label)}</td><td class="n">${esc(qtyTxt(p, p.stock))}</td>${vs.map(v => { const q = unidadesABordo(E, v.id, p.sku); return `<td class="n">${q ? esc(vistaUnidades(p, q).principal) : ''}</td>`; }).join('')}<td class="n">${p.minimoDefinido === false ? '—' : esc(vista(p, p.min).principal)}</td></tr>`).join('');
   return `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>${esc(titulo)}</title><style>
 body{font:12px/1.35 system-ui,sans-serif;margin:16px;color:#111}h1{font-size:17px;margin:0 0 2px}p{margin:0 0 10px;color:#555}
 table{border-collapse:collapse;width:100%}th,td{border-bottom:1px solid #ddd;padding:4px 6px;text-align:left;vertical-align:top}

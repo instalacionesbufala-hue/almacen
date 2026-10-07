@@ -24,7 +24,35 @@ export const contenidoDe = (p: Pick<Producto, 'contenido'>) => p.contenido && p.
 /** En el almacén y en las entregas se mueven formatos enteros (bote completo); los metros admiten decimales, y (E-031) también
     un formato en metros con "metros sueltos" (cable cortado a medida) */
 export const formatoEntero = (p: Pick<Producto, 'unit'> & { metrosSueltos?: boolean; unidadContenido?: 'm' | 'ud' }) => p.unit !== 'm' && !(p.metrosSueltos && p.unidadContenido === 'm');
-export const qtyTxt = (p: Pick<Producto, 'unit'>, q: number) => `${num(q)} ${unidadTxt(p.unit, q)}`;
+/* E-036 · El material se ve en la unidad en que se gasta (m o ud) y el formato va como dato secundario:
+   "−319 m · ≈ 3,19 cajas de 100 m". Con "Mostrar en formato", al revés ("3 cajas · 300 ud"). */
+type PV = Pick<Producto, 'unit'> & { contenido?: number; unidadContenido?: 'm' | 'ud'; mostrarFormato?: boolean };
+/** Tiene formato con contenido (caja de 100 m, bote de 500 ud): se puede ver en la unidad base */
+export const tieneContenido = (p: PV) => p.unit !== 'm' && p.unit !== 'ud' && contenidoDe(p) > 1;
+const ucTxt = (p: PV) => (p.unidadContenido === 'm' ? 'm' : 'ud');
+/** Cantidad principal y secundaria a partir de FORMATOS (lo que guarda el almacén) */
+export function vista(p: PV, formatos: number): { principal: string; secundario: string } {
+  const q = redondea(formatos), fmt = `${num(q)} ${unidadTxt(p.unit, q)}`;
+  if (!tieneContenido(p)) return { principal: fmt, secundario: '' };
+  const base = `${num(redondea(q * contenidoDe(p)))} ${ucTxt(p)}`;
+  return p.mostrarFormato ? { principal: fmt, secundario: base } : { principal: base, secundario: `${Number.isInteger(q) ? '' : '≈ '}${fmt} de ${num(contenidoDe(p))} ${ucTxt(p)}` };
+}
+/** Lo mismo a partir de UNIDADES DE CONTENIDO (lo que guarda un vehículo o consume un cierre) */
+export const vistaUnidades = (p: PV, unidades: number) => vista(p, unidades / contenidoDe(p));
+/** "319 m · ≈ 3,19 cajas de 100 m" (la vista de siempre, en una línea) */
+export const qtyTxt = (p: PV, q: number) => { const v = vista(p, q); return v.secundario ? `${v.principal} · ${v.secundario}` : v.principal; };
+/** E-036 · Para CSV e informes: la cifra en la unidad en que se ve y el nombre de esa unidad */
+export const enVista = (p: PV, formatos: number) => tieneContenido(p) && !p.mostrarFormato ? { n: redondea(formatos * contenidoDe(p)), u: ucTxt(p) } : { n: redondea(formatos), u: UNIT[p.unit] };
+/** E-036 · Línea de un cierre: "62 m → 21 barras (63 m)" si se gasta por pieza entera; si no, "62 m · ≈ 20,67 barras de 3 m" */
+export function lineaCierreTxt(p: PV & { piezaEntera?: boolean }, unidades: number) {
+  const real = consumoPorPieza(p, unidades);
+  if (real === unidades || !tieneContenido(p)) return qtyTxt(p, unidades / contenidoDe(p));
+  const n = redondea(real / contenidoDe(p));
+  return `${num(unidades)} ${ucTxt(p)} → ${num(n)} ${unidadTxt(p.unit, n)} (${num(real)} ${ucTxt(p)})`;
+}
+/** E-036 · Consumo por pieza entera: lo que descuenta un cierre de ese artículo (en unidades de contenido) */
+export const consumoPorPieza = (p: Pick<Producto, 'contenido'> & { piezaEntera?: boolean } | undefined, unidades: number) =>
+  p?.piezaEntera && contenidoDe(p) > 1 && unidades > 0 ? redondea(Math.ceil(redondea(unidades / contenidoDe(p)) - 1e-9) * contenidoDe(p)) : unidades;
 /** "bote de 1000 ud", "rollo de 50 m" (vacío en m y ud) */
 export const contenidoTxt = (p: Pick<Producto, 'unit' | 'contenido'> & { unidadContenido?: 'm' | 'ud' }) => p.unit !== 'm' && p.unit !== 'ud' && contenidoDe(p) > 1 ? `${UNIT[p.unit]} de ${num(contenidoDe(p))} ${p.unidadContenido === 'm' ? 'm' : 'ud'}` : '';
 

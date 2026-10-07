@@ -1,10 +1,10 @@
 /* E-016 · Editor de equivalencias en la app: condiciones por filas (campo, operador, valor), artículos con buscador y foto,
    fórmula, kits de fijación, "Probar" (qué descontaría, sin aplicar nada) y "Recalcular cierres desde…". */
 import { useState } from 'react';
-import type { ArticuloRegla, Equivalencia, Unidad } from '../../data/tipos';
+import type { ArticuloRegla, Equivalencia } from '../../data/tipos';
 import { CAMPOS_MATERIAL, normalizarCierre, reglasVigentes, traducirCierre, type LineaTraducida } from '../../domain/cierres';
-import { fechaHora, hoyISO, num, redondea, toNum } from '../../domain/formato';
-import { contenidoDe, find, unidadTxt } from '../../domain/reglas';
+import { fechaHora, hoyISO, num, toNum } from '../../domain/formato';
+import { find, lineaCierreTxt } from '../../domain/reglas';
 import { ejecutar, S, useAlmacen } from '../../store/almacen';
 import { modoNube, supabase } from '../../store/nube/cliente';
 import { closeModal, openModal, SheetFoot, SheetHead } from '../../ui/modal';
@@ -149,7 +149,7 @@ function Probar() {
             <span className="min-w-0"><span className="font-mono text-label-sm text-secondary">{l.campo}{l.formula !== 'directa' ? ` · ${l.formula}` : ''}</span><br />
               {p ? p.name : <span className={l.estado === 'pendiente' ? 'text-amber-800' : 'text-error'}>{l.estado === 'pendiente' ? 'Por elegir' : 'Sin equivalencia'}</span>}{l.estimada && <Tag c="bg-amber-100 text-amber-800 ml-1">estimado</Tag>}
               {l.nota && <span className="block text-label-sm text-secondary">{l.nota}</span>}</span>
-            <b className="whitespace-nowrap">{p ? `${num(redondea(l.cantidad / contenidoDe(p)))} ${unidadTxt(p.unit as Unidad, l.cantidad / contenidoDe(p))}` : num(l.cantidad)}</b></div>; })}
+            <b className="whitespace-nowrap">{p ? lineaCierreTxt(p, l.cantidad) : num(l.cantidad)}</b></div>; })}
       </div>
     </div>
   </>);

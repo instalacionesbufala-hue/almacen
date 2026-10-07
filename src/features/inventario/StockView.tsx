@@ -1,8 +1,9 @@
 /* Stock general: panel de escritorio, inventario móvil y stock a bordo de un vehículo (E-013: sin precios ni estanterías) */
-import { equivTxt } from '../../domain/formatos';
+import { AvisoCoherencia } from './Coherencia';
+import { Cantidad } from '../../ui/cantidad';
 import type { Estado, Producto } from '../../data/tipos';
 import { MARCA, UNIT, catDe, categoriasActivas, idsCategoriasActivas } from '../../data/catalogo';
-import { contenidoTxt, critical, esCustodia, find, nombreVehiculo, ORD, qtyTxt, searchProducts, status, stockDeVehiculo, stockTotal, unidadesABordo } from '../../domain/reglas';
+import { contenidoTxt, critical, esCustodia, find, nombreVehiculo, ORD, enVista, qtyTxt, vista, searchProducts, status, stockDeVehiculo, stockTotal, unidadesABordo } from '../../domain/reglas';
 import { esHoy, fechaHora, hace, hoyISO, initials, num, redondea } from '../../domain/formato';
 import { descargarCsv } from '../../domain/csv';
 import { guardar, S, ultimoGuardado, useAlmacen } from '../../store/almacen';
@@ -24,9 +25,9 @@ import { chipsFiltros, EST_SIN_MINIMO, filtroDeRecuadro, propDeSocio, SIN_FILTRO
 import { colorSocio, desgloseCustodia, sociosActivos } from '../../domain/socios';
 
 export function exportarStockCsv(E: Estado = S()) {
-  descargarCsv(`stock-${hoyISO()}.csv`, [['SKU', 'Nombre', 'Categoría', 'Propiedad', 'Almacén', 'En vehículos', 'Total', 'Unidad', 'Contenido', 'Mínimo almacén', 'Estado', 'Proveedor', 'Código proveedor', 'EAN'],
+  descargarCsv(`stock-${hoyISO()}.csv`, [['SKU', 'Nombre', 'Categoría', 'Propiedad', 'Almacén', 'En vehículos', 'Total', 'Unidad', 'Formato', 'Total en formatos', 'Mínimo almacén', 'Estado', 'Proveedor', 'Código proveedor', 'EAN'],
     ...E.products.map(p => { const t = stockTotal(E, p); return [p.sku, p.name, catDe(p.cat).label, esCustodia(p) ? `Custodia ${E.propietarios.find(o => o.id === p.propietario)?.nombre || ''}` : 'Propio',
-      p.stock, redondea(t - p.stock), t, UNIT[p.unit], p.contenido || 1, p.minimoDefinido === false ? '' : p.min, ST[status(p)].t, p.supplier, p.supplierRef || '', p.ean || '']; })]);
+      enVista(p, p.stock).n, enVista(p, t - p.stock).n, enVista(p, t).n, enVista(p, 1).u, contenidoTxt(p) || UNIT[p.unit], t, p.minimoDefinido === false ? '' : enVista(p, p.min).n, ST[status(p)].t, p.supplier, p.supplierRef || '', p.ean || '']; })]);
 }
 /** E-019: la lista filtrada completa, tal como se ve (con una columna por vehículo) */
 export function exportarListaCsv(E: Estado, lista: Producto[]) { descargarCsv(`inventario-${hoyISO()}.csv`, filasCsvInventario(E, lista)); }
@@ -54,7 +55,7 @@ export function exportarMovimientosCsv(E: Estado = S()) {
 export default function StockView() {
   const u = useUI(), desk = useEsEscritorio();
   if (u.almacen !== 'central') return <VanView />;
-  return desk ? <StockDesk /> : <StockMob />;
+  return <><AvisoCoherencia />{desk ? <StockDesk /> : <StockMob />}</>;
 }
 
 function Kpis() {
@@ -123,8 +124,8 @@ function StockDesk() {
                   <div className="relative"><FotoProducto p={p} size="h-24 w-full" alerta={r} icono="ico-40" />{contenidoTxt(p) && <span className="absolute bottom-2 left-2 font-mono text-label-sm bg-white/85 text-on-surface px-2 py-0.5 rounded">{contenidoTxt(p)}</span>}</div>
                   <div><h3 className="text-headline-sm font-semibold line-clamp-2">{p.name}</h3><p className="text-body-sm text-secondary">{p.supplier}</p></div>
                   <div className="flex justify-between items-end pt-space-sm border-t border-surface-container-high">
-                    <div><span className={LBL}>En almacén</span><div className={`text-headline-md font-bold ${r ? 'text-error' : ''}`}>{qtyTxt(p, p.stock)}</div></div>
-                    <div className="text-right"><span className={LBL}>{r ? 'Faltan' : 'Mínimo'}</span><div className={`font-mono text-label-md ${r ? 'text-error font-semibold' : 'text-primary'}`}>{qtyTxt(p, r ? p.min - p.stock : p.min)}</div></div>
+                    <div><span className={LBL}>En almacén</span><Cantidad p={p} formatos={p.stock} className={`text-headline-md font-bold ${r ? 'text-error' : ''}`} sub="font-mono text-label-sm text-secondary" /></div>
+                    <div className="text-right"><span className={LBL}>{r ? 'Faltan' : 'Mínimo'}</span><div className={`font-mono text-label-md ${r ? 'text-error font-semibold' : 'text-primary'}`}>{vista(p, r ? p.min - p.stock : p.min).principal}</div></div>
                   </div>
                 </button>); }) : <p className="text-secondary">Sin productos en esta categoría.</p>}
             </div>
@@ -213,7 +214,7 @@ function FilaStock({ p, pedido }: { p: Producto; pedido: boolean }) {
       <td><div className="flex items-center gap-2"><Icon n={r ? 'warning' : 'qr_code_2'} className={`${r ? 'text-error' : 'text-secondary'} ico-20`} /><div><div className={`font-mono text-label-md ${r ? 'text-error' : ''} whitespace-nowrap`}>{p.sku}</div>{p.ean && <div className="font-mono text-label-sm text-secondary">EAN {p.ean}</div>}</div></div></td>
       <td className="max-w-[340px]"><button onClick={() => abrirFicha(p.sku)} className="text-left flex items-center gap-3"><Tile p={p} size="w-11 h-11" /><div><div className="font-semibold hover:text-primary">{p.name}</div><div className="text-body-sm text-secondary">{catDe(p.cat).label} · {p.supplier}{contenidoTxt(p) ? ` · ${contenidoTxt(p)}` : ''}</div></div></button><div className="flex flex-wrap gap-1 mt-1"><TagCustodia p={p} />{p.borrador && <Tag c="bg-amber-100 text-amber-800">Borrador</Tag>}{pedido && <Tag c="bg-amber-100 text-amber-800">Pedido en curso</Tag>}</div></td>
       <td className="max-w-[260px]"><Ubicaciones p={p} /></td>
-      <td><div className={`text-headline-sm font-bold ${r ? 'text-error' : ''}`}>{qtyTxt(p, p.stock)}</div><div className={`font-mono text-label-sm ${r ? 'text-error' : 'text-secondary'}`}>Mín: {p.minimoDefinido === false ? 'sin definir' : num(p.min)}</div></td>
+      <td><Cantidad p={p} formatos={p.stock} className={`text-headline-sm font-bold whitespace-nowrap ${r ? 'text-error' : ''}`} sub="font-mono text-label-sm text-secondary whitespace-nowrap" /><div className={`font-mono text-label-sm ${r ? 'text-error' : 'text-secondary'}`}>Mín: {p.minimoDefinido === false ? 'sin definir' : vista(p, p.min).principal}</div></td>
       <td><Pill p={p} /></td>
       {perm.mod('movimientos') && <td className="text-right whitespace-nowrap">
         {perm.mod('movimientos') && <button onClick={() => abrirMovimiento(p.sku, 'entrada')} title="Registrar entrada" className="p-2 rounded-lg text-tertiary hover:bg-tertiary-fixed/30"><Icon n="add_circle" /></button>}
@@ -300,14 +301,14 @@ function CardMob({ p, pedido }: { p: Producto; pedido: boolean }) {
         </div>
       </button>
       {r && <div className="flex items-center gap-3 bg-error-container/50 rounded-xl p-3"><Icon n="warning" className="text-error" />
-        <div className="flex-1 min-w-0"><div className="font-mono text-label-md text-error font-semibold uppercase">{qtyTxt(p, p.stock)} restante{p.stock === 1 ? '' : 's'} (mín: {num(p.min)})</div><div className="text-body-sm text-on-surface-variant">en el almacén</div></div>
+        <div className="flex-1 min-w-0"><div className="font-mono text-label-md text-error font-semibold uppercase">{vista(p, p.stock).principal} restante{p.stock === 1 ? '' : 's'} (mín: {vista(p, p.min).principal})</div><div className="text-body-sm text-on-surface-variant">en el almacén</div></div>
         {pedido ? <span className="font-mono text-label-sm text-amber-800 bg-amber-100 px-2 py-1 rounded">PEDIDO</span>
           : (perm.mod('inventario')) && <button onClick={() => pedir(p.sku)} className="shrink-0 inline-flex items-center gap-1 bg-error text-white px-3 h-10 rounded-lg font-mono text-label-md"><Icon n="local_shipping" className="ico-18" />PEDIR</button>}
       </div>}
       <div className="grid grid-cols-3 bg-surface-container-low rounded-xl p-3 text-center">
-        <div><div className={LBL}>Almacén</div><div className={`text-headline-md font-bold ${r ? 'text-error' : 'text-primary'}`}>{num(p.stock)} <span className="text-body-sm font-normal text-secondary">{UNIT[p.unit]}</span></div></div>
-        <div><div className={LBL}>Mínimo</div><div className="text-headline-md font-bold">{num(p.min)} <span className="text-body-sm font-normal text-secondary">{UNIT[p.unit]}</span></div></div>
-        <div><div className={LBL}>En vehículos</div><div className="text-headline-md font-bold text-violet-800">{num(redondea(total - p.stock))}</div></div>
+        <div><div className={LBL}>Almacén</div><Cantidad p={p} formatos={p.stock} className={`text-headline-md font-bold ${r ? 'text-error' : 'text-primary'}`} sub="text-label-sm text-secondary" /></div>
+        <div><div className={LBL}>Mínimo</div><Cantidad p={p} formatos={p.min} className="text-headline-md font-bold" sub="text-label-sm text-secondary" /></div>
+        <div><div className={LBL}>En vehículos</div><Cantidad p={p} formatos={redondea(total - p.stock)} className="text-headline-md font-bold text-violet-800" sub="text-label-sm text-secondary" /></div>
       </div>
       {perm.mod('movimientos') && <div className="grid grid-cols-[1fr_auto_auto] gap-2">
         {perm.mod('movimientos') && <button onClick={() => abrirMovimiento(p.sku, 'salida')} disabled={p.stock <= 0} className={`${BTN_P} h-14 text-body-lg`}><Icon n="outbox" className="ico-fill" />Registrar salida</button>}
@@ -338,8 +339,8 @@ function VanView() {
         : <div className="grid grid-cols-1 md:grid-cols-2 gap-3">{vs.length ? vs.map(x => { const p = find(E, x.sku)!; return (
         <article key={x.sku} className={`${CARD} p-4 flex gap-3 items-center ${x.qty < 0 ? 'ring-1 ring-error/40' : ''}`}><Tile p={p} />
           <div className="flex-1 min-w-0"><div className="font-mono text-label-sm text-secondary">{p.sku}</div><div className="font-semibold truncate">{p.name}</div>
-            {contenidoTxt(p) && <div className="font-mono text-label-sm text-secondary">{num(x.unidades)} ud sueltas</div>}{x.qty < 0 && <div className="text-body-sm text-error">Discrepancia: consta más gastado que entregado</div>}</div>
-          <div className="text-right"><div className={`text-headline-md font-bold ${x.qty < 0 ? 'text-error' : ''}`}>{qtyTxt(p, x.qty)}</div>{equivTxt(p, x.qty) && <div className="text-body-sm text-secondary">{equivTxt(p, x.qty)}</div>}
+            {x.qty < 0 && <div className="text-body-sm text-error">Discrepancia: consta más gastado que entregado</div>}</div>
+          <div className="text-right"><Cantidad p={p} unidades={x.unidades} className={`text-headline-md font-bold whitespace-nowrap ${x.qty < 0 ? 'text-error' : ''}`} />
             {x.qty >= 1 && (perm.mod('movimientos')) && <button onClick={() => abrirMovimiento(p.sku, 'devolucion', { vehiculo: v.id, qty: Math.floor(x.qty), lock: true, ref: `Devuelto de ${v.matricula}` })} className="font-mono text-label-sm text-primary h-10">Devolver ↩</button>}</div>
         </article>); }) : <div className={`${CARD} p-8 text-center text-secondary md:col-span-2`}>Este vehículo no lleva material del almacén. Activa <b>Mostrar todo el catálogo</b> para asignarle artículos.</div>}</div>}
     </div>
@@ -384,7 +385,7 @@ function CatalogoVehiculo({ vehiculo, equipo: eqId }: { vehiculo: string; equipo
         <Tile p={p} size="w-11 h-11" />
         <button onClick={() => abrirFicha(p.sku)} className="flex-1 min-w-0 text-left"><div className="font-semibold truncate">{p.name}</div>
           <div className="font-mono text-label-sm text-secondary">{p.sku} · almacén {qtyTxt(p, p.stock)}</div></button>
-        <div className={`text-right whitespace-nowrap font-semibold ${q2 < 0 ? 'text-error' : q2 === 0 ? 'text-secondary' : ''}`}>{qtyTxt(p, q2)}<div className={LBL}>a bordo</div></div>
+        <div className={`text-right whitespace-nowrap font-semibold ${q2 < 0 ? 'text-error' : q2 === 0 ? 'text-secondary' : ''}`}><Cantidad p={p} unidades={ud} sub="font-mono text-label-sm text-secondary font-normal" /><div className={LBL}>a bordo</div></div>
         {equipo && <button onClick={() => asignar(equipo, [p.sku])} className={`${BTN_S} h-11 px-3 shrink-0`}>Asignar</button>}
       </div>); })}</div>
     <div ref={centinela} />

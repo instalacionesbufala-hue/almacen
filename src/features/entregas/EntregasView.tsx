@@ -1,7 +1,7 @@
 /* E-011 · Nueva entrega en tres pasos (móvil primero, botones de 56 px):
    1. Para quién (técnico y, si se quiere, la obra) · 2. Qué se entrega (buscador o escáner seguido) · 3. Firma del técnico.
    Nada predeterminado: el almacén elige los artículos. Se puede guardar como preparada (stock reservado) para firmar más tarde. */
-import { enMetros, equivTxt } from '../../domain/formatos';
+import { cantTxt, enMetros, equivTxt } from '../../domain/formatos';
 import { useEffect, useMemo, useState } from 'react';
 import { UNIT, categoriasActivas } from '../../data/catalogo';
 import type { Producto } from '../../data/tipos';
@@ -89,7 +89,7 @@ function PasoMaterial() {
   const leer = (raw: string) => {
     const r = escanearEnCesta(raw), p = r.sku ? find(S(), r.sku) : undefined;
     const l = p ? S().cesta.lineas.find(x => x.sku === p.sku) : undefined;
-    const texto = r.ok ? `${p?.name}${l ? ` · ${qtyTxt(p!, l.qty)} en la cesta` : ''}` : r.aviso || 'No se ha podido añadir';
+    const texto = r.ok ? `${p?.name}${l ? ` · ${cantTxt(p!, l.qty)} en la cesta` : ''}` : r.aviso || 'No se ha podido añadir';
     setLecturas(x => [{ ts: Date.now(), texto, ok: r.ok }, ...x].slice(0, 6));
     if (navigator.vibrate) navigator.vibrate(r.ok ? 40 : [60, 60, 60]);
   };
@@ -152,7 +152,7 @@ function LineaCesta({ sku }: { sku: string }) {
     <div className={`rounded-xl p-3 flex flex-col gap-2 ${excede || falta ? 'bg-amber-50 ring-1 ring-amber-300' : 'bg-surface-container-low'}`}>
       <div className="flex items-center gap-3"><Tile p={p} size="w-12 h-12" />
         <div className="flex-1 min-w-0"><div className="font-semibold leading-snug">{p.name} <TagCustodia p={p} /></div>
-          <div className="font-mono text-label-sm text-secondary">{p.sku} · disp. {qtyTxt(p, disp)}</div></div></div>
+          <div className="font-mono text-label-sm text-secondary">{p.sku} · disp. {cantTxt(p, disp)}</div></div></div>
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex items-center bg-white rounded-lg">
           <button onClick={() => quitarDeCesta(sku)} className="w-14 h-14 grid place-items-center" aria-label={`Menos ${p.name}`}><Icon n="remove" /></button>
@@ -166,7 +166,7 @@ function LineaCesta({ sku }: { sku: string }) {
           <select value={sku} onChange={e => cambiarTalla(sku, e.target.value)} className={`${INP} !w-auto h-14 font-semibold`} aria-label={`Talla de ${p.name}`}>
             {tallas.map(v => <option key={v.sku} value={v.sku} disabled={v.sku !== sku && Math.max(0, disponibleReal(E, v)) <= 0}>{v.talla || v.sku}{v.sku !== sku ? ` (${num(Math.max(0, disponibleReal(E, v)))})` : ''}</option>)}</select></label>}
       </div>
-      {excede && <p className="text-body-sm text-amber-800">Solo hay {qtyTxt(p, disp)} disponibles: ajusta la cantidad.</p>}
+      {excede && <p className="text-body-sm text-amber-800">Solo hay {cantTxt(p, disp)} disponibles: ajusta la cantidad.</p>}
       {falta && <p className="text-body-sm text-amber-800">Se entrega por {p.unit} entero.</p>}
       {!esPersonal(p) && contenidoTxt(p) && <p className="text-body-sm text-secondary">{contenidoTxt(p)} · entra en el vehículo del equipo</p>}
       {esPersonal(p) && <p className="text-body-sm text-secondary">Dotación personal: pasa al técnico que firme la recogida, no al vehículo.</p>}

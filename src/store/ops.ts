@@ -2,6 +2,7 @@
    - aplicarse en local (validación previa con src/domain y respuesta inmediata en pantalla), y
    - traducirse a su función SQL del servidor (la fuente de verdad en modo nube).
    En modo nube la operación se guarda en la cola y se reaplica en local hasta que el servidor la confirma. */
+import { recalcularConsumoPiezasLocal } from '../domain/cierres';
 import { corregirCierreLocal, type Correccion } from '../domain/corregir';
 import { rolValidoParaSocio } from '../../supabase/functions/_compartido/permisos';
 import { cambiarFormatoLocal, formatoTxt, type ModoConversion, type NuevoFormato } from '../domain/formatos';
@@ -99,6 +100,7 @@ export type Op =
   | { op: 'revisarMaterialEspecial'; args: { id: string; nota: string } }
   | { op: 'resolverLinea'; args: { linea: string; sku: string; cantidad?: number } }
   | { op: 'corregirCierre'; args: { id: string; correccion: Correccion } }
+  | { op: 'recalcularConsumoPiezas'; args: { sku: string; desde: number } }
   | { op: 'cambiarFormato'; args: { sku: string; formato: NuevoFormato; modo: ModoConversion } }
   | { op: 'resolverLineaVarios'; args: { linea: string; grupo: string; articulos: ArticuloResolucion[] } }
   | { op: 'deshacerResolucion'; args: { linea: string } }
@@ -198,7 +200,7 @@ export const OPS: Defs = {
       }
     },
     rpc: ({ producto: p, nuevo, stockInicial }) => ['guardar_producto', { p_producto: {
-      sku: p.sku, nuevo, ean: p.ean ?? '', ref_proveedor: p.supplierRef ?? '', nombre: p.name, categoria: p.cat, unidad: p.unit, contenido: p.contenido ?? 1, unidad_contenido: p.unit === 'm' ? 'm' : p.unit === 'ud' ? 'ud' : p.unidadContenido || 'ud', metros_sueltos: !!p.metrosSueltos,
+      sku: p.sku, nuevo, ean: p.ean ?? '', ref_proveedor: p.supplierRef ?? '', nombre: p.name, categoria: p.cat, unidad: p.unit, contenido: p.contenido ?? 1, unidad_contenido: p.unit === 'm' ? 'm' : p.unit === 'ud' ? 'ud' : p.unidadContenido || 'ud', metros_sueltos: !!p.metrosSueltos, mostrar_formato: !!p.mostrarFormato, pieza_entera: !!p.piezaEntera,
       formato_texto: p.packLabel ?? '', notas: p.notas ?? '', minimo: p.minimoDefinido === false ? '' : p.min, proveedor: p.supplier, stock_inicial: stockInicial,
       propiedad: p.propiedad || 'propia', propietario_id: p.propiedad === 'custodia' ? p.propietario : null,
       objetivo: p.objetivo ?? '', proveedor_habitual: p.proveedorHabitual ?? '', modelo: p.modelo ?? '', talla: p.talla ?? '' } }],
@@ -451,6 +453,12 @@ export const OPS: Defs = {
     local: (S, a) => { if (!gestiona(S, 'cierres')) throw new Error('Solo el administrador corrige los cierres'); corregirCierreLocal(S, a.id, a.correccion, S.operator); },
     rpc: a => ['corregir_cierre', { p_cierre: a.id, p: a.correccion }],
     desc: (S, a) => `Corregir el cierre ${S.cierres.find(c => c.id === a.id)?.numInst || ''}`,
+  },
+  /* ---------- E-036 · Recalcular los cierres de un artículo tras cambiar "pieza entera" ---------- */
+  recalcularConsumoPiezas: {
+    local: (S, a) => { if (!gestiona(S, 'cierres')) throw new Error('Solo el administrador recalcula los cierres'); recalcularConsumoPiezasLocal(S, a.sku, a.desde, S.operator); },
+    rpc: a => ['recalcular_consumo_piezas', { p_sku: a.sku, p_desde: new Date(a.desde).toISOString() }],
+    desc: (S, a) => `Recalcular los cierres de ${nombreProd(S, a.sku)}`,
   },
   /* ---------- E-031 · Cambiar el formato convirtiendo el stock ---------- */
   cambiarFormato: {

@@ -23,6 +23,10 @@ export interface Producto {
   /** E-031: unidad del contenido (rollo de 50 m → 'm'; bote de 1000 → 'ud') y si se puede entregar en metros sueltos */
   unidadContenido?: 'm' | 'ud';
   metrosSueltos?: boolean;
+  /** E-036: verlo en su formato ("3 cajas") en lugar de en la unidad base ("300 m", por defecto) */
+  mostrarFormato?: boolean;
+  /** E-036: cada cierre descuenta piezas enteras redondeando hacia arriba (62 m de tubo en barras de 3 m → 21 barras) */
+  piezaEntera?: boolean;
   /** Descripción corta opcional ("Monofásico · 40 A") */
   packLabel?: string;
   /** Stock del ALMACÉN en formatos (E-013). Lo de los vehículos está en Estado.aBordo */

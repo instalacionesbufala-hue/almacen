@@ -1,7 +1,8 @@
 /* E-011 · Justificante de entrega en PDF desde la app: el mismo documento que recibe el técnico por correo
    (supabase/functions/_compartido/justificante.ts), aquí con la miniatura de cada artículo. Se genera sin conexión. */
 import type { Entrega } from '../../data/tipos';
-import { find, numEntrega, qtyTxt } from '../../domain/reglas';
+import { find, numEntrega } from '../../domain/reglas';
+import { cantTxt } from '../../domain/formatos';
 import { num } from '../../domain/formato';
 import { fotoDe, fotoDeHerramienta } from '../../domain/fotos';
 import { construirJustificante, nombreArchivo, type ConstructorPdf } from '../../../supabase/functions/_compartido/justificante';
@@ -18,7 +19,7 @@ export async function justificantePdf(e: Entrega): Promise<Blob> {
     const f = h ? fotoDeHerramienta(E, h) : fotoDe(E, p);
     const foto = f ? await urlFoto(f.mini).then(u => (u ? aJpegDataUrl(u) : null)) : null;
     return h ? { nombre: h.nombre, codigo: h.serie, cantidad: '1 ud', series: [], foto }
-      : { nombre: p?.name || l.sku, codigo: l.sku, cantidad: p ? qtyTxt(p, l.qty) : num(l.qty), series: l.serials, foto };
+      : { nombre: p?.name || l.sku, codigo: l.sku, cantidad: p ? cantTxt(p, l.qty) : num(l.qty), series: l.serials, foto };
   }));
   const pdf = construirJustificante(jsPDF as unknown as ConstructorPdf, {
     numero: numEntrega(e), fecha: e.ts, equipo: `${eq ? eq.nombre : e.equipo}${e.vehiculo ? ` (${E.vehiculos.find(v => v.id === e.vehiculo)?.matricula || e.vehiculo})` : ''}`,

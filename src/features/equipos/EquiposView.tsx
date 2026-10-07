@@ -1,11 +1,12 @@
 /* Equipos, vehículos y técnicos (E-013: tres entidades independientes con historial de asignaciones) y auditoría de entregas.
    - El equipo es un nombre ("Búfala 1", como lo envía el wizard); cambia de técnicos y de vehículo con el tiempo.
    - El material a bordo es del VEHÍCULO: si un técnico cambia de equipo no se mueve nada; si un vehículo cambia de equipo, su material va con él. */
-import { equivTxt } from '../../domain/formatos';
+import { cantTxt } from '../../domain/formatos';
+import { Cantidad } from '../../ui/cantidad';
 import { useState } from 'react';
 import type { Equipo, EstadoEquipo, Tecnico, Vehiculo } from '../../data/tipos';
 import { catDe } from '../../data/catalogo';
-import { find, nombreVehiculo, numEntrega, qtyTxt, stockDeVehiculo } from '../../domain/reglas';
+import { find, nombreVehiculo, numEntrega, stockDeVehiculo } from '../../domain/reglas';
 import { fechaHora, fechaHoraInput, hace, hoyISO, num, uid } from '../../domain/formato';
 import { cierresAfectados, claveAsignacion, validarInicioAsignacion } from '../../domain/asignaciones';
 import type { Asignacion } from '../../data/tipos';
@@ -91,7 +92,7 @@ function CardEquipo({ e }: { e: Equipo }) {
 
       {v && <div><div className="flex justify-between mb-2"><span className={LBL}>A bordo de {v.matricula}</span><button onClick={() => { setUI({ almacen: v.id }); ir('stock'); }} className="font-mono text-label-sm text-primary h-8">Ver todo ({vs.length}) →</button></div>
         <div className="grid grid-cols-3 gap-2">{vs.length ? vs.slice(0, 3).map(x => { const p = find(E, x.sku)!; return (
-          <div key={x.sku} className="bg-surface-container-low rounded-lg p-2 text-center"><Icon n={catDe(p.cat).icon} className="text-primary ico-20" /><div className="font-semibold text-body-sm">{qtyTxt(p, x.qty)}</div>{equivTxt(p, x.qty) && <div className="text-label-sm text-secondary">{equivTxt(p, x.qty)}</div>}<div className="font-mono text-[9px] text-secondary truncate">{p.name}</div></div>); })
+          <div key={x.sku} className="bg-surface-container-low rounded-lg p-2 text-center"><Icon n={catDe(p.cat).icon} className="text-primary ico-20" /><Cantidad p={p} formatos={x.qty} className="font-semibold text-body-sm" sub="text-label-sm text-secondary" /><div className="font-mono text-[9px] text-secondary truncate">{p.name}</div></div>); })
           : <div className="col-span-3 text-body-sm text-secondary bg-surface-container-low rounded-lg p-3 text-center">Sin material a bordo</div>}</div></div>}
       <button onClick={() => ir('dotacion')} className="text-left bg-surface-container-low rounded-xl p-3 flex items-center gap-3 min-h-14"><Icon n="construction" className="text-primary" />
         <div className="flex-1 min-w-0"><div className="font-mono text-label-sm text-secondary">Dotación (herramientas, EPIs, ropa)</div><div className="font-semibold">{dot.length} fichas{dotAvisos ? <span className="text-error"> · {dotAvisos} con aviso</span> : ''}</div></div><Icon n="chevron_right" className="text-primary" /></button>
@@ -202,7 +203,7 @@ export function AuditoriaEntregas() {
   const E = useAlmacen(), desk = useEsEscritorio();
   const es = E.entregas.filter(e => (e.estado ?? 'firmada') === 'firmada').sort((a, b) => b.ts - a.ts);
   const [n, mas] = useMas(100);
-  const resumen = (e: typeof es[0]) => e.lineas.map(l => { const p = find(E, l.sku); return p ? `${qtyTxt(p, l.qty)} ${p.name.split(' ').slice(0, 3).join(' ')}` : `${num(l.qty)} ${l.sku}`; }).join(', ');
+  const resumen = (e: typeof es[0]) => e.lineas.map(l => { const p = find(E, l.sku); return p ? `${cantTxt(p, l.qty)} ${p.name.split(' ').slice(0, 3).join(' ')}` : `${num(l.qty)} ${l.sku}`; }).join(', ');
   const verificar = async () => {
     let bad: string[] = [], total = E.entregas.length;
     if (modoNube) { const r = await verificarEntregasServidor(); if (!r) return; total = r.length; bad = r.filter(x => !x.ok).map(x => x.numero); }

@@ -2,7 +2,7 @@
    y para la carga del histórico en local; y los resúmenes para las pantallas (consumo por obra, por equipo y periodo, discrepancias). */
 import type { CierreApp, Equivalencia, Estado, LineaCierre } from '../data/tipos';
 import { claveCierre, prepararVersion, traducirCierre, type Cierre, type LineaTraducida, type OrigenVersion, type PrefacturaHolded, type PrevioCierre, type Regla, type Version } from '../../supabase/functions/_compartido/cierres';
-import { applyMovement, contenidoDe, find, unidadesABordo, vehiculoDeEquipo } from './reglas';
+import { applyMovement, consumoPorPieza, contenidoDe, find, unidadesABordo, vehiculoDeEquipo } from './reglas';
 import { redondea, uid } from './formato';
 
 export { CAMPOS_FACTURABLES, CAMPOS_MATERIAL, EQUIVALENCIAS_PROPUESTA, KITS_PROPUESTA, normalizarCierre, traducirCierre, type Cierre, type LineaTraducida, type OrigenVersion, type PrevioCierre } from '../../supabase/functions/_compartido/cierres';
@@ -32,6 +32,7 @@ export function sincronizarCierreLocal(S: Estado, id: string) {
     }
     const objetivo = new Map<string, number>(), hecho = consumoDe(S, id);
     if (!ci.despFallido) for (const l of lineas) if (l.sku && ['aplicada', 'discrepancia', 'resuelta'].includes(l.estado)) objetivo.set(l.sku, (objetivo.get(l.sku) || 0) + l.cantidad);
+    for (const [sku, q] of objetivo) objetivo.set(sku, consumoPorPieza(find(S, sku), q));      // E-036: por pieza entera
     const ref = [ci.numInst, ci.cliente, ci.direccion].filter(Boolean).join(' · ');
     for (const sku of new Set([...objetivo.keys(), ...hecho.keys()])) {
       const d = redondea((objetivo.get(sku) || 0) - (hecho.get(sku) || 0)); if (!d) continue;
@@ -45,6 +46,25 @@ export function sincronizarCierreLocal(S: Estado, id: string) {
   }
   ci.estado = ci.despFallido ? 'fallido' : !ci.vehiculo ? 'sin_vehiculo' : lineas.some(l => l.estado === 'discrepancia') ? 'discrepancia'
     : lineas.some(l => l.estado === 'sin_equivalencia' || l.estado === 'pendiente') ? 'parcial' : 'aplicado';
+}
+
+/** E-036 · Tras activar o quitar "pieza entera": vuelve a sincronizar los cierres ya aplicados de ese artículo desde una fecha,
+    con una versión por cierre que cambie (= recalcular_consumo_piezas del servidor) */
+export function recalcularConsumoPiezasLocal(S: Estado, sku: string, desde: number, operario: string) {
+  const p = find(S, sku); if (!p) throw new Error(`Producto no encontrado: ${sku}`);
+  let cierres = 0, unidades = 0;
+  const lista = S.cierres.filter(c => c.fecha >= desde && c.vehiculo && !['ignorado', 'fallido', 'sin_vehiculo'].includes(c.estado) && S.lineasCierre.some(l => l.cierre === c.id && l.sku === p.sku));
+  for (const ci of lista.sort((a, b) => a.fecha - b.fecha)) {
+    const antes = consumoDe(S, ci.id);
+    sincronizarCierreLocal(S, ci.id);
+    const despues = consumoDe(S, ci.id);
+    const diferencia = [...new Set([...antes.keys(), ...despues.keys()])].sort().map(k => ({ sku: k, unidades: redondea((despues.get(k) || 0) - (antes.get(k) || 0)) })).filter(d => d.unidades);
+    if (!diferencia.length) continue;
+    ci.version++;
+    (ci.versiones ||= []).push({ n: ci.version, origen: 'admin', documento: `Consumo de ${p.name} recalculado por ${operario} (${p.piezaEntera ? 'por pieza entera' : 'sin redondear'})`, recibido: Date.now(), diferencia });
+    cierres++; unidades = redondea(unidades + (diferencia.find(d => d.sku === p.sku)?.unidades || 0));
+  }
+  return { cierres, unidades };
 }
 
 /* ---------- E-026 · Versiones: una instalación = un cierre ---------- */
@@ -136,12 +156,15 @@ export const consumoPorArticulo = (S: Estado, cierres: CierreApp[]) => resumenLi
 export const noEntregadosPorArticulo = (S: Estado, cierres: CierreApp[]) => resumenLineas(S, cierres, ['no_entregado']);
 function resumenLineas(S: Estado, cierres: CierreApp[], estados: string[]) {
   const ids = new Set(cierres.filter(c => c.estado !== 'fallido' && c.estado !== 'ignorado' && c.estado !== 'sin_vehiculo').map(c => c.id));
-  const m = new Map<string, { sku: string; unidades: number; estimada: boolean }>();
+  const m = new Map<string, { sku: string; unidades: number; estimada: boolean }>(), porCierre = new Map<string, number>();
   for (const l of S.lineasCierre) {
     if (!ids.has(l.cierre) || !l.sku || !estados.includes(l.estado)) continue;
     const x = m.get(l.sku) || { sku: l.sku, unidades: 0, estimada: false };
-    x.unidades = redondea(x.unidades + l.cantidad); x.estimada ||= l.estimada; m.set(l.sku, x);
+    x.estimada ||= l.estimada; m.set(l.sku, x);
+    porCierre.set(`${l.cierre}|${l.sku}`, redondea((porCierre.get(`${l.cierre}|${l.sku}`) || 0) + l.cantidad));
   }
+  // E-036: lo que de verdad se descuenta (por pieza entera, cada cierre redondea hacia arriba)
+  for (const [k, q] of porCierre) { const x = m.get(k.split('|')[1])!; x.unidades = redondea(x.unidades + consumoPorPieza(find(S, x.sku), q)); }
   return [...m.values()].map(x => { const p = find(S, x.sku); return { ...x, nombre: p?.name || x.sku, formatos: p ? redondea(x.unidades / contenidoDe(p)) : x.unidades, unidad: p?.unit || 'ud' }; })
     .sort((a, b) => a.nombre.localeCompare(b.nombre));
 }

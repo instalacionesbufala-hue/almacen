@@ -5,7 +5,8 @@
    - ropa y EPIs: la talla se elige en la línea; si la ficha del técnico la tiene, sale preseleccionada;
    - nunca más de lo disponible (stock menos lo reservado para otras entregas preparadas). */
 import type { Cesta, Estado, Herramienta, LineaEntrega, Producto, TipoTalla } from '../data/tipos';
-import { disponibleReal, find, formatoEntero, qtyTxt, resolveCode, vehiculoDeEquipo } from './reglas';
+import { disponibleReal, find, formatoEntero, resolveCode, vehiculoDeEquipo } from './reglas';
+import { cantTxt } from './formatos';
 import { redondea } from './formato';
 
 export const NOMBRE_TALLA: Record<TipoTalla, string> = { camiseta: 'camiseta', pantalon: 'pantalón', calzado: 'calzado', guantes: 'guantes' };
@@ -63,7 +64,7 @@ export function sumar(S: Estado, c: Cesta, sku: string, o: { n?: number } = {}):
   let r: Resultado = { ok: true, sku };
   const n = o.n ?? pasoDe(p), disp = Math.max(0, disponibleReal(S, p));
   if (disp <= 0) r = { ok: false, sku, aviso: `Sin stock disponible de ${p.name}` };
-  else if (l.qty + n > disp) { l.qty = disp; r = { ok: false, sku, aviso: `Solo hay ${qtyTxt(p, disp)} disponibles de ${p.name}` }; }
+  else if (l.qty + n > disp) { l.qty = disp; r = { ok: false, sku, aviso: `Solo hay ${cantTxt(p, disp)} disponibles de ${p.name}` }; }
   else l.qty = redondea(l.qty + n);
   limpiar(c);
   return r;
@@ -80,7 +81,7 @@ export function fijar(S: Estado, c: Cesta, sku: string, q: number): Resultado {
   const disp = Math.max(0, disponibleReal(S, p)), pedido = formatoEntero(p) ? Math.floor(q) : q;
   l.qty = redondea(Math.min(pedido, disp));
   limpiar(c);
-  return q > disp ? { ok: false, sku, aviso: `Solo hay ${qtyTxt(p, disp)} disponibles de ${p.name}` } : { ok: true, sku };
+  return q > disp ? { ok: false, sku, aviso: `Solo hay ${cantTxt(p, disp)} disponibles de ${p.name}` } : { ok: true, sku };
 }
 
 /** Cambia la talla de una línea de ropa o EPI: la cantidad pasa a la otra talla (sin superar lo disponible) */
@@ -118,7 +119,7 @@ export function problemas(S: Estado, c: Cesta): string[] {
     const p = find(S, l.sku);
     if (!p) { out.push(`El artículo ${l.sku} ya no existe`); continue; }
     const disp = Math.max(0, disponibleReal(S, p));
-    if (l.qty > disp) out.push(`Solo hay ${qtyTxt(p, disp)} disponibles de ${p.name}`);
+    if (l.qty > disp) out.push(`Solo hay ${cantTxt(p, disp)} disponibles de ${p.name}`);
     if (formatoEntero(p) && l.qty !== Math.trunc(l.qty)) out.push(`${p.name} se entrega por formato entero`);
   }
   return out;

@@ -5,8 +5,8 @@ import { useMemo, useState } from 'react';
 import qrcode from 'qrcode-generator';
 import type { Movimiento, Producto, TipoMov } from '../../data/tipos';
 import { OFICINA, REASONS, UNIDADES, UNIT, catDe, categoriasActivas } from '../../data/catalogo';
-import { contenidoDe, contenidoTxt, critical, find, formatoEntero, nombreVehiculo, pedidoSugerido, qrContenido, qtyTxt, status, ubicaciones, unidadesABordo, unidadTxt } from '../../domain/reglas';
-import { hace, num, redondea, toNum } from '../../domain/formato';
+import { contenidoDe, contenidoTxt, critical, find, formatoEntero, nombreVehiculo, pedidoSugerido, qrContenido, qtyTxt, tieneContenido, vista, status, ubicaciones, unidadesABordo, unidadTxt } from '../../domain/reglas';
+import { hace, hoyISO, num, redondea, toNum } from '../../domain/formato';
 import { ejecutar, guardar, mover, operarioSeleccionable, S, useAlmacen } from '../../store/almacen';
 import { salir, sesion } from '../../store/nube/sync';
 import { ir, VISTAS, type Vista, useVista } from '../../store/ui';
@@ -64,11 +64,25 @@ function imprimirEtiqueta(p: Producto) {
 export function Ubicaciones({ p }: { p: Producto }) {
   const E = useAlmacen(), u = ubicaciones(E, p);
   return <div className="flex flex-wrap gap-1.5">{u.map(x => <span key={x.vehiculo || 'almacen'} className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-body-sm ${x.vehiculo ? (x.qty < 0 ? 'bg-error-container text-error' : 'bg-violet-50 text-violet-900') : 'bg-surface-container-low'}`}>
-    <Icon n={x.vehiculo ? 'local_shipping' : 'warehouse'} className="ico-16" />{x.donde} <b>{cantTxt(p, x.qty)}</b></span>)}</div>;
+    <Icon n={x.vehiculo ? 'local_shipping' : 'warehouse'} className="ico-16" />{x.donde} <b>{qtyTxt(p, x.qty)}</b></span>)}</div>;
 }
 
 /* ---------- Ficha ---------- */
 export const abrirFicha = (sku: string) => openModal(<Ficha sku={sku} />);
+/** E-036 · Los cierres ya aplicados no cambian solos al activar o quitar "pieza entera": se recalculan aquí, desde una fecha */
+function RecalcularPiezas({ p }: { p: Producto }) {
+  const [desde, setDesde] = useState(hoyISO().slice(0, 8) + '01');
+  const recalcular = () => {
+    if (!confirm(`¿Recalcular los cierres con ${p.name} desde el ${desde.split('-').reverse().join('/')}? ${p.piezaEntera ? 'Cada cierre descontará piezas enteras, redondeando hacia arriba.' : 'Cada cierre descontará lo justo, sin redondear.'} La diferencia queda en la versión de cada cierre.`)) return;
+    if (ejecutar({ op: 'recalcularConsumoPiezas', args: { sku: p.sku, desde: new Date(desde + 'T00:00:00').getTime() } })) toast('Cierres recalculados: la diferencia está en la versión de cada cierre.', 'ok', 6000);
+  };
+  return <div className="bg-surface-container-low rounded-xl p-3 flex flex-col gap-2">
+    <div className="text-body-sm"><b>{p.piezaEntera ? `Se gasta por pieza entera (${UNIT[p.unit]} de ${num(contenidoDe(p))} ${ucDe(p)})` : 'Se gasta lo justo (sin redondear a piezas enteras)'}</b>. Los cierres ya aplicados no cambian solos al cambiar esta opción.</div>
+    <div className="flex flex-wrap items-end gap-2"><Campo label="Recalcular cierres desde"><input type="date" value={desde} onChange={e => setDesde(e.target.value)} className={`${INP} h-12`} /></Campo>
+      <button onClick={recalcular} className={`${BTN_S} h-12 px-4`}><Icon n="restart_alt" className="ico-20" />Recalcular</button></div>
+  </div>;
+}
+
 function Ficha({ sku }: { sku: string }) {
   const E = useAlmacen(), p = find(E, sku), perm = usePermisos();
   if (!p) return <SheetHead title="Referencia no encontrada" />;
@@ -79,7 +93,7 @@ function Ficha({ sku }: { sku: string }) {
     <div className="p-5 flex flex-col gap-4">
       <EditorFoto p={p} />
       <div className="flex items-center gap-3">
-        <div className="flex-1 min-w-0"><div className={`text-headline-lg font-bold break-words ${status(p) === 'red' ? 'text-error' : ''}`}>{qtyTxt(p, p.stock)} <span className="text-body-md font-normal text-secondary">en el almacén</span></div>
+        <div className="flex-1 min-w-0"><div className={`text-headline-lg font-bold break-words ${status(p) === 'red' ? 'text-error' : ''}`}>{vista(p, p.stock).principal} <span className="text-body-md font-normal text-secondary">en el almacén</span></div>{vista(p, p.stock).secundario && <div className="text-body-sm text-secondary">{vista(p, p.stock).secundario}</div>}
           <div className="text-body-sm text-secondary">Mínimo en almacén {p.minimoDefinido === false ? <b className="text-amber-800">sin definir</b> : qtyTxt(p, p.min)}</div>
           <div className="flex flex-wrap gap-1 mt-1"><TagCustodia p={p} />{p.borrador && <Tag c="bg-amber-100 text-amber-800">Borrador: falta completarla</Tag>}</div></div>
         <span className="shrink-0"><Pill p={p} /></span></div>
@@ -90,6 +104,7 @@ function Ficha({ sku }: { sku: string }) {
         <div className="text-body-sm text-secondary">Etiqueta QR (<span className="font-mono">{qrContenido(p.sku)}</span>): el escáner la reconoce al instante.<br />
           {perm.exportar && <button onClick={() => imprimirEtiqueta(p)} className="text-primary font-semibold mt-1 h-10">Imprimir etiqueta</button>}</div>
       </div>
+      {!p.borrador && tieneContenido(p) && perm.mod('cierres') && <RecalcularPiezas p={p} />}
       {!p.borrador && <CodigosFicha sku={sku} />}
       <div><div className={`${LBL} mb-1`}>Últimos movimientos</div>{movs.length ? movs.map(m => <MovRow key={m.id} m={m} />) : <p className="text-secondary text-body-sm">Sin movimientos todavía.</p>}</div>
     </div>
@@ -254,7 +269,7 @@ function Selector({ type }: { type: TipoMov }) {
 }
 
 /* ---------- Alta / edición de referencia: los mismos campos que el CSV del catálogo ---------- */
-type FormProd = { sku: string; ean: string; name: string; cat: Producto['cat']; unit: Producto['unit']; contenido: string; unidadContenido: 'm' | 'ud'; metrosSueltos: boolean; packLabel: string; stock: string; min: string; supplier: string; supplierRef: string;
+type FormProd = { sku: string; ean: string; name: string; cat: Producto['cat']; unit: Producto['unit']; contenido: string; unidadContenido: 'm' | 'ud'; metrosSueltos: boolean; mostrarFormato: boolean; piezaEntera: boolean; packLabel: string; stock: string; min: string; supplier: string; supplierRef: string;
   objetivo: string; proveedorHabitual: string; modelo: string; talla: string; propiedad: 'propia' | 'custodia'; propietario: string; notas: string };
 /** E-016: modo "propuesta" (el almacén propone cambios, no los aplica) y "revisar" (el administrador aplica una propuesta) */
 export const abrirFormProducto = (sku?: string, preset: Partial<Producto> = {}, onCreado?: (sku: string) => void, o: { modo?: 'propuesta' | 'revisar'; propuesta?: string } = {}) =>
@@ -263,7 +278,7 @@ function FormProducto({ sku, preset, onCreado, modo, propuesta }: { sku?: string
   const p = sku ? find(S(), sku) : undefined;
   const base: Partial<Producto> = p ? { ...p, ...preset } : { cat: 'fijaciones', unit: 'ud', contenido: 1, min: 0, ...preset };
   const [f, setF] = useState<FormProd>({
-    sku: base.sku || '', ean: base.ean || '', name: base.name || '', cat: base.cat || 'fijaciones', unit: base.unit || 'ud', contenido: String(base.contenido ?? 1), unidadContenido: base.unit ? ucDe(base as Producto) : 'ud', metrosSueltos: !!base.metrosSueltos, packLabel: base.packLabel || '',
+    sku: base.sku || '', ean: base.ean || '', name: base.name || '', cat: base.cat || 'fijaciones', unit: base.unit || 'ud', contenido: String(base.contenido ?? 1), unidadContenido: base.unit ? ucDe(base as Producto) : 'ud', metrosSueltos: !!base.metrosSueltos, mostrarFormato: !!base.mostrarFormato, piezaEntera: base.piezaEntera ?? (!p && base.unit === 'barra'), packLabel: base.packLabel || '',
     stock: String(p?.borrador ? p.stockPropuesto ?? 0 : 0), min: base.minimoDefinido === false ? '' : String(base.min ?? ''), supplier: base.supplier || '', supplierRef: base.supplierRef || '',
     objetivo: base.objetivo != null ? String(base.objetivo) : '', proveedorHabitual: base.proveedorHabitual || '', modelo: base.modelo || '', talla: base.talla || '',
     propiedad: base.propiedad || 'propia', propietario: socioInicial(S(), base.propietario), notas: base.notas || '',
@@ -289,7 +304,7 @@ function FormProducto({ sku, preset, onCreado, modo, propuesta }: { sku?: string
     if (f.unit !== 'm' && !sueltos && n.stock !== Math.trunc(n.stock)) return toast(`El stock inicial va en ${unidadTxt(f.unit, 2)} enteros.`, 'err');
     if (!p) { const aviso = avisoStockInicial(E, code, n.stock); if (aviso && !confirm(aviso)) return; }
     const custodia = f.propiedad === 'custodia';
-    const obj: Producto = { sku: code, name, cat: f.cat, unit: f.unit, contenido: n.contenido, unidadContenido: uc, metrosSueltos: sueltos || undefined, packLabel: f.packLabel.trim() || undefined, stock: p?.stock ?? 0, min: n.min, minimoDefinido: f.min.trim() !== '',
+    const obj: Producto = { sku: code, name, cat: f.cat, unit: f.unit, contenido: n.contenido, unidadContenido: uc, metrosSueltos: sueltos || undefined, mostrarFormato: (conContenido && f.mostrarFormato) || undefined, piezaEntera: (conContenido && f.piezaEntera) || undefined, packLabel: f.packLabel.trim() || undefined, stock: p?.stock ?? 0, min: n.min, minimoDefinido: f.min.trim() !== '',
       supplier: f.supplier.trim(), ean: f.ean.trim() || undefined, supplierRef: f.supplierRef.trim() || undefined,
       objetivo: f.objetivo.trim() === '' ? undefined : toNum(f.objetivo), proveedorHabitual: f.proveedorHabitual.trim() || undefined, modelo: f.modelo.trim() || undefined, talla: f.talla.trim() || undefined,
       propiedad: f.propiedad, propietario: custodia ? f.propietario : undefined, foto: p?.foto, fotoMini: p?.fotoMini, fotoOrigen: p?.fotoOrigen, notas: f.notas.trim() || undefined };
@@ -344,10 +359,12 @@ function FormProducto({ sku, preset, onCreado, modo, propuesta }: { sku?: string
       {inp('ean', 'EAN / código de barras', { inputMode: 'numeric' })}
       <div className="sm:col-span-2">{inp('name', 'Nombre *')}</div>
       <Campo label="Categoría"><select value={f.cat} onChange={set('cat')} className={`${INP} h-12`}>{categoriasActivas().map(([k, c]) => <option key={k} value={k}>{c.label}</option>)}</select></Campo>
-      <Campo label="Se vende y se entrega por"><select value={f.unit} onChange={set('unit')} className={`${INP} h-12`}>{UNIDADES.map(u => <option key={u} value={u}>{u === 'm' ? 'Metros' : u === 'ud' ? 'Unidades' : unidadTxt(u, 2).replace(/^./, c => c.toUpperCase())}</option>)}</select></Campo>
+      <Campo label="Se vende y se entrega por"><select value={f.unit} onChange={e => setF({ ...f, unit: e.target.value as Producto['unit'], ...(p ? {} : { piezaEntera: e.target.value === 'barra' }) })} className={`${INP} h-12`}>{UNIDADES.map(u => <option key={u} value={u}>{u === 'm' ? 'Metros' : u === 'ud' ? 'Unidades' : unidadTxt(u, 2).replace(/^./, c => c.toUpperCase())}</option>)}</select></Campo>
       {conContenido && <div className="grid grid-cols-[1fr_auto] gap-2 items-end">{inp('contenido', `Cuánto trae cada ${UNIT[f.unit]} (bote de 1000 → 1000; rollo de 50 m → 50)`, { inputMode: 'decimal' })}
         <select value={f.unidadContenido} onChange={e => setF({ ...f, unidadContenido: e.target.value as 'm' | 'ud' })} className={`${INP} h-12 !w-auto`} aria-label="Unidad del contenido"><option value="ud">ud</option><option value="m">m</option></select></div>}
       {conContenido && f.unidadContenido === 'm' && <label className="sm:col-span-2 flex items-center gap-3 text-body-md min-h-12"><input type="checkbox" checked={f.metrosSueltos} onChange={e => setF({ ...f, metrosSueltos: e.target.checked })} className="w-5 h-5" />Permitir entregar metros sueltos (cable cortado a medida). Si no, se entrega por {UNIT[f.unit]} entero.</label>}
+      {conContenido && <label className="sm:col-span-2 flex items-center gap-3 text-body-md min-h-12"><input type="checkbox" checked={f.piezaEntera} onChange={e => setF({ ...f, piezaEntera: e.target.checked })} className="w-5 h-5" />Se gasta por pieza entera: cada cierre descuenta {UNIT[f.unit]}s enteros, redondeando hacia arriba (62 m en barras de 3 m → 21 barras).</label>}
+      {conContenido && <label className="sm:col-span-2 flex items-center gap-3 text-body-md min-h-12"><input type="checkbox" checked={f.mostrarFormato} onChange={e => setF({ ...f, mostrarFormato: e.target.checked })} className="w-5 h-5" />Mostrar en formato ({unidadTxt(f.unit, 2)}) en lugar de en {f.unidadContenido === 'm' ? 'metros' : 'unidades'}.</label>}
       {(!p || p.borrador) && inp('stock', `Stock inicial en el almacén (${unidadTxt(f.unit, 2)})${p?.borrador ? ' · contado por el almacén' : ''}`, { inputMode: 'decimal' })}
       {inp('min', 'Mínimo en el almacén (vacío = completar después)', { inputMode: 'decimal' })}
       {inp('supplier', 'Proveedor')}
@@ -384,6 +401,8 @@ function ConversionFormato({ p, nf, volver, elegir }: { p: Producto; nf: NuevoFo
         <b>El stock ya está en {unidadTxt(nf.unit, 2)} (no convertir)</b>
         <span className="text-body-sm">El almacén se queda en <b>{cantTxt(nuevo, b.stock)}</b>.</span>
         {b.vehiculos.length > 0 && <span className="text-body-sm text-secondary">Lo de las furgonetas se reexpresa: {b.vehiculos.map(veh).join(' · ')}</span>}
+        {/* E-036: así se quedó el RZ1-K 3G10 en 0,8 m (eran 80 m) */}
+        {b.vehiculos.some(v => v.antes && (Math.abs(v.despues) <= Math.abs(v.antes) / 10 || Math.abs(v.despues) >= Math.abs(v.antes) * 10)) && <span className="text-body-sm text-error font-semibold">Ojo: las furgonetas cambiarían de cantidad física (p. ej. {num(b.vehiculos[0].antes)} {ucDe(p)} → {num(b.vehiculos[0].despues)} {nf.unidadContenido}). Lo que llevan ya está en {ucTxt}: casi siempre la opción buena es la de arriba.</span>}
       </button>
       <p className="text-body-sm text-secondary">No cambia la cantidad física: queda un ajuste "Conversión de formato" enlazado en el historial (almacén y furgonetas) y en la auditoría.</p>
     </div>

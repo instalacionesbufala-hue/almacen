@@ -3,7 +3,7 @@
 import type { Estado, Producto, Unidad } from '../data/tipos';
 import { UNIT } from '../data/catalogo';
 import { num, redondea } from './formato';
-import { contenidoDe, unidadTxt } from './reglas';
+import { contenidoDe, qtyTxt, unidadTxt } from './reglas';
 
 type P = Pick<Producto, 'unit' | 'contenido' | 'unidadContenido'>;
 /** Unidad en la que va el contenido: m (rollo de 50 m) o ud (bote de 1000 ud) */
@@ -14,8 +14,8 @@ export const enMetros = (p: P) => ucDe(p) === 'm' && p.unit !== 'm' && contenido
 export const equivTxt = (p: P, formatos: number) => contenidoDe(p) > 1 && p.unit !== 'm' && p.unit !== 'ud' ? `${num(redondea(formatos * contenidoDe(p)))} ${ucDe(p)}` : '';
 /** "3 rollos (150 m)" a partir de formatos */
 export const cantTxt = (p: P, formatos: number) => { const q = redondea(formatos), e = equivTxt(p, q); return `${num(q)} ${unidadTxt(p.unit, q)}${e ? ` (${e})` : ''}`; };
-/** "2,64 rollos (132 m)" a partir de unidades de contenido (lo que guarda un vehículo) */
-export const cantVehiculoTxt = (p: P, unidades: number) => cantTxt(p, unidades / contenidoDe(p));
+/** E-036: "132 m · ≈ 2,64 rollos de 50 m" a partir de unidades de contenido (lo que guarda un vehículo) */
+export const cantVehiculoTxt = (p: P, unidades: number) => qtyTxt(p, unidades / contenidoDe(p));
 /** Recuento mixto: formatos enteros + sueltos en la unidad del contenido → formatos ("2 rollos y 15 m" = 2,3) */
 export const deMixto = (p: P, formatos: number, sueltos: number) => redondea((formatos || 0) + (sueltos || 0) / contenidoDe(p));
 

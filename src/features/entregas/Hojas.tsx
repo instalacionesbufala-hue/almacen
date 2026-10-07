@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { Entrega, LineaEntrega, Tallas, TipoTalla, Tecnico } from '../../data/tipos';
 import { MARCA } from '../../data/catalogo';
-import { find, nombreVehiculo, numEntrega, qtyTxt } from '../../domain/reglas';
+import { find, nombreVehiculo, numEntrega } from '../../domain/reglas';
+import { cantTxt } from '../../domain/formatos';
 import { fechaHora, num } from '../../domain/formato';
 import { hashEntrega } from '../../domain/hash';
 import { descargarCsv } from '../../domain/csv';
@@ -63,7 +64,7 @@ export function PanelFirma({ lineas, equipo, receptor, obra, onFirmar, enPagina,
             {l.serials.length ? <span className="block font-mono text-label-md text-secondary">S/N {l.serials.join(', ')}</span> : null}
             {p?.talla ? <span className="block text-body-sm text-secondary">Talla {p.talla}</span> : null}
             {(h || (p && esPersonal(p))) ? <span className="block text-body-sm text-violet-800">Dotación personal de {t?.nombre || 'quien firme'}</span> : null}</span>
-          <b className="text-headline-sm whitespace-nowrap">{h ? '1 ud' : p ? qtyTxt(p, l.qty) : num(l.qty)}</b></li>); })}</ul>
+          <b className="text-headline-sm whitespace-nowrap">{h ? '1 ud' : p ? cantTxt(p, l.qty) : num(l.qty)}</b></li>); })}</ul>
       {obra && <p className="text-body-sm">Obra: <b>{obra}</b></p>}
       <details className="rounded-xl bg-surface-container-low px-4 py-3"><summary className="cursor-pointer font-semibold text-body-md">Enviar copia por WhatsApp o correo (opcional)</summary><div className="flex flex-col gap-4 mt-3">
       <Campo label={`WhatsApp de ${t?.nombre || 'quien recoge'} (para enviarle la copia y su enlace)`}>
@@ -171,7 +172,7 @@ function Recibo({ id }: { id: string }) {
       <table className="w-full text-body-sm"><thead><tr className={`text-left ${LBL}`}><th className="py-1">Material</th><th>S/N</th><th className="text-right">Cant.</th></tr></thead>
         <tbody>{e.lineas.map((l, i) => { const p = find(E, l.sku), h = E.herramientas.find(x => x.id === l.dotacion); return <tr key={i} className="border-t border-surface-container"><td className="py-1.5">
           <span className="flex items-center gap-2"><FotoLinea sku={l.sku} herramienta={l.dotacion} size="w-9 h-9" /><span>{h ? h.nombre : p ? p.name : l.sku}<span className="block font-mono text-label-sm text-secondary">{h ? h.serie : l.sku}</span></span></span></td>
-          <td className="font-mono text-label-sm">{(l.serials || []).map(s => <div key={s}>{s}</div>)}</td><td className="text-right font-semibold">{h ? '1 ud' : p ? qtyTxt(p, l.qty) : num(l.qty)}</td></tr>; })}</tbody></table>
+          <td className="font-mono text-label-sm">{(l.serials || []).map(s => <div key={s}>{s}</div>)}</td><td className="text-right font-semibold">{h ? '1 ud' : p ? cantTxt(p, l.qty) : num(l.qty)}</td></tr>; })}</tbody></table>
       {firmada ? <div className="flex items-end justify-between gap-3 border-t border-surface-container pt-3"><div><FirmaImg f={e.firma} className="h-16 w-44" /><div className="text-body-sm text-secondary">Firma de quien recoge</div></div>
         <div className="font-mono text-[9px] text-secondary break-all max-w-[55%] text-right">Huella SHA-256<br />{e.hash || 'Se calcula en el servidor al sincronizar'}</div></div>
         : <p className="text-body-sm text-amber-800">Pendiente de firma{e.estado === 'anulada' ? ' (anulada)' : ''}.</p>}

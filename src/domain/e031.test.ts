@@ -32,7 +32,7 @@ describe('cambiar el formato convirtiendo el stock', () => {
     expect([p.unit, p.contenido, p.unidadContenido, p.stock, p.min]).toEqual(['rollo', 50, 'm', 3, 2]);
     expect([unidadesABordo(S, 'V-F02', SKU), unidadesABordo(S, 'V-F03', SKU)]).toEqual([-18, 40]);
     expect(S.movements[0]).toMatchObject({ sku: SKU, type: 'ajuste', qty: -147, reason: 'Conversión de formato', ref: '150 unidades → 3 rollo de 50 m (sin cambio físico)' });
-    expect(cantVehiculoTxt(p, -18)).toBe('-0,36 rollos (-18 m)');
+    expect(cantVehiculoTxt(p, -18)).toBe('-18 m · ≈ -0,36 rollos de 50 m');   // E-036: en metros, el formato en pequeño
     expect(contenidoTxt(p)).toBe('rollo de 50 m');
     expect(cambiaFormato(p, ROLLO)).toBe(false);
   });
@@ -80,9 +80,9 @@ describe('con el artículo en rollos de 50 m', () => {
     expect(unidadesABordo(S, 'V-F02', SKU)).toBe(115);
   });
 
-  it('el CSV del inventario lleva la cantidad en formato y su equivalente en metros', () => {
+  it('el CSV del inventario lleva la cantidad en metros (E-036) y su equivalente en formatos', () => {
     const S = conRollo(), filas = filasCsvInventario(S, [prod(S)]);
     const h = filas[0] as string[], f = filas[1];
-    expect([f[h.indexOf('Almacén')], f[h.indexOf('Unidad')], f[h.indexOf('Unidad del contenido')], f[h.indexOf('Total')], f[h.indexOf('Total en unidad del contenido')]]).toEqual([3, 'rollo', 'm', 3.44, 172]);
+    expect([f[h.indexOf('Almacén')], f[h.indexOf('Unidad')], f[h.indexOf('Formato')], f[h.indexOf('Total')], f[h.indexOf('Total en formatos')]]).toEqual([150, 'm', 'rollo de 50 m', 172, 3.44]);
   });
 });

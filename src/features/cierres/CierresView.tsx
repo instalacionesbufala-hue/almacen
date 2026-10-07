@@ -2,15 +2,15 @@
    consumo por equipo y periodo, discrepancias (vehículos en negativo) y recuento de vehículo. */
 import { abrirCorregirCierre } from './Corregir';
 import { Contado, lineasContadas } from '../../ui/contado';
-import { cantTxt } from '../../domain/formatos';
 import { Fragment, useState } from 'react';
-import type { CierreApp, EstadoCierre, LineaCierre, Unidad } from '../../data/tipos';
+import type { CierreApp, Estado, EstadoCierre, LineaCierre, Unidad } from '../../data/tipos';
+import { UNIT } from '../../data/catalogo';
 import { conductoresSueltos, datosLinea, filtroRZ1K, mangueraRZ1K, reglaDeResolucion, type Propuesta } from '../../domain/resolucion';
 import { consumoPorArticulo, desdeCierresPorDefecto, discrepancias, lineasDe, noEntregadosPorArticulo, noGestionadoPorPartida, ORIGEN_VERSION, textoDiferencia } from '../../domain/cierres';
 import { vehiculoActualDeCierre, vehiculoHistorialDeCierre } from '../../domain/asignaciones';
 import { descargarCsv } from '../../domain/csv';
 import { fechaHora, hoyISO, num, redondea, toNum } from '../../domain/formato';
-import { contenidoDe, find, nombreVehiculo, unidadTxt, unidadesABordo } from '../../domain/reglas';
+import { contenidoDe, contenidoTxt, enVista, tieneContenido, find, lineaCierreTxt, nombreVehiculo, qtyTxt, unidadTxt, unidadesABordo, vista, vistaUnidades } from '../../domain/reglas';
 import { ejecutar, useAlmacen } from '../../store/almacen';
 import { nuevoId } from '../../store/ops';
 import { usePermisos } from '../../store/permisos';
@@ -26,8 +26,10 @@ const ESTADO: Record<EstadoCierre, { t: string; c: string }> = {
   discrepancia: { t: 'Discrepancia', c: 'bg-error-container text-error' }, fallido: { t: 'Desplazamiento fallido', c: 'bg-surface-container-high text-secondary' },
   ignorado: { t: 'Anterior a la apertura', c: 'bg-surface-container-high text-secondary' }, sin_vehiculo: { t: 'Equipo sin vehículo', c: 'bg-amber-100 text-amber-800' },
 };
-const cant = (u: number, unidad: string, contenido: number) => `${num(redondea(u / contenido))} ${unidadTxt(unidad as Unidad, u / contenido)}${contenido > 1 ? ` (${num(u)} ud)` : ''}`;
 
+/** E-036 · Consumo de un artículo en un periodo: en la unidad en que se gasta, con el formato en pequeño */
+const cantConsumo = (E: Estado, x: { sku: string; formatos: number; unidad: string }) => { const p = find(E, x.sku); if (!p) return `${num(x.formatos)} ${unidadTxt(x.unidad as Unidad, x.formatos)}`; const v = vista(p, x.formatos);
+  return <><span className="whitespace-nowrap">{v.principal}</span>{v.secundario && <span className="block text-label-sm font-normal text-secondary whitespace-nowrap">{v.secundario}</span>}</>; };
 export default function CierresView() {
   const E = useAlmacen(), { gestionarCierres: validar, exportar: puedeExportar } = usePermisos();
   // E-029: por defecto desde la apertura del inventario (o los últimos 30 días), para que no se queden fuera cierres recién llegados del histórico
@@ -42,8 +44,8 @@ export default function CierresView() {
   const [n, mas] = useMas(100, JSON.stringify(f));
   const disc = discrepancias(E);
   const pendientes = E.lineasCierre.filter(l => l.estado === 'pendiente' || l.estado === 'sin_equivalencia').length;
-  const exportar = () => descargarCsv(`consumos-cierres-${f.desde}-${f.hasta}.csv`, [['SKU', 'Artículo', 'Unidades', 'Formatos', 'Unidad', 'Estimado'],
-    ...consumo.map(c => [c.sku, c.nombre, c.unidades, c.formatos, c.unidad, c.estimada ? 'sí' : '']),
+  const exportar = () => descargarCsv(`consumos-cierres-${f.desde}-${f.hasta}.csv`, [['SKU', 'Artículo', 'Cantidad', 'Unidad', 'Formatos', 'Formato', 'Estimado'],
+    ...consumo.map(c => { const p = find(E, c.sku), v = p ? enVista(p, c.formatos) : { n: c.unidades, u: c.unidad }; return [c.sku, c.nombre, v.n, v.u, c.formatos, p ? contenidoTxt(p) || UNIT[p.unit] : c.unidad, c.estimada ? 'sí' : '']; }),
     ...noGestionado.map(x => ['', `${x.campo} (material no gestionado en el almacén: no descontado)`, x.cantidad, '', '', ''])]);
   if (!E.cierres.length) return <section className={`${CARD} p-6 flex flex-col gap-2`}><h2 className="text-headline-sm font-semibold">Aún no ha llegado ningún cierre</h2>
     <p className="text-body-md text-secondary">Cuando el wizard de cierres esté conectado (Configuración → Integraciones y la guía, paso 14), cada cierre descontará aquí el material del vehículo de su equipo.</p></section>;
@@ -64,12 +66,12 @@ export default function CierresView() {
       <aside className="flex flex-col gap-4">
         <section className={`${CARD} p-4 flex flex-col gap-2`}>
           <div className="flex items-center justify-between gap-2"><h2 className="font-semibold">Consumo del periodo</h2>{puedeExportar && <button onClick={exportar} disabled={!consumo.length} className={`${BTN_S} h-10 px-3 disabled:opacity-40`}><Icon n="file_download" className="ico-18" />CSV</button>}</div>
-          {consumo.length ? consumo.map(x => <div key={x.sku} className="flex justify-between gap-2 py-1.5 border-b border-surface-container text-body-sm"><span className="min-w-0 truncate">{x.nombre}{x.estimada && <Tag c="bg-amber-100 text-amber-800 ml-1">estimado</Tag>}</span><b className="whitespace-nowrap">{num(x.formatos)} {unidadTxt(x.unidad as Unidad, x.formatos)}</b></div>)
+          {consumo.length ? consumo.map(x => <div key={x.sku} className="flex justify-between gap-2 py-1.5 border-b border-surface-container text-body-sm"><span className="min-w-0 truncate">{x.nombre}{x.estimada && <Tag c="bg-amber-100 text-amber-800 ml-1">estimado</Tag>}</span><b className="text-right">{cantConsumo(E, x)}</b></div>)
             : <p className="text-body-sm text-secondary">Sin consumos en el periodo.</p>}
           {sinVehiculoLista > 0 && <p className="text-body-sm text-amber-800">{sinVehiculoLista} cierre{sinVehiculoLista === 1 ? '' : 's'} sin vehículo: no cuenta{sinVehiculoLista === 1 ? '' : 'n'} hasta procesarlo{sinVehiculoLista === 1 ? '' : 's'}.</p>}
           {noEntregados.length > 0 && <div className="flex flex-col pt-2"><h3 className="font-semibold text-body-md">Instalados no entregados por el almacén</h3>
             <p className="text-body-sm text-secondary mb-1">Cargadores que el equipo ya llevaba: se instalaron, pero no se descuentan.</p>
-            {noEntregados.map(x => <div key={x.sku} className="flex justify-between gap-2 py-1.5 border-b border-surface-container text-body-sm"><span className="min-w-0 truncate">{x.nombre}</span><b className="whitespace-nowrap text-violet-800">{num(x.formatos)} {unidadTxt(x.unidad as Unidad, x.formatos)}</b></div>)}</div>}
+            {noEntregados.map(x => <div key={x.sku} className="flex justify-between gap-2 py-1.5 border-b border-surface-container text-body-sm"><span className="min-w-0 truncate">{x.nombre}</span><b className="text-right text-violet-800">{cantConsumo(E, x)}</b></div>)}</div>}
           {noGestionado.length > 0 && <div className="flex flex-col pt-2"><h3 className="font-semibold text-body-md">Material no gestionado en el almacén</h3>
             <p className="text-body-sm text-secondary mb-1">Partidas que llevan material que aún no está en el almacén: se cuentan, no se descuentan.</p>
             {noGestionado.map(x => <div key={x.campo} className="flex justify-between gap-2 py-1.5 border-b border-surface-container text-body-sm"><span className="font-mono">{x.campo}</span><b className="whitespace-nowrap">{num(x.cantidad)} · {x.cierres} cierre{x.cierres === 1 ? '' : 's'}</b></div>)}</div>}
@@ -77,7 +79,7 @@ export default function CierresView() {
         <section className={`${CARD} p-4 flex flex-col gap-2`}>
           <h2 className="font-semibold flex items-center gap-2"><Icon n="report" className="text-error" />Discrepancias</h2>
           <p className="text-body-sm text-secondary">Artículos que los cierres dejan en negativo en un vehículo: el equipo gastó algo que no constaba. Se corrige con un recuento del vehículo.</p>
-          {disc.length ? disc.map(d => <div key={d.vehiculo + d.sku} className="flex justify-between gap-2 py-1.5 border-b border-surface-container text-body-sm"><span className="min-w-0 truncate">{d.vehiculoObj?.matricula} · {d.producto?.name || d.sku}</span><b className="text-error whitespace-nowrap">{d.producto ? cant(d.unidades, d.producto.unit, contenidoDe(d.producto)) : num(d.unidades)}</b></div>)
+          {disc.length ? disc.map(d => <div key={d.vehiculo + d.sku} className="flex justify-between gap-2 py-1.5 border-b border-surface-container text-body-sm"><span className="min-w-0 truncate">{d.vehiculoObj?.matricula} · {d.producto?.name || d.sku}</span><b className="text-error whitespace-nowrap">{d.producto ? vistaUnidades(d.producto, d.unidades).principal : num(d.unidades)}</b></div>)
             : <p className="text-body-sm text-tertiary">Ningún vehículo en negativo.</p>}
         </section>
       </aside>
@@ -116,7 +118,7 @@ function FilaCierre({ c, abierto, alternar, puede }: { c: CierreApp; abierto: bo
                 {l.estimada && <Tag c="bg-amber-100 text-amber-800 ml-1">estimado</Tag>}{l.estado === 'discrepancia' && <Tag c="bg-error-container text-error ml-1">deja el vehículo en negativo</Tag>}
                 {l.nota && <div className="text-label-sm text-secondary">{l.nota}</div>}
                 {puede && l.estado === 'resuelta' && (!l.resolucion || l.previo) && <button onClick={() => deshacer(E, l)} className="text-error text-body-sm font-semibold h-10 flex items-center gap-1"><Icon n="undo" className="ico-18" />Deshacer resolución</button>}</td>
-              <td className="py-1.5 text-right whitespace-nowrap font-semibold">{p ? cant(l.cantidad, p.unit, contenidoDe(p)) : num(l.cantidad)}</td>
+              <td className="py-1.5 text-right whitespace-nowrap font-semibold">{p ? lineaCierreTxt(p, l.cantidad) : num(l.cantidad)}</td>
               <td />
             </tr>
             {resolver && <tr><td colSpan={4} className="pb-2"><div className="w-0 min-w-full"><ResolverLinea c={c} l={l} /></div></td></tr>}</Fragment>); })}</tbody></table>}
@@ -241,8 +243,8 @@ function RecuentoVehiculo({ vehiculo }: { vehiculo: string }) {
       {!skus.length && <Vacio>No consta material a bordo. Añade lo que lleva la furgoneta con los botones de arriba.</Vacio>}
       {skus.map(sku => { const p = find(E, sku)!, teorico = redondea(unidadesABordo(E, vehiculo, sku) / contenidoDe(p)); return (
         <div key={sku} className="flex items-center gap-3 py-2 border-b border-surface-container">
-          <span className="flex-1 min-w-0"><span className="block font-medium truncate">{p.name}</span><span className="text-body-sm text-secondary">Consta: <b className={teorico < 0 ? 'text-error' : ''}>{cantTxt(p, teorico)}</b></span></span>
-          <Contado p={p} vals={cont} setVals={setCont} placeholder={Math.max(0, teorico)} />
+          <span className="flex-1 min-w-0"><span className="block font-medium truncate">{p.name}</span><span className="text-body-sm text-secondary">Consta: <b className={teorico < 0 ? 'text-error' : ''}>{qtyTxt(p, teorico)}</b></span></span>
+          <Contado p={p} vals={cont} setVals={setCont} placeholder={Math.max(0, teorico)} sueltos={tieneContenido(p)} />
           {extra.includes(sku) && !aBordo.includes(sku) && <button onClick={() => { setExtra(e => e.filter(x => x !== sku)); setCont(c => { const n = { ...c }; delete n[sku]; delete n[sku + '|m']; return n; }); }} className={`${BTN_S} h-12 w-12 shrink-0`} aria-label={`Quitar ${p.name} del recuento`}><Icon n="close" className="ico-20" /></button>}
         </div>); })}
     </div>
