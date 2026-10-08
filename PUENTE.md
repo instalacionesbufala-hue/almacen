@@ -1167,9 +1167,41 @@ El usuario se vuelve loco y necesita verlo claro.
 - Hay pruebas de: la retirada solo admite artículos de ese socio; no se puede retirar más del stock; el stock y el extracto bajan; el PDF lleva firma y número; el socio ve su retirada en el portal; y una anulación devuelve el stock.
 - El usuario registra desde el móvil una retirada de cargadores de Esmove recogidos por un tercero en su nombre.
 
+### E-039 · La retirada por el socio o un tercero, también desde Entregas · PENDIENTE (pequeño)
+**El usuario (08/10)** busca la retirada de E-038 en **Entregas & Firmas** (paso 1 "¿Para qué equipo es el material?"), en el ordenador y en el móvil. Allí solo salen sus equipos, y no la encuentra. Está en Custodia → pestaña del socio → "Retiradas de …".
+
+**Qué hacer**
+1. **En el paso 1 de Entregas,** junto a las tarjetas de los equipos, una tarjeta más: **"Socio o tercero (material en custodia)"**. Al elegirla, se elige el **socio** y se abre el mismo flujo de E-038 (origen almacén o vehículo, cesta solo con material de ese socio, quién recoge, en nombre de quién, motivo y firma). No se duplica lógica: se reutiliza `Retirada.tsx`.
+2. **"Últimas entregas" y "Entregas por equipo"** muestran también las retiradas (RET-…), con su etiqueta "Retirada · Esmove" y su enlace al PDF, para tener todas las salidas firmadas en un mismo sitio.
+3. **Menú rápido del móvil:** "Retirada por socio".
+4. **Hecho cuando** desde Entregas, en el ordenador y en el móvil, se registra una retirada de material de Esmove recogida por un tercero, y aparece en "Últimas entregas" como RET-….
+
+### E-040 · Barra inferior del móvil personalizable (sin afectar al escritorio) · PENDIENTE
+**Petición del usuario (08/10):** en la app del móvil, la barra de abajo tiene **4 accesos fijos** (Inventario, Escanear, Entrega y Cuadrillas). Quiere **poder cambiarlos**, sin que eso altere el menú lateral del escritorio.
+
+**Qué hacer**
+1. **Configurar la barra:** en el móvil, una mantenida larga sobre la barra, o un botón en Configuración → **"Barra inferior del móvil"**, abre un editor:
+   - lista de accesos disponibles con su icono: Inventario, Escanear, Entrega, Equipos y técnicos, Retirada por socio (E-039), Albaranes / Escanear albarán (E-024), Movimientos, Custodia de socios, Cierres, Recuento de furgoneta, Herramientas, EPIs y ropa, Avisos/bandeja y Nuevo con la cámara;
+   - el usuario elige **hasta 5** y los **ordena** arrastrando. Uno puede ser el botón central destacado, como hoy "Escanear";
+   - botón **"Restablecer"** para volver a la barra de siempre;
+   - vista previa de cómo queda.
+2. **Por usuario:** la configuración se guarda en el perfil del usuario (servidor), para que la tenga en cualquier móvil. Sin conexión, se usa la última guardada en el dispositivo.
+3. **Permisos (E-027 y E-034):** solo se ofrecen los accesos que el rol del usuario puede ver. Si un rol pierde un permiso, ese acceso desaparece de su barra.
+4. **No toca el escritorio:** el menú lateral (`lg:` en adelante) sigue igual. La barra personalizada solo se usa en pantallas de móvil y tableta.
+5. **"Más":** si el usuario elige menos de 5 accesos, el último hueco puede ser "Más", que abre el menú completo.
+6. **Hecho cuando:**
+   - Hay pruebas de: guardar y leer la barra por usuario; que se filtra por permisos; que se restablece; y que el escritorio no cambia.
+   - En el iPhone del usuario se cambian los accesos y la barra se mantiene al volver a abrir la app.
+
 ---
 
 ## Revisión del chat
+
+### 08/10/2026 · Revisión de E-037 y E-038, y nuevo E-039
+- **E-037 y E-038:** verificados. **539 pruebas en verde.**
+- **E-039 (nuevo, pequeño):** acceso a la retirada por socio o tercero desde Entregas, porque el usuario la busca allí.
+- **E-040 (nuevo):** barra inferior del móvil personalizable por usuario, sin tocar el escritorio.
+- **Orden: E-039 → E-040.**
 
 ### 07/10/2026 · Revisión de E-036 y nuevo E-037
 - **E-036:** verificado. **521 pruebas en verde.** Bien explicado el caso del 3G10: el usuario corregirá las dos furgonetas con los botones del aviso.
