@@ -68,7 +68,8 @@ describe('en el estado local', () => {
     expect(c.vehiculo).toBe('V-F02');
     expect(S.lineasCierre.filter(l => l.cierre === c.id && l.campo !== 'hardware').map(l => [l.campo, l.sku, l.estado]))
       .toEqual([['metrosLinea', '6000650603', 'discrepancia'], ['metrosLinea', '6000650604', 'discrepancia'], ['metrosLinea', '6000650605', 'discrepancia'],
-        ['metrosUtp', '7270021010', 'discrepancia'], ['rj45', '7280040060', 'discrepancia'], ['preinst', undefined, 'no_gestionado']]);
+        ['metrosUtp', '7270021010', 'discrepancia'], ['rj45', '7280040060', 'discrepancia'], ['preinst', undefined, 'no_gestionado'],
+        ['pvc32', undefined, 'sin_equivalencia']]);                     // E-042: el tubo PVC deducido de la línea (aquí no hay regla de pvc32)
     expect(unidadesABordo(S, 'V-F02', '6000650603')).toBe(-28);
     expect(noGestionadoPorPartida(S, S.cierres)).toEqual([{ campo: 'preinst', cantidad: 1, cierres: 1 }]);
   });

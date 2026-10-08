@@ -169,12 +169,28 @@ export function cumple(c: Cierre, cond: Record<string, string | string[]>): bool
   });
 }
 
+/** E-042 · Tramos de la línea que no van en tubo PVC */
+export const OTRAS_CANALIZACIONES = ['corr32', 'acero32', 'acero40', 'canaleta', 'sot50', 'sot90'] as const;
+/** E-042 · La canalización completa son los metros de línea. Si la línea va bajo tubo y el cierre no trae pvc32 (la prefactura de
+    Holded no lo lleva), el tubo PVC son los metros de línea menos los tramos de otra canalización (nunca negativo). Si el cierre trae
+    pvc32 > 0, se respeta. Con manguera solo cuenta el pvc32 que venga (el wizard no dice si va entubada). */
+export function deducirPvc(c: Cierre): Cierre {
+  if (numero(c.pvc32) > 0 || c.pvcDeducido || !/tubo/.test(norm(c.tipoLinea)) || /manguera/.test(norm(c.tipoLinea))) return c;
+  const linea = numero(c.metrosLinea), tramos = OTRAS_CANALIZACIONES.filter(k => numero(c[k]) > 0);
+  const pvc = Math.round((linea - tramos.reduce((a, k) => a + numero(c[k]), 0)) * 1000) / 1000;
+  if (!(pvc > 0)) return c;
+  const es = (v: number) => String(v).replace('.', ',');
+  return { ...c, pvc32: pvc, pvcDeducido: `PVC deducido de los metros de línea (${tramos.length ? `${[es(linea), ...tramos.map(k => es(numero(c[k])))].join(' − ')} = ` : ''}${es(pvc)} m)` };
+}
+
 export const manguitos = (m: number) => (m > 0 ? Math.floor(m / 3) + 1 : 0);
 export const fijaciones = (m: number) => (m > 0 ? Math.ceil(m / 0.5 - 1e-9) : 0);
 
 /** Traduce un cierre a líneas de consumo. Dentro de cada (campo, fórmula) aplica la PRIMERA regla activa que cumpla las condiciones. */
 export function traducirCierre(c: Cierre, reglas: Regla[], kits: Kits, kitDefecto = 'A', catalogo?: Set<string>): LineaTraducida[] {
   if (c.despFallido) return [];
+  c = deducirPvc(c);
+  const deducido = typeof c.pvcDeducido === 'string' ? c.pvcDeducido : '';
   const out: LineaTraducida[] = [];
   const activas = reglas.filter(r => r.activa).sort((a, b) => a.orden - b.orden);
   const grupos = new Map<string, Regla[]>();
@@ -217,6 +233,8 @@ export function traducirCierre(c: Cierre, reglas: Regla[], kits: Kits, kitDefect
   // el cargador (de cualquier socio de custodia, según el propietario del artículo): 1 ud del modelo; si no se reconoce, a "Pendientes"
   if (c.hardware && !activas.some(r => r.campo === 'hardware' && cumple(c, r.condiciones)))
     out.push({ campo: 'hardware', formula: 'unidad', valor: 1, sku: null, cantidad: 1, estimada: false, estado: 'pendiente', regla: null, nota: `modelo de cargador no reconocido: "${c.hardware}"` });
+    // E-042: que se vea que el tubo PVC (y lo que se calcula con él) no lo puso el técnico
+  if (deducido) for (const l of out) if (l.campo.split('+').some(k => k.trim() === 'pvc32')) l.nota = [deducido, l.nota].filter(Boolean).join(' · ');
   return out;
 }
 
@@ -240,7 +258,8 @@ export const EQUIVALENCIAS_PROPUESTA: Regla[] = [
   R('canaleta', 'directa', {}, [['6222106082', 1]], { nota: 'moldura Hager ATEHA 30x12' }),
   R('pvc32', 'manguitos', {}, [['6201025023', 1]], { estimada: true, nota: 'manguito M-32: floor(m/3)+1' }),
   R('acero32', 'manguitos', {}, [[null, 1, 'manguito de acero M-32']], { estimada: true }),
-  R('pvc32+acero32', 'fijaciones', {}, [], { estimada: true, kit: null, nota: '1 cada 0,50 m; el corrugado no cuenta' }),
+  // E-042: 1 fijación cada 0,50 m de tubo PVC (el del wizard o el deducido de los metros de línea) y de acero; el corrugado no cuenta
+  R('pvc32+acero32+acero40', 'fijaciones', {}, [], { estimada: true, kit: null, nota: '1 cada 0,50 m; el corrugado no cuenta' }),
   // E-026: texto real del calendario ("V2C TRYDAN MONOFÁSICO PROTECCIONES M5 + SCHUKO", "POLICHARGER NW MONOFÁSICO PROTECCIÓN REARME M5"…)
   R('hardware', 'unidad', { 'hardware~': 'trydan&schuko' }, [['8900500015', 1]], { nota: 'Trydan 7,4 kW 5 m + Schuko' }),
   R('hardware', 'unidad', { 'hardware~': ['trydan&trif&m10', 'trydan&22&m10'] }, [['8900500030', 1]], { nota: 'Trydan 22 kW 10 m' }),

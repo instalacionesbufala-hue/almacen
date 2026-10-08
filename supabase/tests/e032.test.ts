@@ -35,7 +35,7 @@ beforeEach(async () => {
 describe('prefactura con atributos', () => {
   it('sin cierre previo: con el equipo y la fecha del calendario descuenta de su furgoneta; 3 conductores de 6 mm²; U/UTP; preinst sin pendiente', async () => {
     const r = await enviar(PREFACTURA);
-    expect(r.pendientes).toBe(0);
+    expect(r.pendientes).toBe(1);                                   // E-042: el tubo PVC deducido de la línea bajo tubo (aquí no hay regla de pvc32)
     const c = await cierre('E2632263');
     expect([c.vehiculo_id, c.equipo_wizard, c.estado]).toEqual(['V-F02', 'Búfala 2', 'discrepancia']);          // no había nada a bordo
     expect(Date.parse(c.fecha)).toBe(Date.parse(PREFACTURA.atributos.fechaCierreIso));                         // la de la instalación, no la de aprobación
@@ -45,6 +45,7 @@ describe('prefactura con atributos', () => {
       { campo: 'metrosLinea', sku: '6000650605', cantidad: '28.000', estado: 'discrepancia' },
       { campo: 'metrosUtp', sku: '7270021010', cantidad: '28.000', estado: 'discrepancia' },        // E-033: Policharger → F/UTP (lo decide el cargador)
       { campo: 'preinst', sku: null, cantidad: '1.000', estado: 'no_gestionado' },                  // se cuenta, no descuenta ni queda pendiente
+      { campo: 'pvc32', sku: null, cantidad: '28.000', estado: 'sin_equivalencia' },                // E-042: PVC deducido (28 m de línea), sin regla en esta prueba
       { campo: 'rj45', sku: '7280040060', cantidad: '2.000', estado: 'discrepancia' }]);            // perfTab (servicio): ni línea
     for (const sku of ['6000650603', '6000650604', '6000650605', '7270021010']) expect(await aBordo('V-F02', sku)).toBe(-28);
   });
@@ -55,10 +56,10 @@ describe('prefactura con atributos', () => {
     const c = await cierre('E2639300');
     expect([c.vehiculo_id, c.equipo_wizard]).toEqual(['V-F01', 'Búfala 1']);
     expect(new Date(c.fecha).getTime()).toBeLessThan(Date.parse(H(-5)));                                        // sigue la del wizard
-    expect((await lineas('E2639300')).filter(l => l.campo !== 'hardware').map(l => [l.campo, l.sku])).toEqual([['metrosLinea', '6000650603'], ['metrosLinea', '6000650604'], ['metrosLinea', '6000650605'], ['metrosUtp', '7270020010']]);
+    expect((await lineas('E2639300')).filter(l => l.campo !== 'hardware' && l.campo !== 'pvc32').map(l => [l.campo, l.sku])).toEqual([['metrosLinea', '6000650603'], ['metrosLinea', '6000650604'], ['metrosLinea', '6000650605'], ['metrosUtp', '7270020010']]);
     // otra versión del wizard (con su manguera de 10) no deshace lo que dice la prefactura
     await enviar({ numInst: 'E2639300', version: 2, equipo: 'Búfala 1', fechaCierreIso: H(-6), tipoLinea: 'manguera', fase: 'mono', seccion: '10', cableDatos: 'U/UTP', hardware: 'V2C TRYDAN', metrosLinea: 20, metrosUtp: 10 }, 'wizard');
-    expect((await lineas('E2639300')).filter(l => l.campo !== 'hardware').map(l => l.sku)).toEqual(['6000650603', '6000650604', '6000650605', '7270020010']);
+    expect((await lineas('E2639300')).filter(l => l.campo !== 'hardware' && l.campo !== 'pvc32').map(l => l.sku)).toEqual(['6000650603', '6000650604', '6000650605', '7270020010']);
   });
 
   it('una prefactura sola y luego el wizard: manda la fecha y el equipo del wizard', async () => {
@@ -84,7 +85,7 @@ describe('prefactura con atributos', () => {
     await como(db, ADMIN);
     await db.query('select resolver_linea_varios($1, gen_random_uuid(), $2::jsonb)', [l, JSON.stringify(['6000650653', '6000650654', '6000650655'].map(sku => ({ sku, cantidad: 28 })))]);
     await enviar({ ...PREFACTURA, lineas: { metrosLinea: 28 } });
-    expect((await lineas('E2632263')).filter(x => x.campo !== 'hardware').map(x => [x.sku, x.cantidad, x.estado])).toEqual([['6000650603', '28.000', 'discrepancia'], ['6000650604', '28.000', 'discrepancia'], ['6000650605', '28.000', 'discrepancia']]);
+    expect((await lineas('E2632263')).filter(x => x.campo !== 'hardware' && x.campo !== 'pvc32').map(x => [x.sku, x.cantidad, x.estado])).toEqual([['6000650603', '28.000', 'discrepancia'], ['6000650604', '28.000', 'discrepancia'], ['6000650605', '28.000', 'discrepancia']]);
     expect(await aBordo('V-F02', '6000650653')).toBe(0);
     expect(await aBordo('V-F02', '6000650603')).toBe(-28);
   });

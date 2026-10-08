@@ -18,14 +18,13 @@ import { redondea } from '../domain/formato';
 import { asignarHerramienta, registrarIncidencia } from '../domain/herramientas';
 import { fotoDe, grupoFoto } from '../domain/fotos';
 import { normalizarTelefono } from '../domain/whatsapp';
-import { EQUIVALENCIAS_PROPUESTA, KITS_PROPUESTA, estadoLinea, quitarResueltasCubiertas, registrarVersionLocal, sincronizarCierreLocal, type EnvioCierre, type LineaTraducida } from '../domain/cierres';
+import { EQUIVALENCIAS_PROPUESTA, KITS_PROPUESTA, recalcularCierreLocal, registrarVersionLocal, sincronizarCierreLocal, type EnvioCierre, type LineaTraducida } from '../domain/cierres';
 import { cambiarCodigoLocal, fusionarLocal, reasignarLineaLocal } from '../domain/fichas';
 import { ajustarLocal, previsionAjuste } from '../domain/ajuste';
 import { asociarLocal, motivoSkuNoValido, quitarCodigoLocal, type TipoCodigo } from '../domain/codigos';
 import { archivarLocal, borrarLocal, deshacerFusionLocal, reactivarArchivado, restaurarLocal } from '../domain/archivo';
 import { exigirSocioActivo, validarSocio } from '../domain/socios';
 const exigirSku = (sku: string) => { const m = motivoSkuNoValido(sku); if (m) throw new Error(m); };
-import { uid } from '../domain/formato';
 import { rolDe, rolesDe } from '../domain/permisos';
 import { normalizarPermisos } from '../../supabase/functions/_compartido/permisos';
 
@@ -386,23 +385,7 @@ export const OPS: Defs = {
   recalcularCierre: {
     local: (S, a) => {
       if (S.rol !== 'admin') throw new Error('Solo el administrador');
-      const ci = S.cierres.find(c => c.id === a.id); if (!ci || ci.estado === 'ignorado') return;
-      const antes = new Map<string, number>(); for (const m of S.movements) if (m.cierre === a.id) antes.set(m.sku, (antes.get(m.sku) || 0) - (m.unidades || 0));
-      quitarResueltasCubiertas(S, a.id, a.lineas);
-      const resueltos = new Set(S.lineasCierre.filter(l => l.cierre === a.id && l.estado === 'resuelta').map(l => l.campo));
-      S.lineasCierre = S.lineasCierre.filter(l => l.cierre !== a.id || l.estado === 'resuelta' || l.manual);
-      const fijadas = new Set(S.lineasCierre.filter(l => l.cierre === a.id && l.manual).map(l => l.campo));
-      for (const l of a.lineas) {
-        if (fijadas.has(l.campo)) continue;
-        if (l.estado !== 'aplicable' && resueltos.has(l.campo)) continue;
-        const sku = l.sku && find(S, l.sku) && !find(S, l.sku)!.borrador ? l.sku : undefined;
-        S.lineasCierre.push({ id: uid('L'), cierre: a.id, campo: l.campo, formula: l.formula, valor: l.valor, sku, cantidad: l.cantidad, estimada: l.estimada,
-          estado: estadoLinea(l, sku), nota: l.nota });
-      }
-      sincronizarCierreLocal(S, a.id);
-      const despues = new Map<string, number>(); for (const m of S.movements) if (m.cierre === a.id) despues.set(m.sku, (despues.get(m.sku) || 0) - (m.unidades || 0));
-      const diferencia = [...new Set([...antes.keys(), ...despues.keys()])].sort().map(sku => ({ sku, unidades: redondea((despues.get(sku) || 0) - (antes.get(sku) || 0)) })).filter(d => d.unidades);
-      if (diferencia.length) { ci.version++; (ci.versiones ||= []).push({ n: ci.version, origen: 'admin', documento: `Recalculado por ${S.operator}`, recibido: Date.now(), diferencia }); }
+      recalcularCierreLocal(S, a.id, a.lineas);
     },
     rpc: a => ['recalcular_cierre_admin', { p_cierre: a.id, p_lineas: a.lineas }],
     desc: () => 'Recalcular un cierre',

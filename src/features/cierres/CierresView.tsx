@@ -1,5 +1,6 @@
 /* E-012 · Cierres de instalación recibidos del wizard: estado, líneas traducidas, pendientes que resuelve el administrador,
    consumo por equipo y periodo, discrepancias (vehículos en negativo) y recuento de vehículo. */
+import { abrirRecalcularCierres } from './Reglas';
 import { abrirCorregirCierre } from './Corregir';
 import { Contado, lineasContadas } from '../../ui/contado';
 import { Fragment, useState } from 'react';
@@ -59,7 +60,8 @@ export default function CierresView() {
       <label className="flex flex-col gap-1"><span className={LBL}>Desde</span><input type="date" value={f.desde} onChange={e => setF({ ...f, desde: e.target.value })} className={`${INP} h-12`} /></label>
       <label className="flex flex-col gap-1"><span className={LBL}>Hasta</span><input type="date" value={f.hasta} onChange={e => setF({ ...f, hasta: e.target.value })} className={`${INP} h-12`} /></label>
       <label className="flex flex-col gap-1"><span className={LBL}>Estado</span><select value={f.estado} onChange={e => setF({ ...f, estado: e.target.value })} className={`${INP} h-12`}><option value="all">Todos</option>{Object.entries(ESTADO).map(([k, v]) => <option key={k} value={k}>{v.t}</option>)}</select></label>
-      <p className="col-span-2 lg:col-span-1 text-body-sm text-secondary">Mostrando <b>{lista.length}</b> de {E.cierres.length} cierre{E.cierres.length === 1 ? '' : 's'}{pendientes ? <> · <b className="text-amber-800">{pendientes} líneas por resolver</b></> : ''}</p>
+      <p className="col-span-2 lg:col-span-1 text-body-sm text-secondary">Mostrando <b>{lista.length}</b> de {E.cierres.length} cierre{E.cierres.length === 1 ? '' : 's'}{pendientes ? <> · <b className="text-amber-800">{pendientes} líneas por resolver</b></> : ''}
+        {E.rol === 'admin' && <button onClick={() => abrirRecalcularCierres(f.desde)} className="block text-primary font-semibold h-10">Recalcular cierres desde el {f.desde.split('-').reverse().join('/')}…</button>}</p>
     </section>
     {validar && sinVehiculo.length > 0 && <SinVehiculo cierres={sinVehiculo} />}
     <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">

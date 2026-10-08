@@ -1224,7 +1224,7 @@ El usuario se vuelve loco y necesita verlo claro.
    - Hay pruebas de: devolución de metros sueltos de un artículo por rollos (100 m entregados, 30 m devueltos → almacén +30 m, furgoneta −30 m); línea defectuosa como merma; custodia que vuelve a su socio; anulación; y el saldo del extracto que cuadra.
    - En el móvil se registra una devolución con firma y sale en "Últimas entregas" como DEV-….
 
-### E-042 · Metros de tubo PVC que faltan en el cierre, fijaciones mal calculadas y recálculo de todos los cierres · PENDIENTE (urgente)
+### E-042 · Metros de tubo PVC que faltan en el cierre, fijaciones mal calculadas y recálculo de todos los cierres · HECHO
 **Captura del usuario (08/10):** un cierre de 44 m de línea monofásica de 10 mm² bajo tubo (3 conductores × 44 m bien). En él:
 - **no aparece el tubo PVC;**
 - las fijaciones salen **6 clips y 6 clavos**, con la partida "pvc32+acero32 = **3**". Solo cuenta el **acero (3 m)** y el **PVC está a 0**;
@@ -3632,3 +3632,42 @@ Todo queda en una versión "Corrección manual por …" con la diferencia, y en 
   - Búfala 1 baja de 150 a 120 m.
   - Sale la primera en "Últimas entregas" como "Devolución · Búfala 1".
   - El PDF se genera.
+
+### E-042 · Metros de tubo PVC que faltan en el cierre, fijaciones mal calculadas y recálculo de todos los cierres · HECHO (08/10/2026)
+**Causa (comprobado en producción, en solo lectura).** El cierre de la captura (44 m de 10 mm² bajo tubo, 1 m de corrugado y 3 m de acero) **nació de la prefactura de Holded** y no tiene versión del wizard. La prefactura no lleva `pvc32` (no es campo facturable), así que el tubo PVC quedaba a 0: ni se descontaba ni contaba en las fijaciones (solo los 3 m de acero → 6 fijaciones). Les pasa a **los 10 cierres "bajo tubo" que han llegado por la prefactura** (05/10 a 08/10) y a **1 cierre del histórico** que trae `pvc32` vacío. Los 2 cierres de manguera no cambian (sin `pvc32`, nada que deducir). Los del histórico con `pvc32 > 0` se respetan.
+
+**Qué he hecho**
+1. **PVC deducido** (`deducirPvc` en `supabase/functions/_compartido/cierres.ts`, lo usan la función `registrar-cierre`, la app y las pruebas):
+   - Si la línea es **bajo tubo** y el cierre no trae `pvc32` (o es 0): `pvc32 = metrosLinea − corr32 − acero32 − acero40 − canaleta − sot50 − sot90`, nunca negativo.
+   - Se calcula **al traducir**: los datos guardados del cierre no cambian, y si luego llega el wizard con `pvc32 > 0`, manda el suyo.
+   - **Manguera:** el wizard no dice si va entubada, así que solo cuenta el `pvc32` que venga (y entonces se descuentan la manguera y el tubo).
+   - Las líneas del PVC, sus manguitos y las fijaciones llevan la nota **"PVC deducido de los metros de línea (44 − 1 − 3 = 40 m)"**, que se ve en el detalle del cierre.
+2. **Fijaciones** con el PVC efectivo: (40 + 3) / 0,5 = **86**. La regla propuesta pasa a `pvc32+acero32+acero40`. **En producción la regla sigue siendo `pvc32+acero32`** (no la he tocado: es configuración); hoy da lo mismo porque ningún cierre trae acero40. Si quieres, cámbiala en Integraciones → Editar.
+3. **Barras enteras (E-036)** también para el deducido: 40 m → 14 barras (42 m).
+4. **Recalcular cierres** (Configuración → Integraciones → "Ver qué cambia", y en Equipos → Cierres, "Recalcular cierres desde el …", solo administrador):
+   - **Vista previa** sin tocar nada (se aplica sobre una copia del estado): cuántos cierres cambian de los revisados, la diferencia **por furgoneta y artículo** ("+63 m · 21 barras de 3 m TUBO PVC…", "+126 ud Clip…") y, cierre a cierre, su diferencia y la nota del PVC deducido.
+   - **Aplicar**: cada cierre que cambia va a `recalcular_cierre_admin` (solo la diferencia, con ajustes "Corrección de cierre" enlazados al cierre y versión "Recalculado por …").
+   - **Respeta lo corregido a mano (E-035):** los datos corregidos (fase, tipo, sección) se aplican antes de traducir y las partidas fijadas a mano no se tocan; lo resuelto a mano también se conserva.
+   - **Auditoría:** migración `20261031000100_e042_recalculo_auditoria.sql`: cada cierre recalculado deja una entrada `recalcular_cierre` con su diferencia. Aplicada en producción.
+   - La lógica local del recálculo pasa de `ops.ts` a `recalcularCierreLocal` (dominio), para usarla en la vista previa.
+5. **Desplegado:** `registrar-cierre` (los cierres nuevos ya llegan con el PVC deducido) y la migración.
+
+**Caso real: lo que cambiaría (calculado con los datos de producción, sin tocar nada)**
+- **11 cierres cambian**, todos solo en PVC, manguitos y fijaciones. El de la captura: **+42 m de PVC (14 barras), +14 manguitos, +80 clips y +80 clavos** (tenía 6 de cada; pasan a 86).
+- En total, en las 3 furgonetas: **+543 m de tubo PVC, +185 manguitos, +1.058 clips y +1.058 clavos.**
+- **No lo he aplicado:** lo aplica el usuario desde "Recalcular cierres desde el 30/09/2026" (o antes), después de ver la vista previa.
+
+**Pruebas:** `src/domain/e042.test.ts` (6) y `supabase/tests/e042.test.ts` (2):
+- 44 − 1 − 3 = 40 m, marcado como deducido;
+- `pvc32` del wizard respetado, nunca negativo;
+- manguera con `pvc32` (se descuentan las dos), sin `pvc32` no se deduce;
+- 86 fijaciones (también con la regla de producción);
+- 14 barras (42 m);
+- prefactura de Holded en el servidor;
+- vista previa sin tocar el estado, por artículo y furgoneta;
+- Aplicar con versión, la corrección manual intacta y nada que cambiar después;
+- `recalcular_cierre_admin` solo administrador y con auditoría.
+
+Ajusté 3 pruebas de E-032 (sus reglas no tienen `pvc32`; ahora aparece la línea del PVC deducido sin equivalencia). Reloj fijo en las nuevas. **564 pruebas en verde** (254 de la app + 310 de base de datos); build correcto.
+
+**En el navegador:** dos cierres de demostración aplicados sin PVC (44 m con 1 + 3, y 20 m) → la vista previa da 2 cierres, +63 m (21 barras), +126 clips y +21 manguitos. En el de 44 m: +42 m (14 barras), +86 clips, +14 manguitos y la nota "PVC deducido… (44 − 1 − 3 = 40 m)". Aplicar → versión "Recalculado por Oficina"; otra vista previa → "0 de 2 cierres cambian". Bien en móvil. Demo restaurada.

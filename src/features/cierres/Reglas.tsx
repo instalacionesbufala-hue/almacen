@@ -1,10 +1,10 @@
 /* E-016 · Editor de equivalencias en la app: condiciones por filas (campo, operador, valor), artículos con buscador y foto,
    fórmula, kits de fijación, "Probar" (qué descontaría, sin aplicar nada) y "Recalcular cierres desde…". */
-import { useState } from 'react';
-import type { ArticuloRegla, Equivalencia } from '../../data/tipos';
-import { CAMPOS_MATERIAL, normalizarCierre, reglasVigentes, traducirCierre, type LineaTraducida } from '../../domain/cierres';
+import { useEffect, useState } from 'react';
+import type { ArticuloRegla, Equivalencia, Estado } from '../../data/tipos';
+import { CAMPOS_MATERIAL, cierresARecalcular, normalizarCierre, reglasVigentes, traducirCierre, vistaPreviaRecalculo, type LineaTraducida, type VistaRecalculo } from '../../domain/cierres';
 import { fechaHora, hoyISO, num, toNum } from '../../domain/formato';
-import { find, lineaCierreTxt } from '../../domain/reglas';
+import { contenidoDe, find, lineaCierreTxt, nombreVehiculo, qtyTxt } from '../../domain/reglas';
 import { ejecutar, S, useAlmacen } from '../../store/almacen';
 import { modoNube, supabase } from '../../store/nube/cliente';
 import { closeModal, openModal, SheetFoot, SheetHead } from '../../ui/modal';
@@ -155,29 +155,74 @@ function Probar() {
   </>);
 }
 
-/* ---------- Recalcular los cierres desde una fecha con las reglas actuales ---------- */
+/* ---------- E-042 · Recalcular todos los cierres desde una fecha (todas las partidas y reglas), con vista previa ---------- */
+/** Los datos de varios cierres: en local, del estado; en la nube, de una consulta por bloques */
+async function datosDeCierres(ids: string[]): Promise<Map<string, Record<string, unknown>>> {
+  const m = new Map<string, Record<string, unknown>>(), faltan: string[] = [];
+  for (const id of ids) { const d = S().cierres.find(c => c.id === id)?.datos; if (d) m.set(id, d); else faltan.push(id); }
+  if (supabase) for (let i = 0; i < faltan.length; i += 200) {
+    const { data, error } = await supabase.from('cierres').select('id, datos').in('id', faltan.slice(i, i + 200));
+    if (error) throw new Error(error.message);
+    for (const r of data || []) if (r.datos) m.set(r.id as string, r.datos as Record<string, unknown>);
+  }
+  return m;
+}
+export const abrirRecalcularCierres = (desde?: string) => openModal(<RecalculoPrevio desde={desde || hoyISO()} />, { ancha: true });
 export function Recalcular() {
-  const E = useAlmacen();
-  const [desde, setDesde] = useState(hoyISO()), [enCurso, setEnCurso] = useState(false);
-  const recalcular = async () => {
-    const lista = E.cierres.filter(c => c.fecha >= Date.parse(desde) && c.estado !== 'ignorado');
-    if (!lista.length) return toast('No hay cierres desde esa fecha.', 'warn');
-    if (!confirm(`¿Recalcular ${lista.length} cierres con las reglas confirmadas actuales? Solo se aplica la diferencia, con ajustes "Corrección de cierre".`)) return;
-    setEnCurso(true);
-    let n = 0;
-    try {
-      for (const c of lista) {
-        const d = await datosDeCierre(c.id); if (!d) continue;
-        const cierre = normalizarCierre(d);
-        const lineas = traducirCierre(cierre, reglasVigentes(S()), S().kits, S().configApp.kitFijacion || 'A', new Set(S().products.filter(p => !p.borrador).map(p => p.sku)));
-        if (ejecutar({ op: 'recalcularCierre', args: { id: c.id, lineas } })) n++;
-      }
-    } finally { setEnCurso(false); }
-    toast(`${n} cierres recalculados.`, 'ok');
-  };
+  const [desde, setDesde] = useState(hoyISO());
   return (<div className="flex flex-wrap items-end gap-2">
     <Campo label="Recalcular cierres desde"><input type="date" value={desde} onChange={e => setDesde(e.target.value)} className={`${INP} h-12`} /></Campo>
-    <button onClick={() => void recalcular()} disabled={enCurso} className={`${BTN_S} h-12 px-4`}><Icon n="restart_alt" className="ico-20" />{enCurso ? 'Recalculando…' : 'Recalcular'}</button>
-    <p className="text-body-sm text-secondary w-full">Los cierres ya aplicados no cambian al editar una regla, salvo que lo pidas aquí. Las líneas que resolviste a mano se conservan.</p>
+    <button onClick={() => abrirRecalcularCierres(desde)} className={`${BTN_S} h-12 px-4`}><Icon n="restart_alt" className="ico-20" />Ver qué cambia</button>
+    <p className="text-body-sm text-secondary w-full">Los cierres ya aplicados no cambian al editar una regla, salvo que lo pidas aquí. Primero se ve qué cambiaría (todas las partidas y reglas a la vez) y luego se aplica. Lo corregido o resuelto a mano se conserva.</p>
   </div>);
+}
+const difTxt = (E: Estado, sku: string, u: number) => { const p = find(E, sku); return `${u > 0 ? '+' : '−'}${p ? qtyTxt(p, Math.abs(u) / contenidoDe(p)) : num(Math.abs(u))} ${p?.name || sku}`; };
+function RecalculoPrevio({ desde: desdeIni }: { desde: string }) {
+  const E = useAlmacen();
+  const [desde, setDesde] = useState(desdeIni), [vista, setVista] = useState<VistaRecalculo | null>(null), [enCurso, setEnCurso] = useState(false), [abierto, setAbierto] = useState<string | null>(null);
+  const calcular = async (d = desde) => {
+    setEnCurso(true); setVista(null);
+    try {
+      const lista = cierresARecalcular(S(), Date.parse(d)), datos = await datosDeCierres(lista.map(c => c.id));
+      setVista(vistaPreviaRecalculo(S(), Date.parse(d), id => datos.get(id)));
+    } catch (err) { toast((err as Error).message, 'err'); } finally { setEnCurso(false); }
+  };
+  useEffect(() => { void calcular(desdeIni); }, []);
+  const aplicar = () => {
+    if (!vista?.cambios.length) return;
+    if (!confirm(`¿Aplicar el recálculo a ${vista.cambios.length} cierre${vista.cambios.length === 1 ? '' : 's'}? Solo se aplica la diferencia, con ajustes "Corrección de cierre" enlazados a cada cierre.`)) return;
+    let n = 0;
+    for (const c of vista.cambios) if (ejecutar({ op: 'recalcularCierre', args: { id: c.id, lineas: c.lineas } })) n++;
+    closeModal(); toast(`${n} cierre${n === 1 ? '' : 's'} recalculado${n === 1 ? '' : 's'}.`, 'ok');
+  };
+  const veh = (v?: string) => v ? nombreVehiculo(E, v) : 'Sin furgoneta';
+  const grupos = vista ? [...new Set(vista.porArticulo.map(x => x.vehiculo || ''))] : [];
+  return (<>
+    <SheetHead title="Recalcular cierres" sub="Todas las partidas y reglas a la vez. Primero, qué cambiaría; no se aplica nada hasta que pulses Aplicar." />
+    <div className="p-4 flex flex-col gap-3 overflow-y-auto">
+      <div className="flex flex-wrap items-end gap-2">
+        <Campo label="Desde"><input type="date" value={desde} onChange={e => setDesde(e.target.value)} className={`${INP} h-12`} /></Campo>
+        <button onClick={() => void calcular()} disabled={enCurso} className={`${BTN_S} h-12 px-4`}><Icon n="refresh" className="ico-20" />{enCurso ? 'Calculando…' : 'Volver a calcular'}</button>
+      </div>
+      {enCurso && <p className="text-body-md text-secondary">Calculando con las reglas confirmadas actuales…</p>}
+      {vista && <>
+        <p className="text-body-md"><b>{vista.cambios.length}</b> de {vista.revisados} cierre{vista.revisados === 1 ? '' : 's'} cambia{vista.cambios.length === 1 ? '' : 'n'}.{!vista.cambios.length && ' Todo está al día con las reglas actuales.'}</p>
+        {grupos.map(g => <section key={g} className="rounded-xl ring-1 ring-surface-container p-3 flex flex-col gap-1">
+          <h3 className="font-semibold">{veh(g || undefined)}</h3>
+          {vista.porArticulo.filter(x => (x.vehiculo || '') === g).map(x => <div key={x.sku} className="flex justify-between gap-2 text-body-sm">
+            <span className={x.unidades > 0 ? '' : 'text-tertiary'}>{difTxt(E, x.sku, x.unidades)}</span><span className="text-secondary whitespace-nowrap">{x.cierres} cierre{x.cierres === 1 ? '' : 's'}</span></div>)}
+        </section>)}
+        {vista.cambios.length > 0 && <div className="flex flex-col"><span className={LBL}>Cierre a cierre</span>
+          {vista.cambios.map(c => <div key={c.id} className="border-b border-surface-container">
+            <button onClick={() => setAbierto(abierto === c.id ? null : c.id)} className="w-full text-left flex flex-wrap justify-between gap-2 py-2 min-h-12">
+              <span><b className="font-mono">{c.numInst || '—'}</b> · {veh(c.vehiculo)}</span><span className="text-secondary text-body-sm">{fechaHora(c.fecha)}</span></button>
+            {abierto === c.id && <div className="pb-2 text-body-sm flex flex-col gap-1">
+              {c.diferencia.map(d => <span key={d.sku}>{difTxt(E, d.sku, d.unidades)}</span>)}
+              {[...new Set(c.lineas.filter(l => /deducido/.test(l.nota)).map(l => l.nota.split(' · ')[0]))].map(t => <span key={t} className="text-amber-800">{t}</span>)}
+            </div>}
+          </div>)}</div>}
+      </>}
+    </div>
+    <SheetFoot><button onClick={aplicar} disabled={!vista?.cambios.length} className={`${BTN_P} h-12 w-full disabled:opacity-40`}><Icon n="done_all" className="ico-20" />Aplicar{vista?.cambios.length ? ` a ${vista.cambios.length} cierre${vista.cambios.length === 1 ? '' : 's'}` : ''}</button></SheetFoot>
+  </>);
 }

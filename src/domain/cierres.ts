@@ -1,7 +1,7 @@
 /* E-012 · Cierres en la app: la misma lógica que el servidor (_registrar_cierre y _sincronizar_cierre) para la demostración
    y para la carga del histórico en local; y los resúmenes para las pantallas (consumo por obra, por equipo y periodo, discrepancias). */
 import type { CierreApp, Equivalencia, Estado, LineaCierre } from '../data/tipos';
-import { claveCierre, prepararVersion, traducirCierre, type Cierre, type LineaTraducida, type OrigenVersion, type PrefacturaHolded, type PrevioCierre, type Regla, type Version } from '../../supabase/functions/_compartido/cierres';
+import { aplicarCorreccion, claveCierre, normalizarCierre, prepararVersion, traducirCierre, type Cierre, type LineaTraducida, type OrigenVersion, type PrefacturaHolded, type PrevioCierre, type Regla, type Version } from '../../supabase/functions/_compartido/cierres';
 import { applyMovement, consumoPorPieza, contenidoDe, find, unidadesABordo, vehiculoDeEquipo } from './reglas';
 import { redondea, uid } from './formato';
 
@@ -65,6 +65,56 @@ export function recalcularConsumoPiezasLocal(S: Estado, sku: string, desde: numb
     cierres++; unidades = redondea(unidades + (diferencia.find(d => d.sku === p.sku)?.unidades || 0));
   }
   return { cierres, unidades };
+}
+
+/** Vuelve a aplicar a un cierre su traducción con las reglas actuales (= recalcular_cierre_admin): solo la diferencia, con ajustes
+    enlazados; lo corregido a mano (E-035) y lo resuelto a mano se conservan. Devuelve la diferencia (vacía si no cambia nada). */
+export function recalcularCierreLocal(S: Estado, id: string, lineasNuevas: LineaTraducida[]): { sku: string; unidades: number }[] {
+  const ci = S.cierres.find(c => c.id === id); if (!ci || ci.estado === 'ignorado') return [];
+  const antes = consumoDe(S, id);
+  quitarResueltasCubiertas(S, id, lineasNuevas);
+  const resueltos = new Set(S.lineasCierre.filter(l => l.cierre === id && l.estado === 'resuelta').map(l => l.campo));
+  S.lineasCierre = S.lineasCierre.filter(l => l.cierre !== id || l.estado === 'resuelta' || l.manual);
+  const fijadas = new Set(S.lineasCierre.filter(l => l.cierre === id && l.manual).map(l => l.campo));
+  for (const l of lineasNuevas) {
+    if (fijadas.has(l.campo)) continue;
+    if (l.estado !== 'aplicable' && resueltos.has(l.campo)) continue;
+    const sku = l.sku && find(S, l.sku) && !find(S, l.sku)!.borrador ? l.sku : undefined;
+    S.lineasCierre.push({ id: uid('L'), cierre: id, campo: l.campo, formula: l.formula, valor: l.valor, sku, cantidad: l.cantidad, estimada: l.estimada,
+      estado: estadoLinea(l, sku), nota: l.nota });
+  }
+  sincronizarCierreLocal(S, id);
+  const despues = consumoDe(S, id);
+  const diferencia = [...new Set([...antes.keys(), ...despues.keys()])].sort().map(sku => ({ sku, unidades: redondea((despues.get(sku) || 0) - (antes.get(sku) || 0)) })).filter(d => d.unidades);
+  if (diferencia.length) { ci.version++; (ci.versiones ||= []).push({ n: ci.version, origen: 'admin', documento: `Recalculado por ${S.operator}`, recibido: Date.now(), diferencia }); }
+  return diferencia;
+}
+
+/* ---------- E-042 · Recalcular todos los cierres desde una fecha (todas las partidas y reglas), con vista previa ---------- */
+/** Los cierres que entran en el recálculo, del más antiguo al más reciente */
+export const cierresARecalcular = (S: Pick<Estado, 'cierres'>, desde: number) =>
+  S.cierres.filter(c => c.fecha >= desde && c.estado !== 'ignorado').sort((a, b) => a.fecha - b.fecha);
+/** La traducción de un cierre con las reglas actuales: sus datos (wizard + prefactura) con la corrección manual de E-035 encima */
+export const lineasRecalculo = (S: Estado, ci: Pick<CierreApp, 'correccion'>, datos: Record<string, unknown>) =>
+  traducirEnApp(S, aplicarCorreccion(normalizarCierre(datos), ci.correccion || null));
+export interface CambioRecalculo { id: string; numInst: string; vehiculo?: string; fecha: number; lineas: LineaTraducida[]; diferencia: { sku: string; unidades: number }[] }
+export interface VistaRecalculo { revisados: number; cambios: CambioRecalculo[]; porArticulo: { sku: string; vehiculo?: string; unidades: number; cierres: number }[] }
+/** Qué cambiaría el recálculo, sin tocar nada: se aplica sobre una copia del estado. `datos` = los datos de cada cierre (en la nube se leen aparte). */
+export function vistaPreviaRecalculo(S: Estado, desde: number, datosDe: (id: string) => Record<string, unknown> | null | undefined): VistaRecalculo {
+  const C: Estado = structuredClone(S), cambios: CambioRecalculo[] = [];
+  let revisados = 0;
+  for (const ci of cierresARecalcular(C, desde)) {
+    const datos = datosDe(ci.id); if (!datos) continue;
+    revisados++;
+    const lineas = lineasRecalculo(S, ci, datos), diferencia = recalcularCierreLocal(C, ci.id, lineas);
+    if (diferencia.length) cambios.push({ id: ci.id, numInst: ci.numInst, vehiculo: ci.vehiculo, fecha: ci.fecha, lineas, diferencia });
+  }
+  const m = new Map<string, { sku: string; vehiculo?: string; unidades: number; cierres: number }>();
+  for (const c of cambios) for (const d of c.diferencia) {
+    const k = `${c.vehiculo || ''}|${d.sku}`, x = m.get(k) || { sku: d.sku, vehiculo: c.vehiculo, unidades: 0, cierres: 0 };
+    x.unidades = redondea(x.unidades + d.unidades); x.cierres++; m.set(k, x);
+  }
+  return { revisados, cambios, porArticulo: [...m.values()].filter(x => x.unidades).sort((a, b) => (a.vehiculo || '').localeCompare(b.vehiculo || '') || a.sku.localeCompare(b.sku)) };
 }
 
 /* ---------- E-026 · Versiones: una instalación = un cierre ---------- */
