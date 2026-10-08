@@ -112,18 +112,5 @@ export function CabeceraMovil({ vista }: { vista: Vista }) {
   );
 }
 
-export function BarraInferior({ vista }: { vista: Vista }) {
-  const E = useAlmacen();
-  const b = (v: Vista, lbl: string, icon: string) => { const on = vista === v; return <a href={`#${v}`} className={`flex flex-col items-center justify-center gap-1 py-2 min-h-[64px] ${on ? 'text-primary' : 'text-on-surface-variant'}`}><Icon n={icon} className={on ? 'ico-fill' : ''} /><span className={`text-[12px] ${on ? 'font-semibold' : ''}`}>{lbl}</span></a>; };
-  return (
-    <nav className="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-surface-container-lowest/95 backdrop-blur-md shadow-[0_-2px_12px_rgba(11,28,48,0.06)] safe-bottom">
-      <div className="grid grid-cols-4 items-end px-2">
-        {b('stock', 'Inventario', 'inventory_2')}
-        {/* E-027: lo que el rol no ve, no sale (el hueco se queda para que el botón central siga en medio) */}
-        <a href="#scan" className={`flex flex-col items-center -mt-6 pb-2 ${vista === 'scan' ? 'text-primary' : 'text-on-surface-variant'}`}><span className="w-16 h-16 rounded-2xl bg-primary text-white grid place-items-center shadow-lg shadow-primary/30"><Icon n="qr_code_scanner" className="ico-32" /></span><span className="text-[12px] font-semibold mt-1">Escanear</span></a>
-        {vistaPermitida(E, 'entregas') ? b('entregas', 'Entrega', 'assignment_turned_in') : <span />}
-        {vistaPermitida(E, 'equipos') ? b('equipos', 'Cuadrillas', 'local_shipping') : <span />}
-      </div>
-    </nav>
-  );
-}
+// E-040: la barra inferior del móvil es personalizable (Barra.tsx)
+export { BarraInferior } from './Barra';

@@ -9,7 +9,7 @@ import { aEstado, COLUMNAS, TABLAS, type Tablas } from './mapeo';
 import { supabase } from './cliente';
 import { motivoLegible } from '../motivos';
 
-export interface Perfil { id: string; nombre: string; email: string | null; rol: string; activo: boolean; propietario_id?: string | null }
+export interface Perfil { id: string; nombre: string; email: string | null; rol: string; activo: boolean; propietario_id?: string | null; /** E-040 */ barra_movil?: unknown }
 export interface Sesion { estado: 'cargando' | 'sin-sesion' | 'lista'; perfil?: Perfil; error?: string; conexion: 'en-linea' | 'sin-conexion'; ultimaCarga?: number }
 export const sesion = crearStore<Sesion>({ estado: 'cargando', conexion: navigator.onLine ? 'en-linea' : 'sin-conexion' });
 

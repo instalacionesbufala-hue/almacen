@@ -1,4 +1,5 @@
 /* Configuración y auditoría: operario, semáforo, IA, integridad y copias de seguridad */
+import { abrirEditorBarra } from '../shell/Barra';
 import { useRef, type ReactNode } from 'react';
 import { MARCA } from '../../data/catalogo';
 import { hashEntrega } from '../../domain/hash';
@@ -59,6 +60,8 @@ export default function ConfigView() {
         <Bloque icon="person" t={modoNube ? 'Mi usuario' : 'Operario activo'}><p className="text-body-sm text-secondary">Cada entrada, salida, merma e incidencia queda a su nombre.</p>
           <button onClick={abrirPerfil} className="flex items-center gap-3 bg-surface-container-low rounded-xl p-3 text-left"><Avatar n={E.operator} /><span className="flex-1 font-semibold">{E.operator}</span><span className="text-primary text-body-sm">Cambiar</span></button></Bloque>
         {perm.configurar && <div className="lg:col-span-2"><Bloque icon="notifications" t="Avisos de reposición"><div className="flex flex-wrap gap-2"><button onClick={abrirReposicion} className={`${BTN_S} h-11 px-4`}><Icon n="inventory" className="ico-20" />Bandeja de reposición</button><button onClick={() => abrirMinimos()} className={`${BTN_S} h-11 px-4`}><Icon n="tune" className="ico-20" />Mínimos y objetivos</button></div><ConfigAvisosPanel /></Bloque></div>}
+        <Bloque icon="smartphone" t="Barra inferior del móvil"><p className="text-body-sm text-secondary">Elige hasta 5 accesos para la barra de abajo del móvil, en tu orden y con tu botón central. Se guarda en tu usuario; el menú del ordenador no cambia. En el móvil también se abre manteniendo pulsada la barra.</p>
+          <button onClick={abrirEditorBarra} className={`${BTN_S} h-12`}><Icon n="tune" className="ico-20" />Cambiar la barra</button></Bloque>
         <Bloque icon="traffic" t="Semáforo de stock">
           <ul className="text-body-sm flex flex-col gap-2">
             <li className="flex gap-2"><span className="w-3 h-3 mt-1 rounded-full bg-error shrink-0" /><span><b>Rojo</b>: stock del almacén por debajo del mínimo (p. ej. menos de 2 cajas de tacos o de 2 cargadores). Salta un aviso al instante.</span></li>

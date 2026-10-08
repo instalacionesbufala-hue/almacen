@@ -1176,7 +1176,7 @@ El usuario se vuelve loco y necesita verlo claro.
 3. **Menú rápido del móvil:** "Retirada por socio".
 4. **Hecho cuando** desde Entregas, en el ordenador y en el móvil, se registra una retirada de material de Esmove recogida por un tercero, y aparece en "Últimas entregas" como RET-….
 
-### E-040 · Barra inferior del móvil personalizable (sin afectar al escritorio) · PENDIENTE
+### E-040 · Barra inferior del móvil personalizable (sin afectar al escritorio) · HECHO
 **Petición del usuario (08/10):** en la app del móvil, la barra de abajo tiene **4 accesos fijos** (Inventario, Escanear, Entrega y Cuadrillas). Quiere **poder cambiarlos**, sin que eso altere el menú lateral del escritorio.
 
 **Qué hacer**
@@ -3450,3 +3450,49 @@ Todo queda en una versión "Corrección manual por …" con la diferencia, y en 
   - en el móvil (375 px), desde Entregas → "Socio o tercero" → cargador de Esmove recogido por un tercero en su nombre, con firma → RET-2026-0001, que aparece la primera en "Últimas entregas";
   - en el escritorio, la tarjeta y la retirada en "Entregas por equipo".
 - 240 pruebas de la app en verde; `tsc -b` y build correctos.
+
+### E-040 · Barra inferior del móvil personalizable · HECHO (08/10/2026)
+
+**Cómo se cambia:**
+- En el móvil, **manteniendo pulsada la barra** (un poco más de medio segundo).
+- O desde **Configuración → "Barra inferior del móvil" → Cambiar la barra**.
+- O desde el **menú del avatar → "Barra inferior del móvil"**. Esta vía sirve también a los roles que no ven Configuración, como el socio.
+
+**El editor** (`src/features/shell/Barra.tsx`):
+- **Vista previa** en vivo.
+- **"En la barra (n de 5)":** cada acceso se **arrastra** por su asa ⠿ para ordenarlo (con el dedo; también hay flechas ↑↓). La ★ lo marca como **botón central destacado** (como hoy "Escanear"; puede no haber ninguno). Con ⊖ se quita.
+- **"Disponibles":** solo los que el rol del usuario puede usar:
+  - Inventario, Escanear, Entrega, Equipos y técnicos;
+  - Retirada por socio (E-039), Albaranes, Escanear albarán;
+  - Movimientos, Custodia de socios, Cierres;
+  - Recuento de furgoneta (pregunta qué furgoneta);
+  - Herramientas, EPIs y ropa;
+  - Avisos y bandeja;
+  - Nuevo con la cámara;
+  - **Más**, que abre el menú completo.
+- Hasta 5 accesos. Con la barra llena, sugiere "Más".
+- **"Restablecer"** vuelve a la barra de siempre (Inventario · Escanear · Entrega · Cuadrillas).
+
+**Por usuario:**
+- Columna `perfiles.barra_movil`, que `perfil_actual()` ya devuelve, así que el usuario la tiene en cualquier móvil.
+- `guardar_barra_movil()` la guarda (también para solo lectura y socios; solo cambia la barra propia). El servidor valida ids conocidos, como mucho 5, sin repetir y que el central esté en la barra.
+- Copia en el dispositivo: sin conexión se usa la última. Si se cambia sin conexión, queda marcada y se envía al volver a entrar.
+
+**Permisos (E-027 y E-034):** la barra que se ve se filtra con los permisos actuales del rol. Si el rol pierde un permiso, el acceso desaparece y, si era el central, deja de serlo. Si no queda ninguno propio, se usa la de siempre, también filtrada.
+
+**El escritorio no cambia:** la barra sigue siendo `lg:hidden` y el menú lateral no depende de ella (hay una prueba que lo comprueba).
+
+**Producción:** migración `20261029000100_e040_barra_movil.sql` aplicada (solo añade la columna y la función).
+
+**Pruebas: 545 en verde.**
+- `supabase/tests/e040.test.ts` (3): guardar y leer por usuario sin tocar a otros (admin, solo lectura y socio); validación y restablecer; un usuario desactivado no guarda.
+- `src/domain/e040.test.ts` (3):
+  - filtro por permisos (admin, solo lectura, socio);
+  - normalización;
+  - guardar, leer y restablecer, con la barra renderizada en 5 columnas mientras el menú lateral sale idéntico.
+- Build correcto.
+- **En el navegador, con tamaño de móvil:**
+  - mantener pulsada → añadir "Retirada por socio" → arrastrarla a la 2.ª posición → Guardar;
+  - tras recargar, la barra es Inventario · Retirada · Escanear (central) · Entrega · Cuadrillas, y "Retirada" abre la retirada;
+  - "Restablecer" devuelve la barra de siempre.
+- **Falta probarlo en el iPhone del usuario.**

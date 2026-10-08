@@ -504,6 +504,7 @@ function Menu() {
       {perm.mod('inventario') && <button onClick={() => { closeModal(); void import('../altaCamara/AltaCamara').then(m => m.abrirAltaCamara()); }} className="flex items-center gap-3 px-4 h-14 rounded-xl bg-primary-fixed/50 text-primary font-semibold"><Icon n="add_a_photo" /><span className="flex-1 text-left">Nuevo con la cámara</span></button>}
       {perm.mod('movimientos') && <button onClick={() => { closeModal(); void import('../custodia/Retirada').then(m => m.iniciarRetirada()); }} className="flex items-center gap-3 px-4 h-14 rounded-xl bg-violet-50 text-violet-900 font-semibold"><Icon n="handshake" /><span className="flex-1 text-left">Retirada por socio</span></button>}
       <button onClick={abrirAvisos} className="flex items-center gap-3 px-4 h-14 rounded-xl hover:bg-surface-container-low"><Icon n="notifications" /><span className="flex-1 text-left">Avisos de stock</span>{nCrit > 0 && <Tag c="bg-error-container text-error">{nCrit}</Tag>}</button>
+      <button onClick={() => { closeModal(); void import('../shell/Barra').then(m => m.abrirEditorBarra()); }} className="flex items-center gap-3 px-4 h-14 rounded-xl hover:bg-surface-container-low"><Icon n="tune" /><span className="flex-1 text-left">Barra inferior del móvil</span></button>
       <button onClick={abrirPerfil} className="flex items-center gap-3 px-4 h-14 rounded-xl hover:bg-surface-container-low"><Icon n="person" /><span className="flex-1 text-left">Cambiar operario</span></button>
     </div>
   </>);

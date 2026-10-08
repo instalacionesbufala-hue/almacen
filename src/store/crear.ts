@@ -10,6 +10,6 @@ export function crearStore<T>(inicial: T) {
     subscribe,
     set(nuevo: T) { valor = nuevo; version++; subs.forEach(f => f()); },
     emit() { version++; subs.forEach(f => f()); },
-    use(): T { useSyncExternalStore(subscribe, () => version); return valor; },
+    use(): T { useSyncExternalStore(subscribe, () => version, () => version); return valor; },
   };
 }
