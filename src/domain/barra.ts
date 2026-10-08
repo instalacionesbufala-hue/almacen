@@ -5,7 +5,7 @@ import type { Estado } from '../data/tipos';
 import { gestiona, puede, socioEfectivo, vistaPermitida } from './permisos';
 
 export type IdAcceso = 'inventario' | 'escanear' | 'entrega' | 'equipos' | 'retirada' | 'albaranes' | 'escanear_albaran' | 'movimientos' | 'custodia'
-  | 'cierres' | 'recuento' | 'dotacion' | 'avisos' | 'camara' | 'mas';
+  | 'cierres' | 'recuento' | 'dotacion' | 'avisos' | 'camara' | 'devolucion' | 'mas';
 export interface Acceso { id: IdAcceso; label: string; corto: string; icon: string; /** vista a la que lleva (las acciones se resuelven en la interfaz) */ vista?: string }
 export interface ConfigBarra { accesos: IdAcceso[]; central: IdAcceso | null }
 type E = Pick<Estado, 'rol' | 'roles' | 'socio'>;
@@ -15,6 +15,7 @@ export const ACCESOS: (Acceso & { permitido: (e: E) => boolean })[] = [
   { id: 'escanear', label: 'Escanear', corto: 'Escanear', icon: 'qr_code_scanner', vista: 'scan', permitido: e => vistaPermitida(e, 'scan') },
   { id: 'entrega', label: 'Entrega', corto: 'Entrega', icon: 'assignment_turned_in', vista: 'entregas', permitido: e => vistaPermitida(e, 'entregas') },
   { id: 'equipos', label: 'Equipos y técnicos', corto: 'Cuadrillas', icon: 'local_shipping', vista: 'equipos', permitido: e => vistaPermitida(e, 'equipos') },
+  { id: 'devolucion', label: 'Devolución de furgoneta', corto: 'Devolución', icon: 'assignment_return', permitido: e => !socioEfectivo(e) && gestiona(e, 'entregas') },
   { id: 'retirada', label: 'Retirada por socio', corto: 'Retirada', icon: 'handshake', permitido: e => !socioEfectivo(e) && gestiona(e, 'movimientos') },
   { id: 'albaranes', label: 'Albaranes', corto: 'Albaranes', icon: 'document_scanner', vista: 'albaranes', permitido: e => vistaPermitida(e, 'albaranes') },
   { id: 'escanear_albaran', label: 'Escanear albarán', corto: 'Albarán', icon: 'photo_camera', permitido: e => !socioEfectivo(e) && gestiona(e, 'albaranes') },

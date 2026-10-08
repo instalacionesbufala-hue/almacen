@@ -2,6 +2,7 @@
    - aplicarse en local (validación previa con src/domain y respuesta inmediata en pantalla), y
    - traducirse a su función SQL del servidor (la fuente de verdad en modo nube).
    En modo nube la operación se guarda en la cola y se reaplica en local hasta que el servidor la confirma. */
+import { anularDevolucionLocal, registrarDevolucionLocal, type DatosDevolucion } from '../domain/devoluciones';
 import { anularRetiradaLocal, registrarRetiradaLocal, type DatosRetirada } from '../domain/retiradas';
 import { recalcularConsumoPiezasLocal } from '../domain/cierres';
 import { corregirCierreLocal, type Correccion } from '../domain/corregir';
@@ -104,6 +105,8 @@ export type Op =
   | { op: 'recalcularConsumoPiezas'; args: { sku: string; desde: number } }
   | { op: 'retirada'; args: { id: string; datos: DatosRetirada } }
   | { op: 'anularRetirada'; args: { id: string; motivo: string } }
+  | { op: 'devolucion'; args: { id: string; datos: DatosDevolucion } }
+  | { op: 'anularDevolucion'; args: { id: string; motivo: string } }
   | { op: 'cambiarFormato'; args: { sku: string; formato: NuevoFormato; modo: ModoConversion } }
   | { op: 'resolverLineaVarios'; args: { linea: string; grupo: string; articulos: ArticuloResolucion[] } }
   | { op: 'deshacerResolucion'; args: { linea: string } }
@@ -838,6 +841,17 @@ export const OPS: Defs = {
     },
     rpc: a => ['encolar_envio', { p_canal: a.canal, p_tipo: a.tipo, p_asunto: a.asunto, p_cuerpo: a.cuerpo, p_destinatarios: a.destinatarios, p_adjunto_csv: a.csv ?? null }],
     desc: (_S, a) => `Envío (${a.canal}): ${a.asunto}`,
+  },
+  /* ---------- E-041 · Devolución de material de una furgoneta al almacén ---------- */
+  devolucion: {
+    local: (S, a) => { registrarDevolucionLocal(S, a.id, a.datos, S.operator); },
+    rpc: ({ id, datos: d }) => ['registrar_devolucion', { p_id: id, p: { vehiculo: d.vehiculo, tecnico: d.tecnico, motivo: d.motivo, motivoTexto: d.motivoTexto || '', obra: d.obra || '', firma: d.firma, lineas: d.lineas } }],
+    desc: (S, a) => `Devolución de ${S.vehiculos.find(v => v.id === a.datos.vehiculo)?.matricula || a.datos.vehiculo} (${a.datos.lineas.length} línea${a.datos.lineas.length === 1 ? '' : 's'})`,
+  },
+  anularDevolucion: {
+    local: (S, a) => { anularDevolucionLocal(S, a.id, a.motivo, S.operator); },
+    rpc: a => ['anular_devolucion', { p_id: a.id, p_motivo: a.motivo }],
+    desc: (S, a) => `Anular la devolución ${S.devoluciones?.find(d => d.id === a.id)?.numero || ''}`,
   },
   /* ---------- E-038 · Retirada de material en custodia por el socio ---------- */
   retirada: {

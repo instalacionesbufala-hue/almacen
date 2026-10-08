@@ -1,6 +1,8 @@
 /* E-011 · Nueva entrega en tres pasos (móvil primero, botones de 56 px):
    1. Para quién (técnico y, si se quiere, la obra) · 2. Qué se entrega (buscador o escáner seguido) · 3. Firma del técnico.
    Nada predeterminado: el almacén elige los artículos. Se puede guardar como preparada (stock reservado) para firmar más tarde. */
+import { abrirVerDevolucion, iniciarDevolucion } from './Devolucion';
+import { numDevolucion } from '../../domain/devoluciones';
 import { abrirVerRetirada, iniciarRetirada } from '../custodia/Retirada';
 import { numRetirada } from '../../domain/retiradas';
 import { cantTxt, enMetros, equivTxt } from '../../domain/formatos';
@@ -71,6 +73,12 @@ function PasoQuien() {
             <span className={`block text-body-sm truncate ${sel ? 'text-white/80' : 'text-secondary'}`}>{!veh ? 'Sin vehículo: asígnale uno en Equipos y técnicos' : !tecs.length ? 'Sin técnicos: asígnale alguno para que firmen' : tecs.join(' · ')}</span></span>
           {sel && <Icon n="check_circle" className="ico-fill" />}
         </button>); })}
+        {/* E-041: la devolución de una furgoneta al almacén, como una entrega al revés */}
+        {E.vehiculos.length > 0 && <button onClick={iniciarDevolucion} className="text-left min-h-20 rounded-xl p-3 flex items-center gap-3 bg-tertiary-fixed/30 hover:bg-tertiary-fixed/50 ring-1 ring-tertiary-fixed">
+          <span className="w-11 h-11 rounded-xl grid place-items-center shrink-0 bg-tertiary-fixed/60 text-tertiary"><Icon n="assignment_return" /></span>
+          <span className="flex-1 min-w-0"><span className="block font-semibold">Devolución de material (furgoneta → almacén)</span>
+            <span className="block text-body-sm text-secondary">Lo que los técnicos no han usado vuelve al almacén, con firma y albarán DEV-</span></span>
+          <Icon n="chevron_right" className="text-secondary" /></button>}
         {/* E-039: la retirada de material en custodia por el socio (o un tercero en su nombre) también se hace desde aquí */}
         {perm.mod('movimientos') && E.propietarios.some(o => o.activo !== false) && <button onClick={iniciarRetirada} className="text-left min-h-20 rounded-xl p-3 flex items-center gap-3 bg-violet-50 hover:bg-violet-100 ring-1 ring-violet-200">
           <span className="w-11 h-11 rounded-xl grid place-items-center shrink-0 bg-violet-100 text-violet-800"><Icon n="handshake" /></span>
@@ -245,13 +253,20 @@ function PasoFirma() {
 function Ultimas() {
   const E = useAlmacen();
   // E-039: todas las salidas firmadas en un mismo sitio: entregas a equipos y retiradas por socios (RET-)
-  const lista = [...E.entregas.filter(e => (e.estado ?? 'firmada') === 'firmada').map(e => ({ ts: e.ts, e, r: undefined })),
-    ...(E.retiradas || []).map(r => ({ ts: r.ts, e: undefined, r }))].sort((a, b) => b.ts - a.ts).slice(0, 8);
+  const lista = [...E.entregas.filter(e => (e.estado ?? 'firmada') === 'firmada').map(e => ({ ts: e.ts, e, r: undefined, d: undefined })),
+    ...(E.retiradas || []).map(r => ({ ts: r.ts, e: undefined, r, d: undefined })),
+    ...(E.devoluciones || []).map(d => ({ ts: d.ts, e: undefined, r: undefined, d }))].sort((a, b) => b.ts - a.ts).slice(0, 8);
   if (!lista.length) return null;
   return (
     <section className={`${CARD} p-4 lg:p-space-md flex flex-col gap-1`}>
       <h2 className="text-headline-sm font-semibold mb-1 flex items-center gap-2"><Icon n="history" className="text-primary" />Últimas entregas</h2>
-      {lista.map(({ e, r }) => { if (r) { const socio = E.propietarios.find(o => o.id === r.socio)?.nombre || r.socio; return (
+      {lista.map(({ e, r, d }) => { if (d) { const furgo = E.equipos.find(x => x.id === d.equipo)?.nombre || nombreVehiculo(E, d.vehiculo); return (
+        <button key={d.id} onClick={() => abrirVerDevolucion(d.id)} className="text-left flex flex-wrap items-center gap-x-3 gap-y-1 py-3 border-t border-surface-container min-h-14">
+          <span className="font-mono text-label-md text-tertiary">{numDevolucion(d)}</span>
+          <span className="flex-1 min-w-[140px] font-medium">Devolución · {furgo}<span className="block text-body-sm text-secondary">{fechaHora(d.ts)} · devuelve {E.tecnicos.find(t => t.id === d.tecnico)?.nombre || '—'} · recibe {d.operator} · {d.lineas.length} líneas{d.obra ? ` · ${d.obra}` : ''}</span></span>
+          <Tag c={d.estado === 'anulada' ? 'bg-error-container text-error' : 'bg-tertiary-fixed/50 text-tertiary'}>{d.estado === 'anulada' ? 'Devolución anulada' : `Devolución · ${furgo}`}</Tag><Icon n="chevron_right" className="text-secondary" />
+        </button>); }
+        if (r) { const socio = E.propietarios.find(o => o.id === r.socio)?.nombre || r.socio; return (
         <button key={r.id} onClick={() => abrirVerRetirada(r.id)} className="text-left flex flex-wrap items-center gap-x-3 gap-y-1 py-3 border-t border-surface-container min-h-14">
           <span className="font-mono text-label-md text-violet-800">{numRetirada(r)}</span>
           <span className="flex-1 min-w-[140px] font-medium">Retirada · {socio}<span className="block text-body-sm text-secondary">{fechaHora(r.ts)} · recogido por {r.recoge}{r.enNombre === 'tercero' ? ` en nombre de ${r.tercero}` : ''} · {r.lineas.length} líneas</span></span>

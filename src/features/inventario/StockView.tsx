@@ -1,4 +1,5 @@
 /* Stock general: panel de escritorio, inventario móvil y stock a bordo de un vehículo (E-013: sin precios ni estanterías) */
+import { abrirDevolucion } from '../entregas/Devolucion';
 import { AvisoCoherencia } from './Coherencia';
 import { abrirExtracto, ExtractoArticulo } from '../equipos/Extracto';
 import { Cantidad } from '../../ui/cantidad';
@@ -342,7 +343,7 @@ function VanView() {
           <button onClick={() => setAbierto(abierto === x.sku ? null : x.sku)} className="flex-1 min-w-0 text-left" aria-expanded={abierto === x.sku}><div className="font-mono text-label-sm text-secondary flex items-center gap-1"><Icon n={abierto === x.sku ? 'expand_more' : 'chevron_right'} className="ico-16 text-primary" />{p.sku}</div><div className="font-semibold truncate">{p.name}</div>
             {x.qty < 0 && <div className="text-body-sm text-error">Discrepancia: consta más gastado que entregado</div>}<div className="text-label-sm text-primary">{abierto === x.sku ? 'Ocultar movimientos' : 'Ver movimientos y saldo'}</div></button>
           <div className="text-right"><Cantidad p={p} unidades={x.unidades} className={`text-headline-md font-bold whitespace-nowrap ${x.qty < 0 ? 'text-error' : ''}`} />
-            {x.qty >= 1 && (perm.mod('movimientos')) && <button onClick={() => abrirMovimiento(p.sku, 'devolucion', { vehiculo: v.id, qty: Math.floor(x.qty), lock: true, ref: `Devuelto de ${v.matricula}` })} className="font-mono text-label-sm text-primary h-10">Devolver ↩</button>}</div>
+            {x.unidades > 0 && (perm.mod('entregas')) && <button onClick={() => abrirDevolucion(v.id, p.sku)} className="font-mono text-label-sm text-primary h-10">Devolver ↩</button>}</div>
           {abierto === x.sku && <div className="w-full border-t border-surface-container pt-3"><ExtractoArticulo vehiculo={v.id} sku={p.sku} /></div>}
         </article>); }) : <div className={`${CARD} p-8 text-center text-secondary md:col-span-2`}>Este vehículo no lleva material del almacén. Activa <b>Mostrar todo el catálogo</b> para asignarle artículos.</div>}</div>}
     </div>

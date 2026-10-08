@@ -1,5 +1,6 @@
 /* E-011 · Piezas de la entrega: panel de firma en pantalla grande (con el correo de la copia), entregas preparadas,
    albarán con el estado de la copia por correo, tallas del técnico e informe de entregas. Sin plantillas. */
+import { abrirVerDevolucion } from './Devolucion';
 import { abrirVerRetirada } from '../custodia/Retirada';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { Entrega, LineaEntrega, Tallas, TipoTalla, Tecnico } from '../../data/tipos';
@@ -304,9 +305,14 @@ function InformeEntregas() {
   // E-039: las retiradas de material en custodia por socios (o terceros en su nombre) del mes
   const rets = (E.retiradas || []).filter(r => r.estado === 'firmada' && r.ts >= desde && r.ts < hasta).sort((x, y) => x.ts - y.ts);
   const socioDe = (id: string) => E.propietarios.find(o => o.id === id)?.nombre || id;
+  // E-041: las devoluciones de las furgonetas del mes
+  const devs = (E.devoluciones || []).filter(d => d.estado === 'firmada' && d.ts >= desde && d.ts < hasta).sort((x, y) => x.ts - y.ts);
+  const equipoDe = (d: { equipo?: string; vehiculo: string }) => E.equipos.find(q => q.id === d.equipo)?.nombre || nombreVehiculo(E, d.vehiculo);
+  const tecDe = (id?: string) => E.tecnicos.find(t => t.id === id)?.nombre || '';
   const csv = () => descargarCsv(`entregas-por-equipo-${mes}.csv`, [['Equipo', 'Entregas', 'Líneas', 'Recogido por', 'Obras'],
     ...filas.map(f => [f.equipo, f.entregas.size, f.lineas, [...f.recogen].join(' | '), [...f.obras].join(' | ')]),
-    ...rets.map(r => [`Retirada · ${socioDe(r.socio)}`, r.numero || '', r.lineas.length, `${r.recoge}${r.enNombre === 'tercero' ? ` (en nombre de ${r.tercero})` : ''}`, r.referencia || ''])]);
+    ...rets.map(r => [`Retirada · ${socioDe(r.socio)}`, r.numero || '', r.lineas.length, `${r.recoge}${r.enNombre === 'tercero' ? ` (en nombre de ${r.tercero})` : ''}`, r.referencia || '']),
+    ...devs.map(d => [`Devolución · ${equipoDe(d)}`, d.numero || '', d.lineas.length, tecDe(d.tecnico), d.obra || ''])]);
   return (<>
     <SheetHead title="Entregas por equipo" sub="Qué se ha entregado a cada equipo en el mes, quién lo recogió y para qué obras." />
     <div className="p-5 flex flex-col gap-3">
@@ -314,11 +320,14 @@ function InformeEntregas() {
       {filas.length ? <table className="tabla w-full text-body-sm"><thead><tr><th>Equipo</th><th>Entregas</th><th>Líneas</th><th>Recogido por</th><th>Obras</th></tr></thead>
         <tbody>{filas.map((f, i) => <tr key={i}><td>{f.equipo}</td><td>{f.entregas.size}</td><td>{f.lineas}</td><td>{[...f.recogen].join(', ') || '—'}</td><td>{[...f.obras].join(', ') || '—'}</td></tr>)}</tbody></table>
         : <Vacio>No hay entregas firmadas en ese mes.</Vacio>}
+      {devs.length > 0 && <><h3 className="font-semibold mt-2">Devoluciones</h3>
+        {devs.map(d => <button key={d.id} onClick={() => abrirVerDevolucion(d.id)} className="text-left flex flex-wrap justify-between gap-2 py-2 border-b border-surface-container text-body-sm">
+          <span><b className="font-mono">{d.numero || 'Pendiente de envío'}</b> · Devolución · {equipoDe(d)}</span><span className="text-secondary">{fechaHora(d.ts)} · {tecDe(d.tecnico) || '—'} · {d.lineas.length} líneas{d.obra ? ` · ${d.obra}` : ''}</span></button>)}</>}
       {rets.length > 0 && <><h3 className="font-semibold mt-2">Retiradas por socios</h3>
         {rets.map(r => <button key={r.id} onClick={() => abrirVerRetirada(r.id)} className="text-left flex flex-wrap justify-between gap-2 py-2 border-b border-surface-container text-body-sm">
           <span><b className="font-mono">{r.numero || 'Pendiente de envío'}</b> · Retirada · {socioDe(r.socio)}</span><span className="text-secondary">{fechaHora(r.ts)} · {r.recoge}{r.enNombre === 'tercero' ? ` en nombre de ${r.tercero}` : ''} · {r.lineas.length} líneas</span></button>)}</>}
     </div>
-    <SheetFoot><button onClick={csv} disabled={!filas.length && !rets.length} className={`${BTN_S} w-full h-12`}><Icon n="table" className="ico-20" />Descargar CSV</button></SheetFoot>
+    <SheetFoot><button onClick={csv} disabled={!filas.length && !rets.length && !devs.length} className={`${BTN_S} w-full h-12`}><Icon n="table" className="ico-20" />Descargar CSV</button></SheetFoot>
   </>);
 }
 

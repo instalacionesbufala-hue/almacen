@@ -1193,7 +1193,7 @@ El usuario se vuelve loco y necesita verlo claro.
    - Hay pruebas de: guardar y leer la barra por usuario; que se filtra por permisos; que se restablece; y que el escritorio no cambia.
    - En el iPhone del usuario se cambian los accesos y la barra se mantiene al volver a abrir la app.
 
-### E-041 · Devolución de material de una furgoneta al almacén, desde Entregas · PENDIENTE
+### E-041 · Devolución de material de una furgoneta al almacén, desde Entregas · HECHO
 **Petición del usuario (08/10):** en Entregas & Firmas, paso 1, hoy están las 3 furgonetas y "Socio o tercero (material en custodia)" (E-039). Quiere **otra tarjeta: "Devolución de material"**, para cuando los técnicos devuelven lo que no han usado (por ejemplo, se llevaron 100 m de manguera y devuelven 30 m). Hoy hay que entrar en el stock de cada furgoneta, elegir el artículo y "Devolución", uno a uno, y no queda un justificante como el de la entrega. Debe contar **igual que las entregas**, pero al revés.
 
 **Qué hacer**
@@ -3533,3 +3533,65 @@ Todo queda en una versión "Corrección manual por …" con la diferencia, y en 
   - tras recargar, la barra es Inventario · Retirada · Escanear (central) · Entrega · Cuadrillas, y "Retirada" abre la retirada;
   - "Restablecer" devuelve la barra de siempre.
 - **Falta probarlo en el iPhone del usuario.**
+
+### E-041 · Devolución de material de una furgoneta al almacén, desde Entregas · HECHO (08/10/2026)
+
+**Dónde:**
+- **Entregas, paso 1:** tarjeta verde **"Devolución de material (furgoneta → almacén)"**.
+- **Menú del avatar del móvil:** "Devolución de furgoneta".
+- **Barra del móvil (E-040):** acceso "Devolución".
+- **El "Devolver ↩" de cada material en el stock de una furgoneta** abre este mismo flujo con el artículo ya en la cesta. La pestaña "Devolución" del formulario de movimientos también lleva aquí, así que todas las devoluciones tienen albarán.
+
+**El flujo** (`src/features/entregas/Devolucion.tsx`):
+- **Qué furgoneta**; **quién devuelve y firma**: uno de los técnicos actuales del equipo, de un toque (si solo hay uno, ya viene elegido).
+- **"Consta a bordo":** tarjetas con foto y cantidad (en unidad base y formato) para añadir de un toque. Además, buscador de cualquier artículo y escáner (cámara o código escrito).
+- **Cantidad en la unidad base** (m o ud), con la equivalencia: "30 m · ≈ 0,3 rollos de 100 m". El almacén recibe 0,3 rollos.
+  - La comprobación de E-036 ya no marca como incoherente un rollo o bobina empezado en el almacén (formatos en metros).
+- Lo que **no consta a bordo** se puede añadir, con aviso: "No consta a bordo. La furgoneta quedará en negativo; se corrige con un recuento".
+- **Estado de cada línea: Bien / Defectuoso.**
+  - Defectuoso pide qué le pasa, sale de la furgoneta como **merma** sin sumar al stock útil y avisa al administrador (`_avisar_merma`).
+  - En custodia, además, genera la **incidencia del socio** (E-008).
+  - Un mismo artículo puede ir en dos líneas, una bien y otra defectuosa.
+- **Motivo:** sobrante de obra, no usado, cambio de material u otro (con texto). **Obra** (`numInst`, opcional). **Firma** del técnico. **"Recibe en el almacén"**: el usuario conectado.
+
+**Justificante:** "Albarán de devolución DEV-AAAA-NNNN" en PDF, con "Compartir PDF" y "Descargar". Lleva:
+- furgoneta, equipo, quién devuelve y quién recibe;
+- motivo y obra;
+- las líneas, con su estado y el motivo del defecto;
+- la firma y la huella SHA-256.
+
+**Movimientos** (enlazados con `devolucion_id`):
+- **Bien:** traspaso furgoneta → almacén (tipo devolución, "Devolución al almacén", referencia "DEV-… · obra").
+- **Defectuoso:** merma desde la furgoneta ("Devuelto defectuoso: …").
+- **Custodia:** vuelve al almacén como custodia de su socio (el artículo sigue siendo suyo).
+- **Anulación** (solo administrador, con motivo):
+  - movimientos inversos enlazados (`corrige`): un traspaso de vuelta para lo devuelto bien y un ajuste para la merma;
+  - se niega si ya no queda ese material en el almacén;
+  - historial inalterable (disparador), auditoría e idempotencia (UUID).
+
+**Dónde se ve:**
+- **"Últimas entregas"**, con la etiqueta "Devolución · Búfala 1", quién devuelve y quién recibe.
+- **"Entregas por equipo":** sección "Devoluciones" del mes, también en el CSV.
+- **Extracto (E-037):** "Devolución · DEV-… · obra" (y la merma), y la comprobación de saldo cuadra.
+- **Custodia y lo que ve el socio:** sección "Devoluciones de furgonetas con material de …", solo con sus líneas. `datos_socio` las da sin técnico y sin firma; el usuario que la recibió aparece como "Búfala".
+- **Informe de custodia:** lo devuelto entra en "Entregado a equipos y devuelto"; lo defectuoso, en "Incidencias".
+
+**Servidor** (migración `20261030000100_e041_devoluciones.sql`, aplicada):
+- tabla `devoluciones` (RLS: `entregas.ver` o `movimientos.ver`), secuencia DEV y `movimientos.devolucion_id`;
+- `registrar_devolucion` y `anular_devolucion` (`entregas.modificar`; anular, solo administrador);
+- `datos_socio`, `limpiar_demostracion` y `guardar_barra_movil` (acceso "devolucion") reescritas en el sitio, con los anclajes comprobados.
+
+**Pruebas: 556 en verde** (las nuevas de la app, con reloj fijo, como pide la revisión del chat).
+- `supabase/tests/e041.test.ts` (6):
+  - 100 m entregados y 30 m devueltos → almacén 1 → 1,3 rollos y furgoneta 100 → 70 m; DEV-0001, huella e idempotencia; el extracto cuadra;
+  - defectuoso como merma, con aviso;
+  - custodia que vuelve a su socio, más la incidencia del socio;
+  - un artículo que no consta a bordo, un técnico de otro equipo y la falta de firma;
+  - el almacén registra, solo el administrador anula, todo vuelve, la devolución es inalterable y el extracto vuelve a cuadrar;
+  - el socio la ve sin técnico ni firma.
+- `src/domain/e041.test.ts` (5): lo mismo en la app.
+- Build correcto.
+- **En el navegador, con tamaño de móvil:** Entregas → "Devolución de material" → Búfala 1 → Luis Martín → manguera de "Consta a bordo" → 30 m → firma → DEV-2026-0001.
+  - Búfala 1 baja de 150 a 120 m.
+  - Sale la primera en "Últimas entregas" como "Devolución · Búfala 1".
+  - El PDF se genera.

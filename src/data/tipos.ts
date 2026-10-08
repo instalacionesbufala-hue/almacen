@@ -111,6 +111,17 @@ export interface Retirada {
   firma: string; hash?: string; estado: 'firmada' | 'anulada'; anuladaTs?: number; anuladaPor?: string; anulacionMotivo?: string; operator: string;
 }
 
+/** E-041 · Devolución de material de una furgoneta al almacén, con firma y albarán DEV-AAAA-NNNN */
+export interface Devolucion {
+  id: string; numero?: string; ts: number; vehiculo: string; equipo?: string;
+  /** técnico que devuelve y firma (vacío en lo que ve un socio) */ tecnico?: string;
+  motivo: 'sobrante' | 'no_usado' | 'cambio' | 'otro'; motivoTexto?: string; obra?: string;
+  /** unidades: en la unidad base (m o ud); cantidad: en formatos */
+  lineas: { sku: string; nombre: string; unidades: number; cantidad: number; estado: 'bien' | 'defectuoso'; motivoDefecto?: string }[];
+  firma: string; hash?: string; estado: 'firmada' | 'anulada'; anuladaTs?: number; anuladaPor?: string; anulacionMotivo?: string;
+  /** quién lo recibe en el almacén */ operator: string;
+}
+
 export interface Propietario { id: string; nombre: string; contacto: string; correosReposicion: string[]; correosInformes: string[];
   /** E-024: socio desactivado (sin artículos); se conserva para el historial */ activo?: boolean;
   /** E-024: color de su etiqueta (clave de COLORES_SOCIO) */ color?: string }
@@ -140,6 +151,8 @@ export interface Movimiento {
   corrige?: string;
   /** E-038: retirada por el socio a la que pertenece */
   retirada?: string;
+  /** E-041: devolución de una furgoneta a la que pertenece */
+  devolucion?: string;
 }
 
 /** E-020: código alternativo de un artículo (un código, un solo artículo) */
@@ -360,6 +373,8 @@ export interface Estado {
   actas: ActaCustodia[];
   /** E-038 */
   retiradas?: Retirada[];
+  /** E-041 */
+  devoluciones?: Devolucion[];
   /** E-011: entrega en curso (se conserva en el dispositivo si se cierra la app) */
   /** E-034: el usuario es de este socio de custodia (solo ve su material) */
   socio?: string;

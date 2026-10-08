@@ -15,6 +15,7 @@ import { BTN_P, BTN_S, Icon } from '../../ui/base';
 /** Qué hace cada acceso que no es una pantalla */
 function accionDe(id: IdAcceso) {
   switch (id) {
+    case 'devolucion': void import('../entregas/Devolucion').then(m => m.iniciarDevolucion()); break;
     case 'retirada': void import('../custodia/Retirada').then(m => m.iniciarRetirada()); break;
     case 'escanear_albaran': ir('albaranes'); void import('../albaranes/AlbaranesView').then(m => m.escanearAlbaran()); break;
     case 'cierres': setUI({ eqTab: 'cierres' }); ir('equipos'); break;

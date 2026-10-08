@@ -22,6 +22,8 @@ export function filtrarParaSocio(S: Estado, propietario: string): Estado {
     actas: S.actas.filter(a => a.propietario === propietario).map(a => ({ ...a, firma: '', operator: 'Búfala' })),
     // E-038: sus retiradas, con la firma de quien recogió (para el PDF); quien la registró en Búfala no se ve
     retiradas: (S.retiradas || []).filter(r => r.socio === propietario).map(r => ({ ...r, operator: 'Búfala' })),
+    // E-041: las devoluciones de su material (solo sus líneas), sin técnico ni firma
+    devoluciones: (S.devoluciones || []).filter(d => d.lineas.some(l => skus.has(l.sku))).map(d => ({ ...d, tecnico: undefined, firma: '', operator: 'Búfala', lineas: d.lineas.filter(l => skus.has(l.sku)) })),
     avisos: S.avisos.filter(a => a.destino === 'propietario' && a.grupo === propietario && a.sku && skus.has(a.sku)),
     propietarios: S.propietarios.filter(o => o.id === propietario).map(o => ({ ...o, contacto: '', correosReposicion: [], correosInformes: [] })),
     equipos: S.equipos.map(e => ({ ...e, tecnicos: [] })),

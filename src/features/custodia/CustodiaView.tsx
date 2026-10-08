@@ -21,6 +21,7 @@ import { fotosInforme } from '../fotos/servicio';
 import { colorSocio } from '../../domain/socios';
 import { ir } from '../../store/ui';
 import { ListaRetiradas } from './Retirada';
+import { DevolucionesSocio } from '../entregas/Devolucion';
 
 export default function CustodiaView() {
   const E = useAlmacen(), perm = usePermisos();
@@ -66,6 +67,7 @@ export default function CustodiaView() {
         {perm.admin && o && <DatosPropietario id={o.id} />}
       </div>
       <ListaRetiradas socio={prop} />
+      <DevolucionesSocio socio={prop} />
       <Instalaciones skus={new Set(prods.map(p => p.sku))} nombre={o?.nombre || prop} />
     </div>
   );

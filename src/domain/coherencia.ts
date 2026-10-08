@@ -49,7 +49,7 @@ export function incoherenciasFormato(S: Estado, descuadres: { vehiculo: string; 
     const c = contenidoDe(p), base = p.unit === 'm' || p.unit === 'ud';
     if (base && c !== 1) out.push({ sku: p.sku, nombre: p.name, tipo: 'contenido_en_base', texto: `Va en ${p.unit === 'm' ? 'metros' : 'unidades'}, pero dice que cada uno trae ${num(c)}: revisa el formato (¿es un ${p.unit === 'm' ? 'rollo' : 'bote o caja'} de ${num(c)}?).` });
     if (!base && c <= 1) out.push({ sku: p.sku, nombre: p.name, tipo: 'formato_sin_contenido', texto: `Se mueve por ${UNIT[p.unit]}, pero no dice cuánto trae cada ${UNIT[p.unit]}: en los cierres, 1 ${ucDe(p)} contaría como 1 ${UNIT[p.unit]}.` });
-    if (formatoEntero(p) && redondea(p.stock) !== Math.trunc(redondea(p.stock)))
+    if (formatoEntero(p) && ucDe(p) !== 'm' && redondea(p.stock) !== Math.trunc(redondea(p.stock)))
       out.push({ sku: p.sku, nombre: p.name, tipo: 'fraccion_almacen', texto: `El almacén tiene ${num(p.stock)} ${UNIT[p.unit]}s, pero se mueven ${UNIT[p.unit]}s enteros: haz un recuento.` });
     if (ucDe(p) === 'm') for (const b of S.aBordo) if (b.sku === p.sku && b.unidades && Math.abs(b.unidades) < 1 && !conAviso.has(`${p.sku}|${b.vehiculo}`))
       out.push({ sku: p.sku, nombre: p.name, tipo: 'diminuto_a_bordo', texto: `${nombreVehiculo(S, b.vehiculo)} lleva ${num(b.unidades)} m: ¿son de verdad ${num(b.unidades)} m o una conversión mal hecha? Revísalo con un recuento.` });
