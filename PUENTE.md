@@ -1224,9 +1224,46 @@ El usuario se vuelve loco y necesita verlo claro.
    - Hay pruebas de: devolución de metros sueltos de un artículo por rollos (100 m entregados, 30 m devueltos → almacén +30 m, furgoneta −30 m); línea defectuosa como merma; custodia que vuelve a su socio; anulación; y el saldo del extracto que cuadra.
    - En el móvil se registra una devolución con firma y sale en "Últimas entregas" como DEV-….
 
+### E-042 · Metros de tubo PVC que faltan en el cierre, fijaciones mal calculadas y recálculo de todos los cierres · PENDIENTE (urgente)
+**Captura del usuario (08/10):** un cierre de 44 m de línea monofásica de 10 mm² bajo tubo (3 conductores × 44 m bien). En él:
+- **no aparece el tubo PVC;**
+- las fijaciones salen **6 clips y 6 clavos**, con la partida "pvc32+acero32 = **3**". Solo cuenta el **acero (3 m)** y el **PVC está a 0**;
+- hay corrugado 1 m.
+
+Con 44 m de línea, el usuario espera **unas 88 fijaciones** (44 / 0,5).
+
+**Causa probable:** `pvc32` no viene en el cierre. Por ejemplo, cuando el cierre nace de la **prefactura de Holded** (E-026, E-032), "Línea bajo tubo PVC" lleva los metros de línea, pero **los metros de tubo PVC no se envían como campo propio**, o el wizard los dejó a 0. Sin `pvc32`, ni se descuenta el tubo ni cuentan sus fijaciones. **Comprobar en producción, en solo lectura,** el origen de ese cierre y de cuántos cierres más les pasa.
+
+**Regla del usuario**
+- La **canalización completa = los metros de línea**. Si el tramo es bajo tubo, el **tubo PVC** son los metros de línea menos los tramos de otra canalización: `pvc32 = metrosLinea − corr32 − acero32 − acero40 − canaleta − sot50 − sot90`, nunca negativo. En el ejemplo: 44 − 1 − 3 = **40 m de PVC**.
+- **Con manguera dentro de tubo PVC** también se descuentan las dos cosas: **la manguera** (los metros de línea) y **el tubo PVC** (sus metros).
+- **Fijaciones:** `ceil((pvc32 + acero32 + acero40) / 0,5)`; el corrugado no cuenta, como hasta ahora. En el ejemplo, (40 + 3) / 0,5 = **86**.
+
+**Qué hacer**
+1. **PVC deducido cuando falta:** si `pvc32` no viene o es 0, y el resto de canalizaciones no cubre los metros de línea, calcular `pvc32` con la fórmula anterior.
+   - **Cuándo:** si `tipoLinea = tubo`, o si es manguera y el wizard o la prefactura indica que va entubada. Revisar si el wizard tiene ese dato; si no, aplicarlo a `tubo` y, para manguera, solo si viene `pvc32`.
+   - **Marcar la línea como "PVC deducido de los metros de línea",** para que se vea que no lo puso el técnico.
+   - Si el wizard **sí** trae `pvc32 > 0`, se respeta su valor.
+2. **Fijaciones con ese PVC:** que la regla de fijaciones use el `pvc32` efectivo (el deducido o el del wizard).
+3. **El tubo PVC por barras enteras (E-036)** se aplica también al PVC deducido: 40 m → 14 barras (42 m).
+4. **Recalcular TODOS los cierres:** en Configuración → Integraciones, o en la lista de cierres, **"Recalcular cierres desde…"** para **todas las partidas y reglas a la vez**, no solo por artículo (E-036):
+   - **primero, una vista previa:** cuántos cierres cambian y la diferencia por artículo y furgoneta ("+40 m PVC, +80 clips…");
+   - después, **"Aplicar"**, con ajustes enlazados a cada cierre;
+   - **las correcciones manuales (E-035) se respetan;**
+   - todo queda en la auditoría.
+5. **Caso real:** recalcular en la vista previa el cierre de la captura (localizarlo por los 44 m de 10 mm²), y los demás afectados, para que el usuario lo aplique él. **No tocar datos.**
+6. **Hecho cuando:**
+   - Hay pruebas de: PVC deducido (44 − 1 − 3 = 40); manguera con `pvc32` (se descuentan las dos); fijaciones = 86 en el ejemplo; barras enteras del PVC deducido; y vista previa y aplicación del recálculo global respetando las correcciones manuales.
+   - En la respuesta, cuántos cierres reales cambian y en qué.
+
 ---
 
 ## Revisión del chat
+
+### 08/10/2026 · Revisión de E-041 y nuevo E-042
+- **E-041:** verificado. **556 pruebas en verde.**
+- **E-042 (urgente, nuevo):** PVC que falta en el cierre (se deduce de los metros de línea), fijaciones con ese PVC y recálculo global de cierres con vista previa.
+- **Orden: E-042.**
 
 ### 08/10/2026 · Revisión de E-039 y E-040, y nuevo E-041
 - **E-039 y E-040:** verificados. **545 pruebas en verde.**
