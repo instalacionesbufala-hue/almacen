@@ -1193,9 +1193,46 @@ El usuario se vuelve loco y necesita verlo claro.
    - Hay pruebas de: guardar y leer la barra por usuario; que se filtra por permisos; que se restablece; y que el escritorio no cambia.
    - En el iPhone del usuario se cambian los accesos y la barra se mantiene al volver a abrir la app.
 
+### E-041 · Devolución de material de una furgoneta al almacén, desde Entregas · PENDIENTE
+**Petición del usuario (08/10):** en Entregas & Firmas, paso 1, hoy están las 3 furgonetas y "Socio o tercero (material en custodia)" (E-039). Quiere **otra tarjeta: "Devolución de material"**, para cuando los técnicos devuelven lo que no han usado (por ejemplo, se llevaron 100 m de manguera y devuelven 30 m). Hoy hay que entrar en el stock de cada furgoneta, elegir el artículo y "Devolución", uno a uno, y no queda un justificante como el de la entrega. Debe contar **igual que las entregas**, pero al revés.
+
+**Qué hacer**
+1. **Entregas → paso 1:** tarjeta **"Devolución de material (furgoneta → almacén)"**. Al elegirla, se escoge **qué furgoneta** devuelve (con su equipo y sus técnicos actuales).
+2. **Cesta de devolución:**
+   - muestra **lo que consta a bordo** de esa furgoneta (con foto y cantidad, en unidad base y formato, E-036), con buscador y escáner;
+   - se puede devolver **en metros o unidades sueltos aunque el artículo vaya por rollos o cajas**: "30 m de manguera" pasa al almacén como 30 m, es decir 0,3 rollos;
+   - también se puede añadir un artículo que **no conste a bordo** (los técnicos lo tenían de antes), con aviso ("No consta a bordo: la furgoneta quedará en negativo; se corrige con un recuento");
+   - **estado de cada línea:** "Bien (vuelve al stock)" o "Defectuoso". Defectuoso vuelve como **merma**, con motivo, en lugar de sumar al stock útil. En custodia: "Defectuoso → incidencia del socio" (E-008).
+3. **Datos:**
+   - **quién devuelve:** técnico del equipo, elegido de un toque, como en E-017;
+   - **motivo:** sobrante de obra, no usado, cambio de material u otro;
+   - **obra** (`numInst`, opcional);
+   - **firma** del técnico que devuelve, y **quién lo recibe en el almacén** (usuario conectado).
+4. **Justificante:** PDF **"Albarán de devolución" DEV-AAAA-NNNN**, con furgoneta, equipo, quién devuelve, quién recibe, líneas, estado y firma. Con "Compartir PDF" y "Descargar", como las entregas.
+5. **Movimientos:** el **traspaso vehículo → almacén** de cada línea, enlazado a la devolución.
+   - Las líneas defectuosas generan la merma correspondiente.
+   - El material en custodia vuelve a la custodia de su socio en el almacén.
+   - **Anulación** (solo administrador, con motivo) con movimientos inversos, como las entregas y las retiradas.
+6. **Dónde se ve,** igual que las entregas:
+   - **"Últimas entregas"**, con la etiqueta "Devolución · Búfala 2";
+   - **"Entregas por equipo":** sección "Devoluciones" del mes, también en el CSV;
+   - **el extracto de E-037:** "Devolución · DEV-…", con la comprobación de saldo;
+   - **el portal del socio** (E-034): las devoluciones de su material, sin nombres de técnicos;
+   - **acceso disponible en la barra del móvil (E-040):** "Devolución".
+7. **Lo que ya existe:** el botón "Devolución" dentro del stock de cada furgoneta se mantiene, pero abre **este mismo flujo** con el artículo ya en la cesta, para que todas las devoluciones tengan albarán.
+8. **Hecho cuando:**
+   - Hay pruebas de: devolución de metros sueltos de un artículo por rollos (100 m entregados, 30 m devueltos → almacén +30 m, furgoneta −30 m); línea defectuosa como merma; custodia que vuelve a su socio; anulación; y el saldo del extracto que cuadra.
+   - En el móvil se registra una devolución con firma y sale en "Últimas entregas" como DEV-….
+
 ---
 
 ## Revisión del chat
+
+### 08/10/2026 · Revisión de E-039 y E-040, y nuevo E-041
+- **E-039 y E-040:** verificados. **545 pruebas en verde.**
+- **El fallo de publicación del 08/10 por la mañana:** las pruebas `e037` y `e038` dependían de la hora (la semilla fija una entrega a las 08:30 de hoy). Lo arregló el chat con un reloj fijo (`b43c5fc` y `f34795b`). Ojo con este patrón en pruebas nuevas.
+- **E-041 (nuevo):** devolución de material de una furgoneta al almacén desde Entregas, con firma y albarán DEV-.
+- **Orden: E-041.**
 
 ### 08/10/2026 · Revisión de E-037 y E-038, y nuevo E-039
 - **E-037 y E-038:** verificados. **539 pruebas en verde.**
