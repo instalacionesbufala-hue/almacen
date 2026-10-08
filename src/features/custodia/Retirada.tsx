@@ -20,6 +20,12 @@ import { SelectorSocio } from '../config/Socios';
 import { compartirRetirada, descargarRetirada } from './retiradaPdf';
 
 export const abrirRetirada = (socio: string) => openModal(<NuevaRetirada socio={socio} />, { ancha: true });
+/** E-039 · Desde Entregas o el menú: empieza con el primer socio que tenga material (se puede cambiar en la propia retirada) */
+export function iniciarRetirada() {
+  const E = S(), activos = E.propietarios.filter(o => o.activo !== false);
+  const conMaterial = activos.find(o => E.products.some(p => esCustodia(p) && p.propietario === o.id && (p.stock > 0 || E.aBordo.some(b => b.sku === p.sku && b.unidades > 0))));
+  abrirRetirada((conMaterial || activos[0])?.id || '');
+}
 export const abrirVerRetirada = (id: string) => openModal(<VerRetirada id={id} />, { ancha: true });
 
 type Linea = { sku: string; cantidad: string };

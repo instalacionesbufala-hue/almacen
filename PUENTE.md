@@ -1167,7 +1167,7 @@ El usuario se vuelve loco y necesita verlo claro.
 - Hay pruebas de: la retirada solo admite artículos de ese socio; no se puede retirar más del stock; el stock y el extracto bajan; el PDF lleva firma y número; el socio ve su retirada en el portal; y una anulación devuelve el stock.
 - El usuario registra desde el móvil una retirada de cargadores de Esmove recogidos por un tercero en su nombre.
 
-### E-039 · La retirada por el socio o un tercero, también desde Entregas · PENDIENTE (pequeño)
+### E-039 · La retirada por el socio o un tercero, también desde Entregas · HECHO
 **El usuario (08/10)** busca la retirada de E-038 en **Entregas & Firmas** (paso 1 "¿Para qué equipo es el material?"), en el ordenador y en el móvil. Allí solo salen sus equipos, y no la encuentra. Está en Custodia → pestaña del socio → "Retiradas de …".
 
 **Qué hacer**
@@ -3437,3 +3437,16 @@ Todo queda en una versión "Corrección manual por …" con la diferencia, y en 
 - **En el navegador, con tamaño de móvil y datos inventados:**
   - retirada de 1 Wallbox de Esmove desde Búfala 1, recogida por un tercero en su nombre, con firma → RET-2026-0001, Búfala 1 de 2 a 1 y PDF generado;
   - después, anulada con motivo → vuelve a 2, con el movimiento inverso.
+
+### E-039 · La retirada por el socio o un tercero, también desde Entregas · HECHO (08/10/2026)
+- **Entregas, paso 1 ("¿Para qué equipo es el material?"):** después de las tarjetas de los equipos, una tarjeta violeta, **"Socio o tercero (material en custodia)"**.
+  - Sale a quien tiene permiso de movimientos.
+  - Abre el mismo flujo de E-038 (se reutiliza `Retirada.tsx`, sin duplicar lógica). Empieza con el primer socio que tiene material y el socio se puede cambiar dentro.
+- **"Últimas entregas"** mezcla las entregas y las **retiradas (RET-…)**, con la etiqueta "Retirada · Esmove" (o "Retirada anulada"), quién recogió y en nombre de quién. Al pincharla se abre la retirada con "Compartir PDF" y "Descargar".
+- **"Entregas por equipo":** sección "Retiradas por socios" del mes, con enlace a cada una; también van en el CSV.
+- **Menú rápido del móvil** (el avatar): "Retirada por socio".
+- Solo cambia la interfaz: el servidor y las reglas son los de E-038.
+- **Comprobado en el navegador:**
+  - en el móvil (375 px), desde Entregas → "Socio o tercero" → cargador de Esmove recogido por un tercero en su nombre, con firma → RET-2026-0001, que aparece la primera en "Últimas entregas";
+  - en el escritorio, la tarjeta y la retirada en "Entregas por equipo".
+- 240 pruebas de la app en verde; `tsc -b` y build correctos.

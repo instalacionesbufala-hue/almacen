@@ -1,6 +1,8 @@
 /* E-011 · Nueva entrega en tres pasos (móvil primero, botones de 56 px):
    1. Para quién (técnico y, si se quiere, la obra) · 2. Qué se entrega (buscador o escáner seguido) · 3. Firma del técnico.
    Nada predeterminado: el almacén elige los artículos. Se puede guardar como preparada (stock reservado) para firmar más tarde. */
+import { abrirVerRetirada, iniciarRetirada } from '../custodia/Retirada';
+import { numRetirada } from '../../domain/retiradas';
 import { cantTxt, enMetros, equivTxt } from '../../domain/formatos';
 import { useEffect, useMemo, useState } from 'react';
 import { UNIT, categoriasActivas } from '../../data/catalogo';
@@ -12,7 +14,7 @@ import { avisoEstado, ejecutar, guardar, S, useAlmacen } from '../../store/almac
 import { nuevoId } from '../../store/ops';
 import { modoNube } from '../../store/nube/cliente';
 import { toast } from '../../ui/toast';
-import { BTN_P, BTN_S, CARD, Icon, INP, LBL, TagCustodia, Tile } from '../../ui/base';
+import { BTN_P, BTN_S, CARD, Icon, INP, LBL, Tag, TagCustodia, Tile } from '../../ui/base';
 import { OrdenArticulos, useListaArticulos } from '../../ui/selectorArticulo';
 import { useCamara } from '../escaner/camara';
 import { anadirACesta, cambiarTalla, cesta, disponible, escanearEnCesta, fijarCantidad, fijarObra, irAPaso, paraEquipo, quitarDeCesta, sumarUno, vaciarCesta } from './cesta';
@@ -51,7 +53,7 @@ export default function EntregasView() {
 
 /* ---------- 1 · Para qué equipo (E-017: el material se entrega al equipo; un técnico firma la recogida) ---------- */
 function PasoQuien() {
-  const E = useAlmacen(), c = cesta();
+  const E = useAlmacen(), c = cesta(), perm = usePermisos();
   const [q, setQ] = useState('');
   const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
   const texto = (e: typeof E.equipos[number]) => `${e.nombre} ${e.id} ${e.tecnicos.map(t => E.tecnicos.find(x => x.id === t)?.nombre || '').join(' ')} ${e.vehiculo ? nombreVehiculo(E, e.vehiculo) : ''}`;
@@ -68,7 +70,13 @@ function PasoQuien() {
           <span className="flex-1 min-w-0"><span className="block font-semibold truncate">{e.nombre}{v ? ` · ${v.matricula}` : ''}</span>
             <span className={`block text-body-sm truncate ${sel ? 'text-white/80' : 'text-secondary'}`}>{!veh ? 'Sin vehículo: asígnale uno en Equipos y técnicos' : !tecs.length ? 'Sin técnicos: asígnale alguno para que firmen' : tecs.join(' · ')}</span></span>
           {sel && <Icon n="check_circle" className="ico-fill" />}
-        </button>); })}</div>
+        </button>); })}
+        {/* E-039: la retirada de material en custodia por el socio (o un tercero en su nombre) también se hace desde aquí */}
+        {perm.mod('movimientos') && E.propietarios.some(o => o.activo !== false) && <button onClick={iniciarRetirada} className="text-left min-h-20 rounded-xl p-3 flex items-center gap-3 bg-violet-50 hover:bg-violet-100 ring-1 ring-violet-200">
+          <span className="w-11 h-11 rounded-xl grid place-items-center shrink-0 bg-violet-100 text-violet-800"><Icon n="handshake" /></span>
+          <span className="flex-1 min-w-0"><span className="block font-semibold">Socio o tercero (material en custodia)</span>
+            <span className="block text-body-sm text-secondary">Esmove u otro socio se lleva material suyo, o alguien en su nombre: con firma y albarán RET-</span></span>
+          <Icon n="chevron_right" className="text-secondary" /></button>}</div>
       {!E.equipos.length && <p className="text-body-sm text-secondary">Aún no hay equipos: créalos en Equipos y técnicos.</p>}
       <label className="flex flex-col gap-1"><span className={LBL}>Obra (opcional)</span>
         <input value={c.obra || ''} onChange={e => fijarObra(e.target.value)} className={`${INP} h-14`} placeholder="C/ Recogidas 12, Granada" /></label>
@@ -236,12 +244,21 @@ function PasoFirma() {
 /* ---------- Últimas entregas: si llegó la copia, y reenviar ---------- */
 function Ultimas() {
   const E = useAlmacen();
-  const lista = E.entregas.filter(e => (e.estado ?? 'firmada') === 'firmada').sort((a, b) => b.ts - a.ts).slice(0, 8);
+  // E-039: todas las salidas firmadas en un mismo sitio: entregas a equipos y retiradas por socios (RET-)
+  const lista = [...E.entregas.filter(e => (e.estado ?? 'firmada') === 'firmada').map(e => ({ ts: e.ts, e, r: undefined })),
+    ...(E.retiradas || []).map(r => ({ ts: r.ts, e: undefined, r }))].sort((a, b) => b.ts - a.ts).slice(0, 8);
   if (!lista.length) return null;
   return (
     <section className={`${CARD} p-4 lg:p-space-md flex flex-col gap-1`}>
       <h2 className="text-headline-sm font-semibold mb-1 flex items-center gap-2"><Icon n="history" className="text-primary" />Últimas entregas</h2>
-      {lista.map(e => { const t = E.tecnicos.find(x => x.id === e.receptor), eqE = E.equipos.find(x => x.id === e.equipo); return (
+      {lista.map(({ e, r }) => { if (r) { const socio = E.propietarios.find(o => o.id === r.socio)?.nombre || r.socio; return (
+        <button key={r.id} onClick={() => abrirVerRetirada(r.id)} className="text-left flex flex-wrap items-center gap-x-3 gap-y-1 py-3 border-t border-surface-container min-h-14">
+          <span className="font-mono text-label-md text-violet-800">{numRetirada(r)}</span>
+          <span className="flex-1 min-w-[140px] font-medium">Retirada · {socio}<span className="block text-body-sm text-secondary">{fechaHora(r.ts)} · recogido por {r.recoge}{r.enNombre === 'tercero' ? ` en nombre de ${r.tercero}` : ''} · {r.lineas.length} líneas</span></span>
+          <Tag c={r.estado === 'anulada' ? 'bg-error-container text-error' : 'bg-violet-100 text-violet-800'}>{r.estado === 'anulada' ? 'Retirada anulada' : `Retirada · ${socio}`}</Tag><Icon n="chevron_right" className="text-secondary" />
+        </button>); }
+        if (!e) return null;
+        const t = E.tecnicos.find(x => x.id === e.receptor), eqE = E.equipos.find(x => x.id === e.equipo); return (
         <button key={e.id} onClick={() => abrirRecibo(e.id)} className="text-left flex flex-wrap items-center gap-x-3 gap-y-1 py-3 border-t border-surface-container min-h-14">
           <span className="font-mono text-label-md text-primary">{numEntrega(e)}</span>
           <span className="flex-1 min-w-[140px] font-medium">{eqE?.nombre || e.equipo}<span className="block text-body-sm text-secondary">{fechaHora(e.ts)} · recogido por {t?.nombre || '—'} · {e.lineas.length} líneas{e.obra ? ` · ${e.obra}` : ''}</span></span>
