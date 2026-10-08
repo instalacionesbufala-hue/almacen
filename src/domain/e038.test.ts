@@ -1,7 +1,7 @@
 /* E-038 · Retirada de material en custodia por el socio (en la app, = registrar_retirada / anular_retirada): solo artículos de
    ese socio, sin pasar del stock, el stock y el extracto bajan, número RET-, el socio la ve sin datos internos y la anulación
    devuelve el stock. */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { fresh } from '../data/semilla';
 import type { Producto } from '../data/tipos';
 import { aplicarLocal } from '../store/ops';
@@ -21,6 +21,11 @@ function estado() {
   return S;
 }
 const retirar = (S: ReturnType<typeof fresh>, d: Partial<DatosRetirada> & { lineas: DatosRetirada['lineas'] }, id = 'R1') => aplicarLocal(S, { op: 'retirada', args: { id, datos: { ...BASE, ...d } } });
+
+// Chat (08/10): la semilla fija entregas a una hora del día (p. ej. hoy 08:30). Sin reloj fijo, antes de esa hora los
+// movimientos de la prueba quedaban por delante de la entrega y el orden del extracto cambiaba (fallaba por la mañana).
+beforeEach(() => { vi.useFakeTimers({ toFake: ['Date'] }); const d = new Date(); d.setHours(20, 0, 0, 0); vi.setSystemTime(d); });
+afterEach(() => { vi.useRealTimers(); });
 
 describe('retirada por el socio en la app', () => {
   it('del almacén: número RET-, stock y movimiento; idempotente', () => {
