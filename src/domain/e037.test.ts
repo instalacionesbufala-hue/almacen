@@ -1,6 +1,6 @@
 /* E-037 · Extracto de un artículo en una furgoneta (en la app, = extracto_vehiculo del servidor): saldo acumulado que llega al
    stock a bordo, pieza entera, recuento, conversión, enlaces a la entrega y al cierre, descuadre provocado y socio sin nombres. */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { fresh } from '../data/semilla';
 import type { Equivalencia, Producto } from '../data/tipos';
 import { aplicarLocal } from '../store/ops';
@@ -21,6 +21,11 @@ function estado() {
     { id: 'P', campo: 'pvc32', formula: 'directa', condiciones: {}, articulos: [{ sku: PVC, factor: 1 }], estimada: false, activa: true, orden: 2, confirmada: true }] as Equivalencia[];
   return S;
 }
+
+// Chat (08/10): la semilla fija entregas a una hora del día (p. ej. hoy 08:30). Sin reloj fijo, antes de esa hora los
+// movimientos de la prueba quedaban por delante de la entrega y el orden del extracto cambiaba (fallaba por la mañana).
+beforeEach(() => { vi.useFakeTimers({ toFake: ['Date'] }); const d = new Date(); d.setHours(20, 0, 0, 0); vi.setSystemTime(d); });
+afterEach(() => { vi.useRealTimers(); });
 
 describe('extracto de un artículo en una furgoneta', () => {
   it('entrega, cierre, ajuste, recuento y conversión: el saldo llega al stock a bordo, con enlaces', () => {
