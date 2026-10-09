@@ -15,7 +15,7 @@
  */
 
 // Solo lo que el almacén necesita (sin fotos, vídeos ni actas)
-var ALMACEN_CAMPOS = ['materialEspecial', 'numInst', 'esbrainUuid', 'cliente', 'direccion', 'fechaCierreIso', 'fechaIso', 'equipo', 'hardware', 'despFallido', 'version',
+var ALMACEN_CAMPOS = ['medidorBidireccional', 'descInstalacion', 'materialEspecial', 'numInst', 'esbrainUuid', 'cliente', 'direccion', 'fechaCierreIso', 'fechaIso', 'equipo', 'hardware', 'despFallido', 'version',
   'tipoLinea', 'fase', 'seccion', 'cableDatos', 'metrosLinea', 'metrosUtp', 'rj45', 'bornasMono', 'bornasTrif',
   'pvc32', 'corr32', 'acero32', 'acero40', 'canaleta', 'sot50', 'sot90',
   'cajaReg', 'caja6', 'caja12', 'caja18', 'cerradura', 'perfTab', 'perfForj', 'pica', 'preinst', 'mag1025', 'mag32', 'mag40'];
@@ -124,16 +124,17 @@ function almacenCalendario_() {
   var mapa = {};
   try {
     var hoja = (typeof _hojaEsbrain_ === 'function') ? _hojaEsbrain_() : almacenLibro_().getSheetByName(typeof ESBRAIN_SHEET_NAME !== 'undefined' ? ESBRAIN_SHEET_NAME : '🔗 ESBRAIN');
-    var v = hoja.getDataRange().getValues(), fc = -1, cPre = -1, cHw = -1, cMat = -1, cEq = -1, cFe = -1;
+    var v = hoja.getDataRange().getValues(), fc = -1, cPre = -1, cHw = -1, cMat = -1, cEq = -1, cFe = -1, cLink = -1;
     for (var r = 0; r < Math.min(6, v.length) && fc < 0; r++) {
       var cab = v[r].map(function (h) { return String(h).trim().toUpperCase(); });
-      if (cab.indexOf('HARDWARE') >= 0 && cab.indexOf('Nº PRESUPUESTO') >= 0) { fc = r; cPre = cab.indexOf('Nº PRESUPUESTO'); cHw = cab.indexOf('HARDWARE'); cMat = cab.indexOf('MATERIAL ESPECIAL'); cEq = cab.indexOf('EQUIPO'); cFe = cab.indexOf('FECHA'); }
+      if (cab.indexOf('HARDWARE') >= 0 && cab.indexOf('Nº PRESUPUESTO') >= 0) { fc = r; cPre = cab.indexOf('Nº PRESUPUESTO'); cHw = cab.indexOf('HARDWARE'); cMat = cab.indexOf('MATERIAL ESPECIAL'); cEq = cab.indexOf('EQUIPO'); cFe = cab.indexOf('FECHA'); cLink = cab.indexOf('LINK WIZARD'); }
     }
     if (fc >= 0) for (var i = fc + 1; i < v.length; i++) {
       var k = String(v[i][cPre] || '').trim().toUpperCase(); if (!k) continue;
       var fe = cFe >= 0 ? v[i][cFe] : null;
       mapa[k] = { hardware: String(v[i][cHw] || '').trim(), materialEspecial: cMat >= 0 ? String(v[i][cMat] || '').trim() : '',
-                  equipo: cEq >= 0 ? String(v[i][cEq] || '').trim() : '', fecha: fe instanceof Date && !isNaN(fe) ? fe.toISOString() : '' };
+                  equipo: cEq >= 0 ? String(v[i][cEq] || '').trim() : '', fecha: fe instanceof Date && !isNaN(fe) ? fe.toISOString() : '',
+                  descInstalacion: cLink >= 0 ? almacenDescDeEnlace_(v[i][cLink]) : '' };
     }
   } catch (e) { Logger.log('Calendario no disponible: ' + e); }
   ALMACEN_CAL_CACHE_ = mapa;
@@ -142,7 +143,7 @@ function almacenCalendario_() {
 function almacenCompletarDesdeCalendario_(c) {
   if (!c || !c.numInst) return c;
   var x = almacenCalendario_()[String(c.numInst).trim().toUpperCase()];
-  if (x) { if (!c.hardware && x.hardware) c.hardware = x.hardware; if (!c.materialEspecial && x.materialEspecial) c.materialEspecial = x.materialEspecial; }
+  if (x) { if (!c.hardware && x.hardware) c.hardware = x.hardware; if (!c.materialEspecial && x.materialEspecial) c.materialEspecial = x.materialEspecial; if (!c.descInstalacion && x.descInstalacion) c.descInstalacion = x.descInstalacion; }
   return c;
 }
 
@@ -314,6 +315,7 @@ function almPfLeer_() {
     if (cal.hardware) atr.hardware = cal.hardware;
     if (cal.fecha) atr.fechaCierreIso = cal.fecha;
     if (cal.materialEspecial) atr.materialEspecial = cal.materialEspecial;
+    if (cal.descInstalacion) atr.descInstalacion = cal.descInstalacion;
     out.push({ id: d.id, numInst: numInst, documento: String(d.docNumber || d.id), fechaAprobacion: f ? f.toISOString() : null, lineas: t.lineas, atributos: atr, sinTraducir: t.sinTraducir });
   });
   return out;
@@ -355,4 +357,48 @@ function instalarPrefacturasAlmacen() {
   ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'enviarPrefacturasAlmacen') ScriptApp.deleteTrigger(t); });
   ScriptApp.newTrigger('enviarPrefacturasAlmacen').timeBased().everyHours(1).create();
   Logger.log('Revisión horaria de prefacturas activada.');
+}
+
+/* ===== Chat (09/10) · Descripción de la instalación (E-044: medidor bidireccional en las "SOLAR") =====
+   El wizard no envía la descripción; el calendario la guarda dentro del enlace del wizard (columna LINK WIZARD, parámetro desc). */
+function almacenDescDeEnlace_(enlace) {
+  var m = String(enlace || '').match(/[?&]desc=([^&#]*)/);
+  if (!m) return '';
+  try { return decodeURIComponent(m[1].replace(/\+/g, ' ')).trim(); } catch (e) { return m[1].trim(); }
+}
+
+/** Instalaciones del calendario desde el 30/09 con descripción: [{ numInst, descInstalacion, solar }] */
+function almacenDescripcionesDesde_() {
+  var desde = new Date(2026, 8, 30), out = [], mapa = almacenCalendario_();
+  Object.keys(mapa).forEach(function (k) {
+    var x = mapa[k]; if (!x.descInstalacion) return;
+    if (x.fecha && new Date(x.fecha) < desde) return;
+    out.push({ numInst: k, descInstalacion: x.descInstalacion, solar: /solar/i.test(x.descInstalacion) });
+  });
+  return out;
+}
+
+/** PRUEBA (no envía nada): instalaciones con descripción desde el 30/09 y cuáles son SOLAR */
+function probarDescripcionesAlmacen() {
+  var l = almacenDescripcionesDesde_(), sol = l.filter(function (x) { return x.solar; });
+  Logger.log('Instalaciones con descripción desde el 30/09: ' + l.length + ' · SOLAR: ' + sol.length);
+  sol.forEach(function (x) { Logger.log('SOLAR · ' + x.numInst + ' · ' + x.descInstalacion); });
+}
+
+/** ENVÍO: completa los cierres ya registrados con la descripción del calendario (se puede repetir: el almacén no duplica) */
+function completarDescripcionesAlmacen() {
+  var l = almacenDescripcionesDesde_(), total = { enviados: 0, conMedidor: [], sinCierre: 0, errores: 0 };
+  for (var i = 0; i < l.length; i += 50) {
+    var lote = l.slice(i, i + 50).map(function (x) { return { origen: 'calendario', numInst: x.numInst, atributos: { descInstalacion: x.descInstalacion } }; });
+    try {
+      var r = almacenLlamar_({ origen: 'calendario', cierres: lote });
+      total.enviados += lote.length;
+      (r.resultados || []).forEach(function (x) {
+        if (x.error) { total.errores++; almacenLog_('ERROR', x.numInst, 'Descripción: ' + x.error, null); }
+        else if (x.estado === 'sin_cierre') total.sinCierre++;
+        else if (x.diferencia && JSON.stringify(x.diferencia).toLowerCase().indexOf('medidor') >= 0) total.conMedidor.push(x.numInst);
+      });
+    } catch (e) { total.errores += lote.length; almacenLog_('ERROR', 'lote ' + (i / 50 + 1), 'Descripción: ' + (e.message || e), null); }
+  }
+  Logger.log(JSON.stringify(total));
 }
