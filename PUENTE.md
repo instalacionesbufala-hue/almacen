@@ -1298,9 +1298,34 @@ Con 44 m de línea, el usuario espera **unas 88 fijaciones** (44 / 0,5).
    - Hay pruebas de: un cierre con descripción SOLAR y mono descuenta 1 medidor monofásico; trif, el trifásico; sin SOLAR, ninguno; el modo calendario sobre un cierre existente añade el medidor sin duplicar; y la prefactura con `descInstalacion`.
    - En la respuesta, qué artículos de medidor hay en la base y cuántos cierres desde el 30/09 tienen SOLAR (si se puede saber por el wizard o la prefactura; si no, lo dirá el Apps Script).
 
+### E-045 · El medidor SOLAR solo es automático con cargador V2C; con otros, revisión manual · PENDIENTE (urgente, pequeño)
+**Corrección del usuario (09/10) a E-044:** el medidor bidireccional (la pinza) **solo se instala siempre con cargadores V2C** (Trydan). Con **Policharger u otro cargador**, en una instalación SOLAR **no siempre** se instala. La regla debe tenerlo en cuenta, y el usuario quiere **poder cambiarla**.
+
+**Qué hacer**
+1. **Reglas S1-S5 (migración, con versión anterior):** añadir a S1-S4 la condición del cargador, **`hardware~v2c` o `hardware~trydan`**. Por ejemplo, S1: `descInstalacion~solar` + `fase = mono` + `hardware~v2c|trydan` → 8900500101. Si el cargador no es V2C, **no se descuenta medidor automáticamente**.
+2. **SOLAR sin V2C → aviso para decidir.** Si la descripción es SOLAR y el cargador no es V2C (Policharger…) o no se conoce:
+   - el cierre muestra un aviso **"Instalación SOLAR con <cargador>: ¿se instaló medidor bidireccional?"**, con dos botones:
+     - **"Sí, monofásico / trifásico"**: añade la línea (como "Corregir cierre", E-035, con su versión);
+     - **"No"**: lo marca como revisado;
+   - aparece en la **bandeja** del administrador como pendiente de revisar, igual que el material especial (E-026 §5);
+   - **no cuenta como "sin equivalencia".**
+3. **Que el usuario pueda cambiarlo él:** en Configuración → Integraciones → Equivalencias, las reglas S1-S5 se pueden **editar**, incluidas las condiciones combinadas (`descInstalacion`, `fase` y `hardware`), con su versión anterior.
+   - Comprobar que el editor de reglas (E-016) admite condiciones sobre `descInstalacion` y varias condiciones a la vez. Si no, añadirlo.
+   - Que haya un **interruptor "Medidor solo con V2C"** en esas reglas, o la condición visible y editable en lenguaje normal ("Cargador contiene: V2C, Trydan").
+4. **Revisar producción** (solo lectura): si el usuario ya ejecutó `completarDescripcionesAlmacen`, comprobar si algún cierre **SOLAR con cargador no V2C** recibió medidor por la regla anterior, y ofrecer el arreglo (recálculo de E-042, que respeta las correcciones manuales). **No tocar datos.**
+5. **Hecho cuando:**
+   - Hay pruebas de: SOLAR + V2C mono → medidor monofásico; SOLAR + Policharger → sin medidor y con aviso "¿se instaló?"; "Sí, monofásico" lo añade; "No" lo marca como revisado; y la regla editada por el usuario (por ejemplo, añadiendo Policharger) se aplica.
+   - El cierre E2632493 (V2C Trydan, MONOFÁSICO SOLAR) sigue descontando el monofásico.
+
 ---
 
 ## Revisión del chat
+
+### 09/10/2026 · Revisión de E-044 y nuevo E-045
+- **E-044:** verificado (266 pruebas de la app y las de cierres en verde).
+- **Apps Script del chat:** lee `descInstalacion` del parámetro `desc` del enlace del wizard en el calendario (columna LINK WIZARD), la envía en directo, en el histórico y en los atributos de la prefactura, y tiene la función `completarDescripcionesAlmacen` (modo calendario) para los cierres desde el 30/09.
+- **E-045 (urgente, nuevo):** el medidor solo es automático con V2C; con otros cargadores, aviso para decidir; reglas editables.
+- **Orden: E-045.**
 
 ### 09/10/2026 · Revisión de E-042 y E-043, y nuevo E-044
 - **E-042 y E-043:** verificados. **573 pruebas en verde.**
