@@ -1317,6 +1317,26 @@ Con 44 m de línea, el usuario espera **unas 88 fijaciones** (44 / 0,5).
    - Hay pruebas de: SOLAR + V2C mono → medidor monofásico; SOLAR + Policharger → sin medidor y con aviso "¿se instaló?"; "Sí, monofásico" lo añade; "No" lo marca como revisado; y la regla editada por el usuario (por ejemplo, añadiendo Policharger) se aplica.
    - El cierre E2632493 (V2C Trydan, MONOFÁSICO SOLAR) sigue descontando el monofásico.
 
+### E-046 · El técnico confirma el medidor bidireccional en el wizard: manda sobre las reglas · PENDIENTE (urgente, pequeño)
+**Novedad (09/10):** el wizard (`bufala/cierre-esbrain.html` v1.4.0) tiene una **página propia en las instalaciones SOLAR**: "¿Se ha instalado medidor bidireccional?", con las opciones "Sí · Monofásico" (por defecto), "Sí · Trifásico" y "No". En el POST envía:
+- **`descInstalacion`:** siempre (la descripción de la instalación);
+- **`medidorBidireccional`:** `'mono'` | `'trif'` | `'no'`. Va vacío si no es SOLAR o si la visita es fallida.
+
+Además, el backend del wizard escribe en "Registro" las columnas AQ "MEDIDOR BIDIRECCIONAL" y AR "DESCRIPCIÓN INSTALACIÓN". El Apps Script del almacén (`docs/apps-script-almacen.gs`, actualizado por el chat) ya reenvía `medidorBidireccional` al almacén.
+
+**Qué hacer en el servidor**
+1. **Aceptar `medidorBidireccional`** en `registrar-cierre` (wizard e histórico), guardarlo en la versión y mostrarlo en el detalle del cierre: "Medidor bidireccional (confirmado por el técnico): Monofásico / Trifásico / No instalado".
+2. **Si viene con valor, manda sobre las reglas S1-S5 (E-044 y E-045),** sea cual sea el cargador:
+   - `'mono'` → 1 × 8900500101;
+   - `'trif'` → 1 × WIH24YJX185551;
+   - `'no'` → ningún medidor, sin aviso "¿se instaló?" (E-045 §2) y sin pendiente.
+   - **Los artículos salen de una configuración editable**, no fijos en el código: dos reglas nuevas `medidorBidireccional = mono/trif` en Equivalencias, editables como las demás.
+3. **Si viene vacío o no viene** (cierres antiguos, no SOLAR, visita fallida o llegados por la prefactura): siguen aplicándose S1-S5 con E-045 (automático con V2C y aviso con otros cargadores).
+4. **Precedencia de versiones:** el valor del técnico (wizard) prevalece sobre el modo calendario y la prefactura; una corrección manual (E-035) prevalece sobre todo.
+5. **Hecho cuando:**
+   - Hay pruebas de: Policharger SOLAR con `'mono'` → descuenta el monofásico, sin aviso; V2C SOLAR con `'no'` → no descuenta; `'trif'` → trifásico; vacío → reglas E-045; y corrección manual por encima.
+   - El primer cierre SOLAR real con el wizard nuevo lo refleja.
+
 ---
 
 ## Revisión del chat
@@ -1325,7 +1345,8 @@ Con 44 m de línea, el usuario espera **unas 88 fijaciones** (44 / 0,5).
 - **E-044:** verificado (266 pruebas de la app y las de cierres en verde).
 - **Apps Script del chat:** lee `descInstalacion` del parámetro `desc` del enlace del wizard en el calendario (columna LINK WIZARD), la envía en directo, en el histórico y en los atributos de la prefactura, y tiene la función `completarDescripcionesAlmacen` (modo calendario) para los cierres desde el 30/09.
 - **E-045 (urgente, nuevo):** el medidor solo es automático con V2C; con otros cargadores, aviso para decidir; reglas editables.
-- **Orden: E-045.**
+- **E-046 (nuevo, 09/10):** la confirmación del técnico en el wizard (`medidorBidireccional`) manda sobre las reglas del medidor.
+- **Orden: E-045 → E-046.**
 
 ### 09/10/2026 · Revisión de E-042 y E-043, y nuevo E-044
 - **E-042 y E-043:** verificados. **573 pruebas en verde.**
