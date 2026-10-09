@@ -226,7 +226,7 @@ export interface CierreApp {
   /** E-035: datos corregidos a mano (fase, tipoLinea, seccion, equipo): mandan sobre lo automático */
   correccion?: Record<string, string>;
   /** E-026: últimos datos del wizard o del histórico, última prefactura de Holded, material especial y versiones */
-  datosWizard?: Record<string, unknown>; holded?: { documento: string; fechaAprobacion: string; lineas: Record<string, number> };
+  datosWizard?: Record<string, unknown>; holded?: { documento: string; fechaAprobacion: string; lineas: Record<string, number>; atributos?: Record<string, string> };
   materialEspecial?: string; materialRevisado?: boolean; versiones?: VersionCierre[];
 }
 export interface VersionCierre { n: number; origen: string; documento: string; recibido: number; diferencia: { sku: string; unidades: number }[] }

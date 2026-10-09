@@ -1273,7 +1273,7 @@ Con 44 m de línea, el usuario espera **unas 88 fijaciones** (44 / 0,5).
 4. **Retiradas (E-038):** el grupo del socio (por ejemplo, el de Esmove), con un campo igual en la ficha del socio (E-024).
 5. **Hecho cuando** en el iPhone, desde una entrega de Búfala 2, "Enviar al grupo de Búfala 2" abre el menú de compartir con el PDF y el texto, y en el ordenador descarga el PDF y abre el grupo.
 
-### E-044 · Medidor bidireccional en las instalaciones "SOLAR" (dato del calendario) · PENDIENTE
+### E-044 · Medidor bidireccional en las instalaciones "SOLAR" (dato del calendario) · HECHO
 **Petición del usuario (09/10):** los **medidores bidireccionales** se instalan **solo cuando el título de la instalación lleva "SOLAR"**, por ejemplo "INSTALACIÓN TIER 1 UNIFAM. Y EMPRESA MONOFÁSICO **SOLAR**". El técnico **no lo pone en el cierre**, pero Búfala lo instala, así que hay que **descontarlo de la furgoneta** automáticamente.
 
 **De dónde sale el dato:**
@@ -3760,3 +3760,52 @@ Ajusté 3 pruebas de E-032 (sus reglas no tienen `pvc32`; ahora aparece la líne
 - Demo restaurada.
 
 **Falta que lo pruebe el usuario en su iPhone**, desde una entrega de Búfala 2 con el enlace real del grupo puesto en el equipo.
+
+### E-044 · Medidor bidireccional en las instalaciones "SOLAR" (dato del calendario) · HECHO (09/10/2026)
+**Artículos de medidor en la base** (los ha dado de alta el usuario; los dos en custodia de Esmove, 1 ud):
+- `8900500101` · V2C MEDIDOR BIDIRECCIONAL MONOFASICO + 1 PINZA 120A (5 en stock) → **monofásico**.
+- `WIH24YJX185551` · MEDIDOR BIDIRECCIONAL TRIFÁSICO CHINT V2C (1) → **trifásico**.
+- **No uso** `OR-WE-520` (contador de energía trifásico 80A MID): no dice bidireccional. Si el trifásico fuese ese, se cambia en la regla S2/S4 (Integraciones → Editar).
+
+**Qué he hecho**
+1. **`descInstalacion`** (texto) en el módulo compartido de cierres (`registrar-cierre`, la app y las pruebas):
+   - en el cierre del wizard y el histórico, y en los `atributos` de la prefactura (E-032);
+   - precedencia: el del wizard o el calendario; si no, el de la prefactura (va con los atributos "de calendario": equipo, cargador, fecha…);
+   - cuenta para saber si una versión trae cambios.
+2. **Condición `descInstalacion~solar`** con el mismo `~` que `hardware`: contiene, sin tildes ni mayúsculas, y `&` = contiene las dos.
+   - **Campo nuevo de regla `descInstalacion`:** vale 1 por instalación si hay descripción, como `hardware`. Con la fórmula "1 ud" es un medidor por instalación.
+3. **Reglas** (migración `20261102000100_e044_medidor_solar.sql`, confirmadas y activas en producción). Dentro del grupo manda la primera que cumple:
+   - S1 `descInstalacion~solar` + `fase = mono` → monofásico;
+   - S2 `descInstalacion~solar` + `fase = trif` → trifásico;
+   - S3 `solar&monofas` (sin fase en el cierre) → monofásico;
+   - S4 `solar&trifas` → trifásico;
+   - S5 `solar` sin fase en ningún sitio → "sin equivalencia", para elegirlo a mano.
+   - Nota de la línea: "Instalación SOLAR: medidor bidireccional monofásico/trifásico".
+   - **E-026:** al ser material en custodia, antes de la fecha de "solo lo entregado" se descuenta solo si consta a bordo (si no, `no_entregado`), igual que los cargadores. Tiene prueba.
+4. **Modo "completar datos":** `{ origen: 'calendario', numInst, atributos: { descInstalacion, … } }` en `registrar-cierre`:
+   - crea una **versión nueva "datos del calendario"** solo con esos datos (la descripción manda; equipo, cargador y fecha solo rellenan si faltan) y aplica la diferencia;
+   - la misma descripción otra vez → `duplicado`, sin descontar dos veces;
+   - **respeta las correcciones manuales (E-035):** con la fase corregida a trifásica, sale el trifásico;
+   - si el cierre aún no ha llegado → `{ estado: 'sin_cierre' }` (no es un error; el dato irá con el cierre);
+   - `cierre_versiones.origen` admite `calendario`. **`registrar-cierre` desplegada.**
+5. **En el detalle del cierre:** "Instalación: INSTALACIÓN TIER 1 UNIFAM. Y EMPRESA MONOFÁSICO SOLAR" con la etiqueta "SOLAR · medidor bidireccional", la línea del medidor con su nota, y la versión "datos del calendario".
+
+**Cierres desde el 30/09 con SOLAR:** **no se puede saber todavía.** De los 29 cierres desde el 30/09, ninguno trae la descripción: el wizard no la envía y la prefactura tampoco. **Lo dirá el Apps Script** al enviar los datos del calendario: por cada cierre SOLAR responderá con la versión nueva y `diferencia` +1 medidor.
+
+**Para el chat (Apps Script):**
+- Enviar `descInstalacion` en el cierre en directo y el histórico, y en `atributos` de la prefactura.
+- Para los cierres ya registrados, una llamada por cierre (o por lotes `{ cierres: [...] }`) con `origen: 'calendario'`.
+- La descripción va **tal cual**, sin quitar tildes.
+
+**Pruebas:** `src/domain/e044.test.ts` (6) y `supabase/tests/e044.test.ts` (4):
+- SOLAR mono → monofásico; trif → trifásico; sin SOLAR, ninguno;
+- la fase de la descripción; sin fase, para elegir;
+- calendario sobre un cierre existente: +1 medidor, versión "calendario" y, repetido, no duplica;
+- el calendario con la corrección manual de la fase;
+- prefactura con `descInstalacion`, y el del wizard manda sobre ella;
+- calendario sin cierre;
+- E-026 con el medidor no entregado.
+
+**583 pruebas en verde** (266 de la app + 317 de base de datos); build correcto.
+
+**En el navegador (demo):** cierre de Búfala 1 sin descripción → "datos del calendario" con la descripción SOLAR → 1 medidor monofásico, la descripción con la etiqueta SOLAR y la versión 2 "datos del calendario +1 V2C MEDIDOR BIDIRECCIONAL MONOFÁSICO". Demo restaurada.

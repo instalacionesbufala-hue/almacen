@@ -14,7 +14,8 @@ export const CAMPOS_MATERIAL = [
 
 export type Formula = 'directa' | 'manguitos' | 'fijaciones' | 'unidad';
 export interface ArticuloRegla { sku: string | null; factor: number; nombre?: string }
-/** Regla de equivalencia. campo: una partida o una suma ("pvc32+acero32"); "hardware" para el cargador.
+/** Regla de equivalencia. campo: una partida o una suma ("pvc32+acero32"); "hardware" para el cargador; E-044: "descInstalacion"
+    (1 ud por instalación cuando hay descripción, p. ej. el medidor bidireccional de las SOLAR).
     condiciones: { campo: valor | [valores] } (igual, sin mayúsculas) o { "campo~": "texto" } (contiene; "a&b" = contiene a y b). */
 export interface Regla {
   id: string; campo: string; formula: Formula; condiciones: Record<string, string | string[]>;
@@ -38,7 +39,9 @@ export interface LineaTraducida {
 export const CAMPOS_FACTURABLES = ['metrosLinea', 'metrosUtp', 'rj45', 'corr32', 'acero32', 'acero40', 'canaleta', 'sot50', 'sot90', 'bornasMono', 'bornasTrif',
   'caja6', 'caja12', 'caja18', 'cerradura', 'cajaReg', 'mag1025', 'mag32', 'mag40', 'pica', 'preinst'] as const;
 /** Lo que identifica qué material lleva un cierre (si no cambia nada de esto, la versión no trae cambios) */
-const CAMPOS_IDENTICOS = [...CAMPOS_MATERIAL, 'hardware', 'equipo', 'despFallido', 'tipoLinea', 'fase', 'seccion', 'cableDatos', 'materialEspecial'];
+const CAMPOS_IDENTICOS = [...CAMPOS_MATERIAL, 'hardware', 'equipo', 'despFallido', 'tipoLinea', 'fase', 'seccion', 'cableDatos', 'materialEspecial', 'descInstalacion'];
+/** E-044 · Campos de texto que valen 1 por instalación si vienen (para reglas de "1 ud") */
+const CAMPOS_TEXTO_UNIDAD = ['hardware', 'descInstalacion'];
 
 const txt = (v: unknown) => String(v ?? '').trim();
 const norm = (v: unknown) => txt(v).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
@@ -50,6 +53,7 @@ export function normalizarCierre(raw: Record<string, unknown>): Cierre {
     ...raw,
     numInst: txt(raw.numInst), esbrainUuid: txt(raw.esbrainUuid), cliente: txt(raw.cliente), direccion: txt(raw.direccion),
     fechaCierreIso: txt(raw.fechaCierreIso || raw.fechaIso), equipo: txt(raw.equipo), hardware: txt(raw.hardware), materialEspecial: materialEspecial(raw.materialEspecial),
+    descInstalacion: txt(raw.descInstalacion),
     despFallido: raw.despFallido === true || raw.despFallido === 'true' || raw.despFallido === 1, version: Math.max(1, Math.trunc(numero(raw.version)) || 1),
   };
   for (const k of CAMPOS_MATERIAL) c[k] = Math.max(0, numero(raw[k]));
@@ -71,13 +75,14 @@ export function claveCierre(c: Pick<Cierre, 'esbrainUuid' | 'numInst'>): string 
 }
 
 /* ---------- E-026 · Versiones de un cierre: directo (wizard), histórico y prefactura aprobada de Holded ---------- */
-export type OrigenVersion = 'wizard' | 'historico' | 'holded' | 'admin';
+export type OrigenVersion = 'wizard' | 'historico' | 'holded' | 'admin' | 'calendario';
 export interface PrefacturaHolded { documento: string; fechaAprobacion: string; lineas: Record<string, number>; atributos?: Record<string, string> }
 /** E-032 · Atributos que manda la prefactura: los de la línea (sacados de los nombres de las líneas de Holded) mandan sobre el wizard,
     porque es lo facturado; los del calendario (equipo, cargador, fecha de la instalación) solo rellenan lo que el wizard no trae. */
 // E-033: el cable de datos NO: en Holded la tarifa siempre dice U/UTP; lo decide el cargador (aunque lo envíe un Apps Script antiguo, se ignora)
 export const ATRIBUTOS_LINEA = ['tipoLinea', 'fase', 'seccion'] as const;
-export const ATRIBUTOS_CALENDARIO = ['equipo', 'hardware', 'fechaCierreIso', 'materialEspecial'] as const;
+// E-044: la descripción de la instalación ("… MONOFÁSICO SOLAR"), del enlace del wizard en el calendario
+export const ATRIBUTOS_CALENDARIO = ['equipo', 'hardware', 'fechaCierreIso', 'materialEspecial', 'descInstalacion'] as const;
 export function normalizarAtributos(raw: unknown): Record<string, string> {
   const a = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>, out: Record<string, string> = {};
   for (const k of [...ATRIBUTOS_LINEA, ...ATRIBUTOS_CALENDARIO]) {
@@ -145,6 +150,16 @@ export function prepararVersion(previo: PrevioCierre | null, origen: OrigenVersi
     const hayWizard = (previo?.origenes || []).some(o => o === 'wizard' || o === 'historico');
     if (!hayWizard) wizard = normalizarCierre({ numInst: raw.numInst, equipo: raw.equipo || atributos.equipo, fechaCierreIso: raw.fechaCierreIso || atributos.fechaCierreIso || raw.fecha || pf.fechaAprobacion,
       cliente: raw.cliente || wizard?.cliente, direccion: raw.direccion || wizard?.direccion, hardware: raw.hardware || atributos.hardware, materialEspecial: atributos.materialEspecial });
+  } else if (origen === 'calendario') {
+    // E-044 · "Completar datos" de un cierre que ya existe: solo los datos del calendario (la descripción manda; lo demás solo rellena)
+    if (!previo || !wizard) throw new Error('Aún no ha llegado ese cierre: los datos del calendario se envían con él');
+    const at = normalizarAtributos(raw.atributos);
+    if (!Object.keys(at).length) throw new Error('Sin datos del calendario que completar');
+    const nuevo: Record<string, unknown> = { ...wizard };
+    for (const k of ATRIBUTOS_CALENDARIO) if (at[k] && (k === 'descInstalacion' || !txt(nuevo[k]))) nuevo[k] = at[k];
+    documento = 'Datos del calendario';
+    if (CAMPOS_IDENTICOS.every(k => norm(nuevo[k]) === norm(wizard![k]))) accion = 'duplicado';
+    wizard = normalizarCierre(nuevo);
   } else {
     const c = normalizarCierre(raw);
     if (wizard) {
@@ -159,7 +174,7 @@ export function prepararVersion(previo: PrevioCierre | null, origen: OrigenVersi
 }
 
 /** Valor de un campo o de una suma de campos ("pvc32+acero32") */
-export const valorCampo = (c: Cierre, campo: string) => campo === 'hardware' ? (c.hardware ? 1 : 0) : campo.split('+').reduce((a, k) => a + numero(c[k.trim()]), 0);
+export const valorCampo = (c: Cierre, campo: string) => CAMPOS_TEXTO_UNIDAD.includes(campo) ? (txt(c[campo]) ? 1 : 0) : campo.split('+').reduce((a, k) => a + numero(c[k.trim()]), 0);
 
 export function cumple(c: Cierre, cond: Record<string, string | string[]>): boolean {
   return Object.entries(cond || {}).every(([k, v]) => {
@@ -239,6 +254,19 @@ export function traducirCierre(c: Cierre, reglas: Regla[], kits: Kits, kitDefect
 }
 
 /* ---------- Propuesta inicial (datos/equivalencias-cierres.csv, con las respuestas del usuario) ---------- */
+/** E-044 · Medidores bidireccionales (en custodia de Esmove): el monofásico V2C con pinza y el trifásico CHINT V2C */
+export const MEDIDOR_MONO = '8900500101', MEDIDOR_TRIF = 'WIH24YJX185551';
+const medidor = (id: string, orden: number, condiciones: Regla['condiciones'], sku: string, nota: string): Regla =>
+  ({ id, campo: 'descInstalacion', formula: 'unidad', condiciones, articulos: [{ sku, factor: 1 }], estimada: false, activa: true, orden, nota });
+export const MEDIDORES_SOLAR: Regla[] = [
+  medidor('S1', 1200, { 'descInstalacion~': 'solar', fase: 'mono' }, MEDIDOR_MONO, 'Instalación SOLAR: medidor bidireccional monofásico'),
+  medidor('S2', 1201, { 'descInstalacion~': 'solar', fase: 'trif' }, MEDIDOR_TRIF, 'Instalación SOLAR: medidor bidireccional trifásico'),
+  medidor('S3', 1202, { 'descInstalacion~': 'solar&monofas' }, MEDIDOR_MONO, 'Instalación SOLAR (monofásica según la descripción): medidor bidireccional monofásico'),
+  medidor('S4', 1203, { 'descInstalacion~': 'solar&trifas' }, MEDIDOR_TRIF, 'Instalación SOLAR (trifásica según la descripción): medidor bidireccional trifásico'),
+  // sin fase en el cierre ni en la descripción: queda "sin equivalencia" para elegir el medidor a mano
+  { ...medidor('S5', 1204, { 'descInstalacion~': 'solar' }, '', 'Instalación SOLAR sin fase: elige el medidor bidireccional'), articulos: [] },
+];
+
 let n = 0;
 const R = (campo: string, formula: Formula, condiciones: Regla['condiciones'], articulos: [string | null, number, string?][], extra: Partial<Regla> = {}): Regla =>
   ({ id: `P${String(++n).padStart(2, '0')}`, campo, formula, condiciones, articulos: articulos.map(([sku, factor, nombre]) => ({ sku, factor, ...(nombre ? { nombre } : {}) })), estimada: false, activa: true, orden: n * 10, ...extra });
@@ -273,6 +301,8 @@ export const EQUIVALENCIAS_PROPUESTA: Regla[] = [
   // F/UTP antes que U/UTP, porque "utp" también está en "f/utp"
   R('metrosUtp', 'directa', { 'cableDatos~': ['f/utp', 'ftp'] }, [['7270021010', 1]], { id: 'P-UTP-F', orden: 65, nota: 'Cat6 F/UTP (sin cargador: lo dice el cable de datos)' }),
   R('metrosUtp', 'directa', { 'cableDatos~': 'utp' }, [['7270020010', 1]], { id: 'P-UTP-U', orden: 66, nota: 'Cat6 U/UTP (sin cargador: lo dice el cable de datos)' }),
+  // E-044: medidor bidireccional, 1 por instalación SOLAR (el título del calendario lleva "SOLAR"). La fase del cierre; si no viene, la de la descripción
+  ...MEDIDORES_SOLAR,
 ];
 
 export const KITS_PROPUESTA: Kits = {

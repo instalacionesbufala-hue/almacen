@@ -5,6 +5,8 @@
 //   - un cierre del wizard { numInst, esbrainUuid, fechaCierreIso, equipo, hardware, materialEspecial, despFallido, version?, metrosLinea, pvc32… }
 //   - varios { cierres: [...], origen?: 'historico' } (carga única del histórico de "Registro")
 //   - E-026: la prefactura aprobada de Holded { origen: 'holded', numInst, documento, fechaAprobacion, lineas: { cajaReg: 2, … }, equipo?, fecha? }
+//   - E-044: completar datos de un cierre que ya existe con los del calendario { origen: 'calendario', numInst, atributos: { descInstalacion, … } }
+//     (descInstalacion también puede venir en el cierre del wizard o del histórico y en los atributos de la prefactura)
 // E-026: una instalación (numInst) = un cierre. Lo que llega después es una versión nueva: se aplica solo la diferencia.
 // El token solo puede registrar cierres: no lee nada.
 import { createClient } from 'jsr:@supabase/supabase-js@2';
@@ -45,10 +47,12 @@ Deno.serve(async (req) => {
   for (const raw of lista) {
     const numInst = normInst(raw?.numInst);
     try {
-      const origen: OrigenVersion = raw.origen === 'holded' ? 'holded' : (raw.origen === 'historico' || cuerpo.origen === 'historico') ? 'historico' : 'wizard';
+      const origen: OrigenVersion = raw.origen === 'holded' ? 'holded' : raw.origen === 'calendario' ? 'calendario' : (raw.origen === 'historico' || cuerpo.origen === 'historico') ? 'historico' : 'wizard';
       const clave = claveCierre({ numInst: String(raw.numInst ?? ''), esbrainUuid: String(raw.esbrainUuid ?? '') });
       const { data: previo, error: e1 } = await db.rpc('previo_cierre', { p_clave: clave });
       if (e1) throw new Error(e1.message);
+      // E-044: los datos del calendario de un cierre que aún no ha llegado no son un error: irán con el cierre
+      if (origen === 'calendario' && !previo) { resultados.push({ numInst, estado: 'sin_cierre' }); continue; }
       const v = prepararVersion(previo as PrevioCierre | null, origen, raw);
       const lineas = v.accion === 'nueva' ? traducirCierre(v.efectivo, reglas, kits, conf?.kit_fijacion || 'A', catalogo) : [];
       const meta = { clave, accion: v.accion, origen, documento: v.documento, base: (previo as PrevioCierre | null)?.version || 0, wizard: v.wizard, holded: v.holded, entrada: raw };

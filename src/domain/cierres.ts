@@ -193,7 +193,10 @@ export function textoDiferencia(S: Estado, d: { sku: string; unidades: number }[
   return d.map(x => { const p = find(S, x.sku), q = p ? redondea(x.unidades / contenidoDe(p)) : x.unidades;
     return `${q > 0 ? '+' : '−'}${String(Math.abs(q)).replace('.', ',')} ${p?.name || x.sku}`; }).join(' · ');
 }
-export const ORIGEN_VERSION: Record<string, string> = { wizard: 'wizard (directo)', historico: 'histórico de Registro', holded: 'prefactura Holded', admin: 'recalculado' };
+export const ORIGEN_VERSION: Record<string, string> = { wizard: 'wizard (directo)', historico: 'histórico de Registro', holded: 'prefactura Holded', admin: 'recalculado', calendario: 'datos del calendario' };
+/** E-044 · Descripción de la instalación ("… MONOFÁSICO SOLAR"): la del wizard o el calendario; si no, la de la prefactura */
+export const descInstalacion = (c: Pick<CierreApp, 'datosWizard' | 'holded' | 'datos'>) =>
+  String(c.datosWizard?.descInstalacion || c.holded?.atributos?.descInstalacion || c.datos?.descInstalacion || '').trim();
 
 /* ---------- Resúmenes para las pantallas ---------- */
 export const lineasDe = (S: Pick<Estado, 'lineasCierre'>, cierre: string) => S.lineasCierre.filter(l => l.cierre === cierre);
