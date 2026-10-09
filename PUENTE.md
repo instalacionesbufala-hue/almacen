@@ -1273,9 +1273,40 @@ Con 44 m de línea, el usuario espera **unas 88 fijaciones** (44 / 0,5).
 4. **Retiradas (E-038):** el grupo del socio (por ejemplo, el de Esmove), con un campo igual en la ficha del socio (E-024).
 5. **Hecho cuando** en el iPhone, desde una entrega de Búfala 2, "Enviar al grupo de Búfala 2" abre el menú de compartir con el PDF y el texto, y en el ordenador descarga el PDF y abre el grupo.
 
+### E-044 · Medidor bidireccional en las instalaciones "SOLAR" (dato del calendario) · PENDIENTE
+**Petición del usuario (09/10):** los **medidores bidireccionales** se instalan **solo cuando el título de la instalación lleva "SOLAR"**, por ejemplo "INSTALACIÓN TIER 1 UNIFAM. Y EMPRESA MONOFÁSICO **SOLAR**". El técnico **no lo pone en el cierre**, pero Búfala lo instala, así que hay que **descontarlo de la furgoneta** automáticamente.
+
+**De dónde sale el dato:**
+- El wizard lo recibe en el enlace (`&desc=…`), pero **no lo envía al cerrar**: envía `numInst`, `equipo`, `hardware`, `tipoInst`… pero no `desc` (comprobado en `bufala/cierre-esbrain.html`, unas líneas antes de `fechaCierreIso`).
+- **El calendario "🔗 ESBRAIN"** guarda el enlace del wizard en la columna **LINK WIZARD**, con `desc`. **El chat** modificará el Apps Script (`almacenCompletarDesdeCalendario_`) para sacar `desc` de ese enlace y enviarlo como **`descInstalacion`**, en el cierre en directo, el histórico y los `atributos` de la prefactura.
+- **El chat lo hará cuando esté este encargo,** para que el almacén ya sepa usarlo.
+
+**Qué hacer en el servidor**
+1. **Aceptar `descInstalacion`** (texto) en `registrar-cierre`: en el cierre del wizard o el histórico, y en `atributos` de la prefactura (E-032). Precedencia: el del wizard o el calendario si existe; si no, el de la prefactura.
+2. **Condición en las equivalencias sobre la descripción:** `descInstalacion~solar`, con el mismo `~` (contiene, sin tildes ni mayúsculas) que `hardware`.
+3. **Reglas nuevas** (migración, con versión anterior), **una unidad por instalación**:
+   - `descInstalacion~solar` + `fase = mono` (o la descripción con "monofas") → **medidor bidireccional monofásico**;
+   - `descInstalacion~solar` + `fase = trif` (o "trifas") → **medidor bidireccional trifásico**.
+   - **Buscar en la base** los artículos de medidor bidireccional (probablemente en custodia de Esmove). Si no existen o hay duda, dejar la regla con "sin equivalencia" y **preguntar al usuario** qué SKU es cada uno.
+   - **La regla de "hasta el 05/10 solo lo entregado" (E-026)** aplica igual que a los cargadores, si el medidor está en custodia.
+4. **Modo "completar datos" para cierres existentes:**
+   - `{ origen: 'calendario', numInst, atributos: { descInstalacion, … } }` crea una **versión nueva solo con esos datos** y **recalcula**, aplicando solo la diferencia;
+   - el Apps Script lo usará una vez para los cierres desde el 30/09, y para los futuros, si el cierre llega antes que el dato;
+   - respeta las correcciones manuales (E-035).
+5. **En el detalle del cierre:** mostrar la descripción de la instalación (por ejemplo, "INSTALACIÓN TIER 1 UNIFAM. Y EMPRESA MONOFÁSICO SOLAR"), y la línea del medidor con la nota "Instalación SOLAR".
+6. **Hecho cuando:**
+   - Hay pruebas de: un cierre con descripción SOLAR y mono descuenta 1 medidor monofásico; trif, el trifásico; sin SOLAR, ninguno; el modo calendario sobre un cierre existente añade el medidor sin duplicar; y la prefactura con `descInstalacion`.
+   - En la respuesta, qué artículos de medidor hay en la base y cuántos cierres desde el 30/09 tienen SOLAR (si se puede saber por el wizard o la prefactura; si no, lo dirá el Apps Script).
+
 ---
 
 ## Revisión del chat
+
+### 09/10/2026 · Revisión de E-042 y E-043, y nuevo E-044
+- **E-042 y E-043:** verificados. **573 pruebas en verde.**
+  - **Aviso al usuario:** recalcular solo **desde después** del recuento de cada furgoneta, si ya lo hizo; si no, el recálculo descontaría dos veces.
+- **E-044 (nuevo):** medidor bidireccional en las instalaciones con "SOLAR" en la descripción. El dato sale del enlace del wizard en el calendario; lo llevará el Apps Script (chat) cuando el servidor lo acepte.
+- **Orden: E-044.**
 
 ### 08/10/2026 · Revisión de E-041 y nuevo E-042
 - **E-041:** verificado. **556 pruebas en verde.**
