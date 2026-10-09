@@ -2,6 +2,7 @@
    - aplicarse en local (validación previa con src/domain y respuesta inmediata en pantalla), y
    - traducirse a su función SQL del servidor (la fuente de verdad en modo nube).
    En modo nube la operación se guarda en la cola y se reaplica en local hasta que el servidor la confirma. */
+import { grupoValido } from '../domain/grupoWhatsapp';
 import { anularDevolucionLocal, registrarDevolucionLocal, type DatosDevolucion } from '../domain/devoluciones';
 import { anularRetiradaLocal, registrarRetiradaLocal, type DatosRetirada } from '../domain/retiradas';
 import { recalcularConsumoPiezasLocal } from '../domain/cierres';
@@ -11,7 +12,7 @@ import { cambiarFormatoLocal, formatoTxt, type ModoConversion, type NuevoFormato
 import { deshacerResolucionLocal, resolverVariosLocal, type ArticuloResolucion } from '../domain/resolucion';
 import { editarInicioAsignacionLocal, reprocesarCierresLocal, usarVehiculoActualLocal } from '../domain/asignaciones';
 import { gestiona } from '../domain/permisos';
-import type { OrigenFoto, Tallas, ConfigAvisos, Propietario, Rol, RolApp, CatId, EstadoEquipo, Estado, Herramienta, LineaEntrega, Producto, TipoIncidencia, TipoMov, Equivalencia, ArticuloRegla, Categoria } from '../data/tipos';
+import type { GrupoWhatsapp, OrigenFoto, Tallas, ConfigAvisos, Propietario, Rol, RolApp, CatId, EstadoEquipo, Estado, Herramienta, LineaEntrega, Producto, TipoIncidencia, TipoMov, Equivalencia, ArticuloRegla, Categoria } from '../data/tipos';
 import { applyMovement, find, delta, disponibleReal, formatoEntero, vehiculoDeEquipo, unidadesABordo, contenidoDe } from '../domain/reglas';
 import { emailValido, herramientasLibres } from '../domain/entregas';
 import { redondea } from '../domain/formato';
@@ -44,7 +45,7 @@ export type Op =
   | { op: 'albaran'; args: OpAlbaran }
   | { op: 'producto'; args: OpProducto }
   | { op: 'pedido'; args: { sku: string; qty: number; proveedor?: string } }
-  | { op: 'equipo'; args: { id: string; nombre: string; estado: EstadoEquipo } }
+  | { op: 'equipo'; args: { id: string; nombre: string; estado: EstadoEquipo; /** E-043: ausente = sin cambio; null = sin grupo */ grupoWhatsapp?: GrupoWhatsapp | null } }
   | { op: 'vehiculo'; args: { id: string; matricula: string; modelo: string } }
   | { op: 'asignarVehiculo'; args: { vehiculo: string; equipo?: string } }
   | { op: 'bajaTecnico'; args: { id: string } }
@@ -119,6 +120,8 @@ export type Op =
   | { op: 'enlacePortal'; args: { tecnico: string; hash: string; entrega?: string } }
   | { op: 'revocarPortal'; args: { tecnico: string } }
   | { op: 'copiaEntrega'; args: { id: string; entrega: string; canal: 'whatsapp' | 'compartir'; destino: string } }
+  | { op: 'copiaJustificante'; args: { id: string; tipo: 'entrega' | 'devolucion'; ref: string; canal: 'compartir' | 'grupo_whatsapp'; destino: string } }
+  | { op: 'copiaRetirada'; args: { id: string; retirada: string; canal: 'compartir' | 'grupo_whatsapp'; destino: string } }
   | { op: 'foto'; args: { sku: string; foto: string; mini: string; origen: OrigenFoto } }
   | { op: 'quitarFoto'; args: { sku: string } }
   | { op: 'acta'; args: { id: string; propietario: string; representante: string; firma: string; lineas: { sku: string; contado: number }[] } };
@@ -226,11 +229,12 @@ export const OPS: Defs = {
     local: (S, a) => {
       if (S.rol !== 'admin') throw new Error('Solo el administrador gestiona los equipos');
       if (!a.nombre.trim()) throw new Error('Indica el nombre del equipo (como lo envía el wizard: "Búfala 1")');
+      const grupo = 'grupoWhatsapp' in a ? { grupoWhatsapp: grupoValido(a.grupoWhatsapp, a.nombre.trim()) } : {};
       const e = S.equipos.find(x => x.id === a.id);
-      if (e) Object.assign(e, { nombre: a.nombre.trim(), estado: a.estado });
-      else S.equipos.push({ id: a.id, nombre: a.nombre.trim(), estado: a.estado, tecnicos: [] });
+      if (e) Object.assign(e, { nombre: a.nombre.trim(), estado: a.estado, ...grupo });
+      else S.equipos.push({ id: a.id, nombre: a.nombre.trim(), estado: a.estado, tecnicos: [], ...grupo });
     },
-    rpc: a => ['guardar_equipo', { p_equipo: a }],
+    rpc: ({ grupoWhatsapp, ...a }) => ['guardar_equipo', { p_equipo: { ...a, ...(grupoWhatsapp !== undefined ? { grupo_whatsapp: grupoWhatsapp } : {}) } }],
     desc: (_S, a) => `Equipo ${a.nombre}`,
   },
   estadoEquipo: {
@@ -553,6 +557,25 @@ export const OPS: Defs = {
     rpc: a => ['revocar_enlaces_portal', { p_tecnico: a.tecnico }],
     desc: (S, a) => `Revocar los enlaces de ${S.tecnicos.find(t => t.id === a.tecnico)?.nombre || a.tecnico}`,
   },
+  /* E-043: copia de una entrega o una devolución por un canal sin portal (PDF compartido o enviado al grupo de WhatsApp del equipo) */
+  copiaJustificante: {
+    local: (S, a) => {
+      const doc = a.tipo === 'entrega' ? S.entregas.find(x => x.id === a.ref) : (S.devoluciones || []).find(x => x.id === a.ref);
+      if (!doc || (doc.estado ?? 'firmada') !== 'firmada') throw new Error(`Solo se envían copias de ${a.tipo === 'entrega' ? 'entregas' : 'devoluciones'} firmadas`);
+      if (!S.copias.some(c => c.id === a.id)) S.copias.unshift({ id: a.id, [a.tipo]: a.ref, canal: a.canal, destino: a.destino, ts: Date.now(), operator: S.operator });
+    },
+    rpc: a => ['registrar_copia_justificante', { p_id: a.id, p_tipo: a.tipo, p_ref: a.ref, p_canal: a.canal, p_destino: a.destino }],
+    desc: (_S, a) => a.canal === 'grupo_whatsapp' ? `Copia enviada al grupo ${a.destino}` : 'Copia del PDF compartida',
+  },
+  copiaRetirada: {
+    local: (S, a) => {
+      const r = (S.retiradas || []).find(x => x.id === a.retirada);
+      if (!r || r.estado !== 'firmada') throw new Error('Solo se envían copias de retiradas firmadas');
+      if (!S.copias.some(c => c.id === a.id)) S.copias.unshift({ id: a.id, retirada: a.retirada, canal: a.canal, destino: a.destino, ts: Date.now(), operator: S.operator });
+    },
+    rpc: a => ['registrar_copia_retirada', { p_id: a.id, p_retirada: a.retirada, p_canal: a.canal, p_destino: a.destino }],
+    desc: (_S, a) => a.canal === 'grupo_whatsapp' ? `Copia enviada al grupo ${a.destino}` : 'Copia del PDF compartida',
+  },
   copiaEntrega: {
     local: (S, a) => {
       const e = S.entregas.find(x => x.id === a.entrega);
@@ -779,11 +802,12 @@ export const OPS: Defs = {
   propietario: {
     local: (S, a) => {
       if (S.rol !== 'admin') throw new Error('Solo el administrador puede editar los socios de custodia');
-      const x = { ...a, nombre: a.nombre.trim(), correosReposicion: a.correosReposicion.map(c => c.trim()).filter(Boolean), correosInformes: a.correosInformes.map(c => c.trim()).filter(Boolean) };
+      const x = { ...a, nombre: a.nombre.trim(), correosReposicion: a.correosReposicion.map(c => c.trim()).filter(Boolean), correosInformes: a.correosInformes.map(c => c.trim()).filter(Boolean),
+        grupoWhatsapp: grupoValido(a.grupoWhatsapp, a.nombre.trim()) };
       validarSocio(S, x);
       const o = S.propietarios.find(y => y.id === x.id); if (o) Object.assign(o, x); else S.propietarios.push(x);
     },
-    rpc: a => ['guardar_propietario', { p: { id: a.id, nombre: a.nombre, contacto: a.contacto, correos_reposicion: a.correosReposicion, correos_informes: a.correosInformes, activo: a.activo !== false, color: a.color || 'violeta' } }],
+    rpc: a => ['guardar_propietario', { p: { id: a.id, nombre: a.nombre, contacto: a.contacto, correos_reposicion: a.correosReposicion, correos_informes: a.correosInformes, activo: a.activo !== false, color: a.color || 'violeta', grupo_whatsapp: a.grupoWhatsapp ?? null } }],
     desc: (_S, a) => `Socio de custodia ${a.nombre}`,
   },
   cambiarPropiedad: {

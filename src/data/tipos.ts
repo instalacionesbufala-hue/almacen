@@ -122,7 +122,11 @@ export interface Devolucion {
   /** quién lo recibe en el almacén */ operator: string;
 }
 
+/** E-043 · Grupo de WhatsApp de un equipo o de un socio: nombre (para mostrarlo) y enlace de invitación (https://chat.whatsapp.com/…) */
+export interface GrupoWhatsapp { nombre: string; enlace: string }
+
 export interface Propietario { id: string; nombre: string; contacto: string; correosReposicion: string[]; correosInformes: string[];
+  /** E-043 */ grupoWhatsapp?: GrupoWhatsapp;
   /** E-024: socio desactivado (sin artículos); se conserva para el historial */ activo?: boolean;
   /** E-024: color de su etiqueta (clave de COLORES_SOCIO) */ color?: string }
 
@@ -203,6 +207,8 @@ export interface Equipo {
   tecnicos: string[];
   /** vehículo asignado ahora */
   vehiculo?: string;
+  /** E-043: grupo de WhatsApp del equipo, para enviarle los justificantes */
+  grupoWhatsapp?: GrupoWhatsapp;
 }
 export interface Vehiculo { id: string; matricula: string; modelo: string; equipo?: string }
 /** Historial: técnico → equipo y vehículo → equipo, con fechas */
@@ -248,7 +254,8 @@ export interface PropuestaFicha { id: string; sku: string; cambios: Partial<Prod
 
 /** E-014: enlace personal del portal del técnico. Solo se guarda el hash del token. */
 export interface EnlacePortal { tecnico: string; entrega?: string; creado: number; creadoPor: string; revocado?: number; hash?: string }
-export interface CopiaEntrega { id: string; entrega: string; canal: 'whatsapp' | 'compartir' | 'correo'; destino: string; ts: number; operator: string }
+/** Copia enviada de un justificante: de una entrega o (E-043) de una devolución o una retirada */
+export interface CopiaEntrega { id: string; entrega?: string; devolucion?: string; retirada?: string; canal: 'whatsapp' | 'compartir' | 'correo' | 'grupo_whatsapp'; destino: string; ts: number; operator: string }
 
 export interface LineaEntrega {
   sku: string;

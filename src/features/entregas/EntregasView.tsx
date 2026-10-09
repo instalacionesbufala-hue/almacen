@@ -1,6 +1,7 @@
 /* E-011 · Nueva entrega en tres pasos (móvil primero, botones de 56 px):
    1. Para quién (técnico y, si se quiere, la obra) · 2. Qué se entrega (buscador o escáner seguido) · 3. Firma del técnico.
    Nada predeterminado: el almacén elige los artículos. Se puede guardar como preparada (stock reservado) para firmar más tarde. */
+import { BotonGrupo } from './Grupo';
 import { abrirVerDevolucion, iniciarDevolucion } from './Devolucion';
 import { numDevolucion } from '../../domain/devoluciones';
 import { abrirVerRetirada, iniciarRetirada } from '../custodia/Retirada';
@@ -261,24 +262,24 @@ function Ultimas() {
     <section className={`${CARD} p-4 lg:p-space-md flex flex-col gap-1`}>
       <h2 className="text-headline-sm font-semibold mb-1 flex items-center gap-2"><Icon n="history" className="text-primary" />Últimas entregas</h2>
       {lista.map(({ e, r, d }) => { if (d) { const furgo = E.equipos.find(x => x.id === d.equipo)?.nombre || nombreVehiculo(E, d.vehiculo); return (
-        <button key={d.id} onClick={() => abrirVerDevolucion(d.id)} className="text-left flex flex-wrap items-center gap-x-3 gap-y-1 py-3 border-t border-surface-container min-h-14">
+        <div key={d.id} className="flex items-center gap-1 border-t border-surface-container"><button onClick={() => abrirVerDevolucion(d.id)} className="flex-1 min-w-0 text-left flex flex-wrap items-center gap-x-3 gap-y-1 py-3 min-h-14">
           <span className="font-mono text-label-md text-tertiary">{numDevolucion(d)}</span>
           <span className="flex-1 min-w-[140px] font-medium">Devolución · {furgo}<span className="block text-body-sm text-secondary">{fechaHora(d.ts)} · devuelve {E.tecnicos.find(t => t.id === d.tecnico)?.nombre || '—'} · recibe {d.operator} · {d.lineas.length} líneas{d.obra ? ` · ${d.obra}` : ''}</span></span>
           <Tag c={d.estado === 'anulada' ? 'bg-error-container text-error' : 'bg-tertiary-fixed/50 text-tertiary'}>{d.estado === 'anulada' ? 'Devolución anulada' : `Devolución · ${furgo}`}</Tag><Icon n="chevron_right" className="text-secondary" />
-        </button>); }
+        </button>{d.estado === 'firmada' && <BotonGrupo j={{ tipo: 'devolucion', doc: d }} compacto />}</div>); }
         if (r) { const socio = E.propietarios.find(o => o.id === r.socio)?.nombre || r.socio; return (
-        <button key={r.id} onClick={() => abrirVerRetirada(r.id)} className="text-left flex flex-wrap items-center gap-x-3 gap-y-1 py-3 border-t border-surface-container min-h-14">
+        <div key={r.id} className="flex items-center gap-1 border-t border-surface-container"><button onClick={() => abrirVerRetirada(r.id)} className="flex-1 min-w-0 text-left flex flex-wrap items-center gap-x-3 gap-y-1 py-3 min-h-14">
           <span className="font-mono text-label-md text-violet-800">{numRetirada(r)}</span>
           <span className="flex-1 min-w-[140px] font-medium">Retirada · {socio}<span className="block text-body-sm text-secondary">{fechaHora(r.ts)} · recogido por {r.recoge}{r.enNombre === 'tercero' ? ` en nombre de ${r.tercero}` : ''} · {r.lineas.length} líneas</span></span>
           <Tag c={r.estado === 'anulada' ? 'bg-error-container text-error' : 'bg-violet-100 text-violet-800'}>{r.estado === 'anulada' ? 'Retirada anulada' : `Retirada · ${socio}`}</Tag><Icon n="chevron_right" className="text-secondary" />
-        </button>); }
+        </button>{r.estado === 'firmada' && <BotonGrupo j={{ tipo: 'retirada', doc: r }} compacto />}</div>); }
         if (!e) return null;
         const t = E.tecnicos.find(x => x.id === e.receptor), eqE = E.equipos.find(x => x.id === e.equipo); return (
-        <button key={e.id} onClick={() => abrirRecibo(e.id)} className="text-left flex flex-wrap items-center gap-x-3 gap-y-1 py-3 border-t border-surface-container min-h-14">
+        <div key={e.id} className="flex items-center gap-1 border-t border-surface-container"><button onClick={() => abrirRecibo(e.id)} className="flex-1 min-w-0 text-left flex flex-wrap items-center gap-x-3 gap-y-1 py-3 min-h-14">
           <span className="font-mono text-label-md text-primary">{numEntrega(e)}</span>
           <span className="flex-1 min-w-[140px] font-medium">{eqE?.nombre || e.equipo}<span className="block text-body-sm text-secondary">{fechaHora(e.ts)} · recogido por {t?.nombre || '—'} · {e.lineas.length} líneas{e.obra ? ` · ${e.obra}` : ''}</span></span>
           <EtiquetaCopia e={e} /><Icon n="chevron_right" className="text-secondary" />
-        </button>); })}
+        </button><BotonGrupo j={{ tipo: 'entrega', doc: e }} compacto /></div>); })}
     </section>
   );
 }

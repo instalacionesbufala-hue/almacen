@@ -1,6 +1,8 @@
 /* E-041 · Devolución de material de una furgoneta al almacén, como una entrega al revés: qué furgoneta, lo que consta a bordo (con
    buscador y escáner; también lo que no consta), cantidades en metros o unidades sueltos, estado de cada línea (bien o defectuoso),
    quién devuelve (técnico del equipo), motivo, obra, firma y albarán DEV- en PDF. */
+import { BotonGrupo, CopiasJustificante } from './Grupo';
+import { grupoDe } from '../../domain/grupoWhatsapp';
 import { useState } from 'react';
 import type { Devolucion } from '../../data/tipos';
 import { avisosDevolucion, comprobarDevolucion, MOTIVO_DEVOLUCION, numDevolucion, tecnicosDeVehiculo, type LineaDev } from '../../domain/devoluciones';
@@ -139,9 +141,11 @@ function VerDevolucion({ id, recien = false }: { id: string; recien?: boolean })
         <b className="text-right">{p ? qtyTxt(p, l.cantidad) : l.unidades}</b></div>; })}</div>
       {d.firma && <div><div className={LBL}>Firma de {tec || 'quien devuelve'}</div><FirmaImg f={d.firma} className="h-24 w-64" /></div>}
       <p className="font-mono text-label-sm text-secondary break-all">Huella: {d.hash || 'se calcula al sincronizar'}</p>
+      <CopiasJustificante devolucion={d.id} />
     </div>
     <SheetFoot className="grid grid-cols-2 gap-2">
-      <button onClick={() => void compartirDevolucion(d)} className={`${BTN_P} h-12`}><Icon n="share" className="ico-20" />Compartir PDF</button>
+      <BotonGrupo j={{ tipo: 'devolucion', doc: d }} className={`${BTN_P} h-14 col-span-2`} />
+      <button onClick={() => void compartirDevolucion(d)} className={`${grupoDe(E, { tipo: 'devolucion', doc: d }) ? BTN_S : BTN_P} h-12`}><Icon n="share" className="ico-20" />Compartir PDF</button>
       <button onClick={() => void descargarDevolucion(d)} className={`${BTN_S} h-12`}><Icon n="file_download" className="ico-20" />Descargar</button>
       {perm.admin && d.estado === 'firmada' && <button onClick={anular} className={`${BTN_S} h-12 col-span-2 !text-error`}><Icon n="undo" className="ico-20" />Anular la devolución</button>}
     </SheetFoot>

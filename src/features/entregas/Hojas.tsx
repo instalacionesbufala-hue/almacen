@@ -1,5 +1,7 @@
 /* E-011 · Piezas de la entrega: panel de firma en pantalla grande (con el correo de la copia), entregas preparadas,
    albarán con el estado de la copia por correo, tallas del técnico e informe de entregas. Sin plantillas. */
+import { BotonGrupo, etiquetaCopia, iconoCopia } from './Grupo';
+import { grupoDe } from '../../domain/grupoWhatsapp';
 import { abrirVerDevolucion } from './Devolucion';
 import { abrirVerRetirada } from '../custodia/Retirada';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
@@ -186,7 +188,8 @@ function Recibo({ id }: { id: string }) {
     {firmada && <HistorialCopias e={e} />}
     <SheetFoot className="flex flex-wrap gap-2">
       <button onClick={closeModal} className={`${BTN_S} h-14 px-5`}>Cerrar</button>
-      <button onClick={() => void compartirJustificante(e).then(ok => { if (ok && firmada && perm.mod('entregas')) ejecutar({ op: 'copiaEntrega', args: { id: nuevoId(), entrega: e.id, canal: 'compartir', destino: '' } }); })} className={`${BTN_P} h-16 w-full sm:w-auto sm:flex-1 text-headline-sm order-first`}><Icon n="share" className="ico-20" />Compartir PDF</button>
+      <BotonGrupo j={{ tipo: 'entrega', doc: e }} className={`${BTN_P} h-16 w-full text-headline-sm order-first`} />
+      <button onClick={() => void compartirJustificante(e).then(ok => { if (ok && firmada && perm.mod('entregas')) ejecutar({ op: 'copiaEntrega', args: { id: nuevoId(), entrega: e.id, canal: 'compartir', destino: '' } }); })} className={grupoDe(E, { tipo: 'entrega', doc: e }) ? `${BTN_S} h-14 px-4` : `${BTN_P} h-16 w-full sm:w-auto sm:flex-1 text-headline-sm order-first`}><Icon n="share" className="ico-20" />Compartir PDF</button>
       <button onClick={() => void descargarJustificante(e)} className={`${BTN_S} h-14 px-4`}><Icon n="download" className="ico-20" />Descargar PDF</button>
       {perm.exportar && <button onClick={() => print()} className={`${BTN_S} h-14 px-4`}><Icon n="print" className="ico-20" />Imprimir</button>}
     </SheetFoot>
@@ -233,7 +236,7 @@ function CopiaWhatsApp({ e }: { e: Entrega }) {
 function HistorialCopias({ e }: { e: Entrega }) {
   const E = useAlmacen();
   const filas = [
-    ...E.copias.filter(c => c.entrega === e.id).map(c => ({ ts: c.ts, icon: c.canal === 'whatsapp' ? 'chat' : 'share', txt: `${c.canal === 'whatsapp' ? 'WhatsApp' : 'PDF compartido'}${c.destino ? ` · ${c.destino}` : ''}`, quien: c.operator })),
+    ...E.copias.filter(c => c.entrega === e.id).map(c => ({ ts: c.ts, icon: iconoCopia(c), txt: etiquetaCopia(c), quien: c.operator })),
     ...E.envios.filter(x => x.entrega === e.id).map(x => ({ ts: x.ts, icon: 'mail', txt: `Correo · ${(x.destinatarios || []).join(', ')} · ${x.estado === 'enviado' ? 'enviado' : x.estado === 'descartado' ? 'sustituido por un reenvío' : x.estado === 'pendiente' ? 'pendiente' : 'no enviado'}`, quien: '' })),
   ].sort((a, b) => b.ts - a.ts);
   if (!filas.length) return null;

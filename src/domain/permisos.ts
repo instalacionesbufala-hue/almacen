@@ -48,7 +48,7 @@ const OPS: Record<string, string> = {
   borrarProducto: 'inventario', archivarProducto: 'inventario', restaurarProducto: 'inventario', deshacerFusion: 'inventario', minimos: 'inventario',
   cambiarPropiedad: 'inventario', foto: 'inventario', quitarFoto: 'inventario',
   albaran: 'albaranes', reasignarLinea: 'albaranes',
-  prepararEntrega: 'entregas', confirmarEntrega: 'entregas', anularEntrega: 'entregas', reenviarCopia: 'entregas', copiaEntrega: 'entregas',
+  prepararEntrega: 'entregas', confirmarEntrega: 'entregas', anularEntrega: 'entregas', reenviarCopia: 'entregas', copiaEntrega: 'entregas', copiaJustificante: 'entregas', copiaRetirada: 'movimientos',
   equipo: 'equipos', vehiculo: 'equipos', asignarVehiculo: 'equipos', bajaTecnico: 'equipos', bajaVehiculo: 'equipos', estadoEquipo: 'equipos', retirarEquipo: 'equipos',
   tecnico: 'equipos', asignarTecnico: 'equipos', emailTecnico: 'equipos', telefonoTecnico: 'equipos', enlacePortal: 'equipos', revocarPortal: 'equipos',
   recuento: 'recuentos', recuentoVehiculo: 'recuentos',

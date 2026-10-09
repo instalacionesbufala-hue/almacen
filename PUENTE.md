@@ -1256,7 +1256,7 @@ Con 44 m de línea, el usuario espera **unas 88 fijaciones** (44 / 0,5).
    - Hay pruebas de: PVC deducido (44 − 1 − 3 = 40); manguera con `pvc32` (se descuentan las dos); fijaciones = 86 en el ejemplo; barras enteras del PVC deducido; y vista previa y aplicación del recálculo global respetando las correcciones manuales.
    - En la respuesta, cuántos cierres reales cambian y en qué.
 
-### E-043 · "Enviar al grupo de WhatsApp" del equipo, con el PDF · PENDIENTE (pequeño)
+### E-043 · "Enviar al grupo de WhatsApp" del equipo, con el PDF · HECHO
 **Petición del usuario (08/10):** los justificantes (entregas ENT-, devoluciones DEV-, retiradas RET-) los manda al **grupo de WhatsApp de cada equipo**, no a un teléfono.
 - **Límite técnico:** `wa.me` solo abre chats con **números**. No se puede abrir un grupo con texto o archivo ya puesto, y los enlaces de invitación (`chat.whatsapp.com/…`) solo abren el grupo.
 - **Decisión:** nada de bots ni servicios no oficiales, porque arriesgan el bloqueo del número.
@@ -3689,3 +3689,43 @@ Todo queda en una versión "Corrección manual por …" con la diferencia, y en 
 Ajusté 3 pruebas de E-032 (sus reglas no tienen `pvc32`; ahora aparece la línea del PVC deducido sin equivalencia). Reloj fijo en las nuevas. **564 pruebas en verde** (254 de la app + 310 de base de datos); build correcto.
 
 **En el navegador:** dos cierres de demostración aplicados sin PVC (44 m con 1 + 3, y 20 m) → la vista previa da 2 cierres, +63 m (21 barras), +126 clips y +21 manguitos. En el de 44 m: +42 m (14 barras), +86 clips, +14 manguitos y la nota "PVC deducido… (44 − 1 − 3 = 40 m)". Aplicar → versión "Recalculado por Oficina"; otra vista previa → "0 de 2 cierres cambian". Bien en móvil. Demo restaurada.
+
+### E-043 · "Enviar al grupo de WhatsApp" del equipo, con el PDF · HECHO (09/10/2026)
+**Qué he hecho**
+1. **Grupo de WhatsApp en cada equipo** (Equipos y técnicos → editar equipo) y **en cada socio** (Configuración → Socios → Editar), opcional:
+   - nombre del grupo (si se deja vacío, el del equipo o socio) y enlace de invitación;
+   - el enlace se valida y se normaliza al escribir: acepta `chat.whatsapp.com/…` sin `https` y con `?mode=…` detrás; un `wa.me` o cualquier otra cosa da error;
+   - en el servidor, columnas `grupo_whatsapp_nombre` y `grupo_whatsapp_enlace` en `equipos` y `propietarios` (con su comprobación). `guardar_equipo` y `guardar_propietario` las guardan si llega `grupo_whatsapp`, y si no llega, las conservan.
+2. **Botón "Enviar al grupo de <equipo>"** (`src/features/entregas/Grupo.tsx`):
+   - **dónde:** en el justificante de la entrega (botón grande; "Compartir PDF" queda al lado como secundario), en el de devoluciones (grupo del equipo) y en el de retiradas (grupo del socio). En "Últimas entregas", un icono de grupo al final de cada fila que tenga grupo;
+   - **en el móvil** (iPhone, Android o iPad): menú de compartir con **el PDF y el texto preparado**, por ejemplo "Entrega ENT-2026-0017 · Búfala 2 · 08/10/2026 · 7 líneas · recogido por …". Si el navegador no comparte archivos, descarga el PDF y abre el grupo;
+   - **en el ordenador:** abre el grupo con el clic (si no, el navegador lo bloquea como ventana emergente), descarga el PDF, copia el texto al portapapeles y avisa: "Arrastra el PDF al chat de Búfala 2 y pega el texto";
+   - **sin grupo configurado:** no sale el botón y queda "Compartir PDF", como hasta ahora.
+3. **Registro:** cada envío queda como **"Copia enviada al grupo · Búfala 2"** (canal `grupo_whatsapp`) en "Copias enviadas":
+   - del justificante de la entrega, como las copias por correo y WhatsApp;
+   - y ahora también en devoluciones y retiradas.
+   - **En el servidor:** `copias_entrega` admite `devolucion_id` o `retirada_id` (uno solo por copia) y el canal nuevo. Hay dos funciones: `registrar_copia_justificante` (entregas y devoluciones, permiso de entregas) y `registrar_copia_retirada` (permiso de movimientos, como las retiradas). Ambas solo aceptan justificantes firmados. La copia por WhatsApp al técnico (E-014) no cambia.
+4. **Migración** `20261101000100_e043_grupo_whatsapp.sql`, aplicada en producción. No hay que desplegar ninguna función.
+
+**Decisiones**
+- Sin bots ni servicios no oficiales, como pide el encargo.
+- **El texto:** WhatsApp a veces lo descarta cuando se comparte un archivo desde el iPhone. Por eso el nombre del PDF ya lleva el número (`ENT-2026-0017.pdf`).
+- **Los grupos no se rellenan por su cuenta:** el usuario pone los enlaces desde WhatsApp (grupo → Invitar mediante enlace → Copiar enlace).
+
+**Pruebas:** `src/domain/e043.test.ts` (6) y `supabase/tests/e043.test.ts` (3):
+- el enlace normalizado y rechazado;
+- el grupo que se guarda, se conserva y se quita (equipo y socio);
+- el grupo y el texto de una entrega y de una retirada;
+- móvil u ordenador;
+- copias de entrega, devolución y retirada, idempotentes y solo de firmadas.
+
+**573 pruebas en verde** (260 de la app + 313 de base de datos); build correcto.
+
+**En el navegador (demo):**
+- Enlace `wa.me` → error en rojo. Enlace de invitación inventado → se guarda normalizado.
+- En "Últimas entregas" sale el icono solo en la fila de Búfala 2.
+- **Ordenador:** abre el grupo, descarga `ENT-2026-0409.pdf`, avisa "Arrastra el PDF al chat de Búfala 2" y aparece "Copia enviada al grupo · Búfala 2" en el historial.
+- **Móvil (simulado):** menú de compartir con el PDF y el texto, sin abrir ninguna ventana.
+- Demo restaurada.
+
+**Falta que lo pruebe el usuario en su iPhone**, desde una entrega de Búfala 2 con el enlace real del grupo puesto en el equipo.

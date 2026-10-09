@@ -1,6 +1,8 @@
 /* E-038 · Retirada de material en custodia por el socio (o por un tercero en su nombre): socio y origen (almacén o un vehículo),
    cesta con buscador y escáner (solo artículos de ese socio), datos de quién recoge y en nombre de quién, firma y albarán
    RET-AAAA-NNNN en PDF. La lista de retiradas va en Custodia; el administrador puede anular una (movimientos inversos). */
+import { BotonGrupo, CopiasJustificante } from '../entregas/Grupo';
+import { grupoDe } from '../../domain/grupoWhatsapp';
 import { useState } from 'react';
 import type { Retirada } from '../../data/tipos';
 import { comprobarRetirada, disponibleRetirada, MOTIVO_RETIRADA, numRetirada } from '../../domain/retiradas';
@@ -143,9 +145,11 @@ function VerRetirada({ id, recien = false }: { id: string; recien?: boolean }) {
         <b className="text-right">{p ? qtyTxt(p, l.cantidad) : num(l.cantidad)}</b></div>; })}</div>
       {r.firma && <div><div className={LBL}>Firma de {r.recoge}</div><FirmaImg f={r.firma} className="h-24 w-64" /></div>}
       <p className="font-mono text-label-sm text-secondary break-all">Huella: {r.hash || 'se calcula al sincronizar'}</p>
+      <CopiasJustificante retirada={r.id} />
     </div>
     <SheetFoot className="grid grid-cols-2 gap-2">
-      <button onClick={() => void compartirRetirada(r)} className={`${BTN_P} h-12`}><Icon n="share" className="ico-20" />Compartir PDF</button>
+      <BotonGrupo j={{ tipo: 'retirada', doc: r }} className={`${BTN_P} h-14 col-span-2`} />
+      <button onClick={() => void compartirRetirada(r)} className={`${grupoDe(E, { tipo: 'retirada', doc: r }) ? BTN_S : BTN_P} h-12`}><Icon n="share" className="ico-20" />Compartir PDF</button>
       <button onClick={() => void descargarRetirada(r)} className={`${BTN_S} h-12`}><Icon n="file_download" className="ico-20" />Descargar</button>
       {perm.admin && r.estado === 'firmada' && <button onClick={anular} className={`${BTN_S} h-12 col-span-2 !text-error`}><Icon n="undo" className="ico-20" />Anular la retirada</button>}
     </SheetFoot>

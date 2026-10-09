@@ -1,6 +1,8 @@
 /* Equipos, vehículos y técnicos (E-013: tres entidades independientes con historial de asignaciones) y auditoría de entregas.
    - El equipo es un nombre ("Búfala 1", como lo envía el wizard); cambia de técnicos y de vehículo con el tiempo.
    - El material a bordo es del VEHÍCULO: si un técnico cambia de equipo no se mueve nada; si un vehículo cambia de equipo, su material va con él. */
+import { CamposGrupo } from '../../ui/campoGrupo';
+import { grupoValido } from '../../domain/grupoWhatsapp';
 import { cantTxt } from '../../domain/formatos';
 import { Cantidad } from '../../ui/cantidad';
 import { abrirExtracto } from './Extracto';
@@ -239,12 +241,14 @@ export function AuditoriaEntregas() {
 export const abrirFormEquipo = (e?: Equipo) => openModal(<FormEquipo e={e} />);
 function FormEquipo({ e }: { e?: Equipo }) {
   const E = useAlmacen();
-  const [f, setF] = useState({ nombre: e?.nombre || `Búfala ${E.equipos.length + 1}`, estado: (e?.estado || 'depot') as EstadoEquipo, vehiculo: e?.vehiculo || '' });
+  const [f, setF] = useState({ nombre: e?.nombre || `Búfala ${E.equipos.length + 1}`, estado: (e?.estado || 'depot') as EstadoEquipo, vehiculo: e?.vehiculo || '', grupoNombre: e?.grupoWhatsapp?.nombre || '', grupoEnlace: e?.grupoWhatsapp?.enlace || '' });
   const [tecs, setTecs] = useState<string[]>(e?.tecnicos || []);
   const guardarEq = () => {
     if (!f.nombre.trim()) return toast('Indica el nombre del equipo.', 'err');
     let id = e?.id; if (!id) { let n = E.equipos.length + 1; do { id = 'F' + String(n++).padStart(2, '0'); } while (E.equipos.some(x => x.id === id)); }
-    if (!ejecutar({ op: 'equipo', args: { id: id!, nombre: f.nombre.trim(), estado: f.estado } })) return;
+    let grupoWhatsapp;
+    try { grupoWhatsapp = grupoValido({ nombre: f.grupoNombre, enlace: f.grupoEnlace }, f.nombre.trim()) ?? null; } catch (err) { return toast((err as Error).message, 'err'); }
+    if (!ejecutar({ op: 'equipo', args: { id: id!, nombre: f.nombre.trim(), estado: f.estado, grupoWhatsapp } })) return;
     for (const t of tecs.filter(t => !e?.tecnicos.includes(t))) ejecutar({ op: 'asignarTecnico', args: { tecnico: t, equipo: id } });
     for (const t of (e?.tecnicos || []).filter(t => !tecs.includes(t))) ejecutar({ op: 'asignarTecnico', args: { tecnico: t } });
     if ((f.vehiculo || undefined) !== (e?.vehiculo || undefined)) ejecutar({ op: 'asignarVehiculo', args: f.vehiculo ? { vehiculo: f.vehiculo, equipo: id } : { vehiculo: e!.vehiculo! } });
@@ -261,6 +265,7 @@ function FormEquipo({ e }: { e?: Equipo }) {
         <div className="flex flex-wrap gap-2 mt-1">{E.tecnicos.map(t => <label key={t.id} className="flex items-center gap-2 px-3 h-12 rounded-lg bg-surface-container-low">
           <input type="checkbox" checked={tecs.includes(t.id)} onChange={x => setTecs(x.target.checked ? [...tecs, t.id] : tecs.filter(y => y !== t.id))} className="w-5 h-5 accent-primary" />{t.nombre}</label>)}
           {!E.tecnicos.length && <span className="text-body-sm text-secondary">Aún no hay técnicos: añádelos después.</span>}</div></div>
+      <CamposGrupo nombre={f.grupoNombre} enlace={f.grupoEnlace} onChange={(grupoNombre, grupoEnlace) => setF({ ...f, grupoNombre, grupoEnlace })} porDefecto={f.nombre.trim()} />
     </div>
     <SheetFoot className="flex gap-2"><button onClick={closeModal} className={`${BTN_S} h-12 px-5`}>Cancelar</button><button onClick={guardarEq} className={`${BTN_P} h-12 flex-1`}><Icon n="save" className="ico-20" />Guardar equipo</button></SheetFoot>
   </>);

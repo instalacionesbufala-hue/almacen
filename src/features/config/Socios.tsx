@@ -1,5 +1,7 @@
 /* E-024 · Configuración → Socios de custodia (administrador): crear, editar y desactivar socios (Esmove, Instant Box…).
    Un socio con artículos no se desactiva: antes hay que pasarlos a otro socio o a material propio. */
+import { CamposGrupo } from '../../ui/campoGrupo';
+import { grupoValido } from '../../domain/grupoWhatsapp';
 import { useState } from 'react';
 import type { Propietario } from '../../data/tipos';
 import { COLORES_SOCIO, colorSocio, idSocio, motivoNoDesactivar } from '../../domain/socios';
@@ -32,11 +34,13 @@ export function Socios() {
 export const abrirSocio = (o?: Propietario) => openModal(<FormSocio o={o} />);
 function FormSocio({ o }: { o?: Propietario }) {
   const E = useAlmacen();
-  const [f, setF] = useState({ nombre: o?.nombre || '', contacto: o?.contacto || '', repo: (o?.correosReposicion || []).join(', '), inf: (o?.correosInformes || []).join(', '), color: o?.color || 'naranja' });
+  const [f, setF] = useState({ nombre: o?.nombre || '', contacto: o?.contacto || '', repo: (o?.correosReposicion || []).join(', '), inf: (o?.correosInformes || []).join(', '), color: o?.color || 'naranja', grupoNombre: o?.grupoWhatsapp?.nombre || '', grupoEnlace: o?.grupoWhatsapp?.enlace || '' });
   const lista = (s: string) => s.split(/[,;\s]+/).filter(Boolean);
   const guardar = () => {
     const id = o?.id || idSocio(f.nombre, E.propietarios.map(x => x.id));
-    const args: Propietario = { id, nombre: f.nombre.trim(), contacto: f.contacto.trim(), correosReposicion: lista(f.repo), correosInformes: lista(f.inf), color: f.color, activo: o ? o.activo !== false : true };
+    let grupoWhatsapp;
+    try { grupoWhatsapp = grupoValido({ nombre: f.grupoNombre, enlace: f.grupoEnlace }, f.nombre.trim()); } catch (err) { return toast((err as Error).message, 'err'); }
+    const args: Propietario = { id, nombre: f.nombre.trim(), contacto: f.contacto.trim(), correosReposicion: lista(f.repo), correosInformes: lista(f.inf), color: f.color, activo: o ? o.activo !== false : true, grupoWhatsapp };
     if (ejecutar({ op: 'propietario', args })) { closeModal(); toast(o ? 'Socio guardado.' : `${args.nombre} dado de alta como socio de custodia.`, 'ok'); }
   };
   return (<>
@@ -46,6 +50,7 @@ function FormSocio({ o }: { o?: Propietario }) {
       <Campo label="Contacto"><input value={f.contacto} onChange={e => setF({ ...f, contacto: e.target.value })} className={`${INP} h-12`} placeholder="Nombre y teléfono" /></Campo>
       <Campo label="Correos para solicitudes de reposición"><input value={f.repo} onChange={e => setF({ ...f, repo: e.target.value })} type="text" inputMode="email" className={`${INP} h-12`} placeholder="pedidos@ejemplo.com" /></Campo>
       <Campo label="Correos para informes"><input value={f.inf} onChange={e => setF({ ...f, inf: e.target.value })} type="text" inputMode="email" className={`${INP} h-12`} placeholder="informes@ejemplo.com" /></Campo>
+      <CamposGrupo nombre={f.grupoNombre} enlace={f.grupoEnlace} onChange={(grupoNombre, grupoEnlace) => setF({ ...f, grupoNombre, grupoEnlace })} porDefecto={f.nombre.trim()} que="las retiradas (RET-)" />
       <Campo label="Color de la etiqueta"><div className="flex flex-wrap gap-2">{Object.entries(COLORES_SOCIO).map(([k, c]) =>
         <button key={k} type="button" onClick={() => setF({ ...f, color: k })} aria-pressed={f.color === k} className={`h-10 px-3 rounded-lg font-mono text-label-md ${c.c} ${f.color === k ? 'ring-2 ring-primary' : ''}`}>{c.t}</button>)}</div></Campo>
       <p className="text-body-sm text-secondary">Vista previa: <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded font-mono text-label-sm ${(COLORES_SOCIO[f.color] || COLORES_SOCIO.violeta).c}`}><Icon n="handshake" className="ico-16" />Custodia {f.nombre.trim() || '…'}</span></p>
