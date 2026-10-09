@@ -1256,6 +1256,23 @@ Con 44 m de línea, el usuario espera **unas 88 fijaciones** (44 / 0,5).
    - Hay pruebas de: PVC deducido (44 − 1 − 3 = 40); manguera con `pvc32` (se descuentan las dos); fijaciones = 86 en el ejemplo; barras enteras del PVC deducido; y vista previa y aplicación del recálculo global respetando las correcciones manuales.
    - En la respuesta, cuántos cierres reales cambian y en qué.
 
+### E-043 · "Enviar al grupo de WhatsApp" del equipo, con el PDF · PENDIENTE (pequeño)
+**Petición del usuario (08/10):** los justificantes (entregas ENT-, devoluciones DEV-, retiradas RET-) los manda al **grupo de WhatsApp de cada equipo**, no a un teléfono.
+- **Límite técnico:** `wa.me` solo abre chats con **números**. No se puede abrir un grupo con texto o archivo ya puesto, y los enlaces de invitación (`chat.whatsapp.com/…`) solo abren el grupo.
+- **Decisión:** nada de bots ni servicios no oficiales, porque arriesgan el bloqueo del número.
+
+**Qué hacer**
+1. **En cada equipo** (Equipos y técnicos → editar equipo): campo opcional **"Grupo de WhatsApp"**:
+   - **nombre del grupo,** para mostrarlo;
+   - **enlace de invitación** (`https://chat.whatsapp.com/…`, validado).
+2. **Botón "Enviar al grupo de <equipo>"** en el justificante de entregas, devoluciones y retiradas, y en "Últimas entregas":
+   - **en el móvil:** Web Share API con **el archivo PDF** y un texto preparado ("Entrega ENT-2026-0017 · Búfala 2 · 08/10/2026 · 7 líneas · recogido por …"). El usuario elige WhatsApp y el grupo, que sale entre los recientes. Si el navegador no puede compartir archivos, descarga el PDF y abre el enlace del grupo;
+   - **en el ordenador:** descarga el PDF y abre el enlace del grupo (WhatsApp Web o la aplicación de escritorio), con un aviso: "Arrastra el PDF al chat";
+   - si el equipo no tiene grupo configurado, el botón es "Compartir PDF", como hoy.
+3. **Registro:** que quede como "copia enviada al grupo" (canal `grupo_whatsapp`) en el historial del justificante, igual que las copias por correo (E-014).
+4. **Retiradas (E-038):** el grupo del socio (por ejemplo, el de Esmove), con un campo igual en la ficha del socio (E-024).
+5. **Hecho cuando** en el iPhone, desde una entrega de Búfala 2, "Enviar al grupo de Búfala 2" abre el menú de compartir con el PDF y el texto, y en el ordenador descarga el PDF y abre el grupo.
+
 ---
 
 ## Revisión del chat
@@ -1263,7 +1280,8 @@ Con 44 m de línea, el usuario espera **unas 88 fijaciones** (44 / 0,5).
 ### 08/10/2026 · Revisión de E-041 y nuevo E-042
 - **E-041:** verificado. **556 pruebas en verde.**
 - **E-042 (urgente, nuevo):** PVC que falta en el cierre (se deduce de los metros de línea), fijaciones con ese PVC y recálculo global de cierres con vista previa.
-- **Orden: E-042.**
+- **E-043 (nuevo, pequeño):** "Enviar al grupo de WhatsApp" del equipo, con el PDF.
+- **Orden: E-042 → E-043.**
 
 ### 08/10/2026 · Revisión de E-039 y E-040, y nuevo E-041
 - **E-039 y E-040:** verificados. **545 pruebas en verde.**
