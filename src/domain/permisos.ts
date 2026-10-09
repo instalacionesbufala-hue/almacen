@@ -54,7 +54,7 @@ const OPS: Record<string, string> = {
   recuento: 'recuentos', recuentoVehiculo: 'recuentos',
   altaDotacion: 'dotacion', asignarDotacion: 'dotacion', incidencia: 'dotacion', minimoHerramienta: 'dotacion', pedidoHerramienta: 'dotacion', tallas: 'dotacion',
   acta: 'custodia', envio: 'custodia',
-  recalcularCierre: 'cierres', revisarMaterialEspecial: 'cierres', resolverLinea: 'cierres', reprocesarCierre: 'cierres', reprocesarCierres: 'cierres', corregirCierre: 'cierres', retirada: 'movimientos', anularRetirada: 'movimientos', devolucion: 'entregas', anularDevolucion: 'entregas', recalcularConsumoPiezas: 'cierres', cambiarFormato: 'inventario', resolverLineaVarios: 'cierres', deshacerResolucion: 'cierres', usarVehiculoActual: 'cierres', editarInicioAsignacion: 'equipos', cierreHistorico: 'cierres',
+  recalcularCierre: 'cierres', revisarMaterialEspecial: 'cierres', revisarMedidorSolar: 'cierres', resolverLinea: 'cierres', reprocesarCierre: 'cierres', reprocesarCierres: 'cierres', corregirCierre: 'cierres', retirada: 'movimientos', anularRetirada: 'movimientos', devolucion: 'entregas', anularDevolucion: 'entregas', recalcularConsumoPiezas: 'cierres', cambiarFormato: 'inventario', resolverLineaVarios: 'cierres', deshacerResolucion: 'cierres', usarVehiculoActual: 'cierres', editarInicioAsignacion: 'equipos', cierreHistorico: 'cierres',
   validarPendiente: 'bandeja', mermaVista: 'bandeja',
   categoria: 'configuracion', desactivarCategoria: 'configuracion', borrarEquivalencia: 'configuracion', configAvisos: 'configuracion', propietario: 'configuracion',
   equivalencia: 'configuracion', cargarPropuesta: 'configuracion', confirmarEquivalencias: 'configuracion', kitFijacion: 'configuracion', configCierres: 'configuracion',

@@ -2,7 +2,7 @@
    fórmula, kits de fijación, "Probar" (qué descontaría, sin aplicar nada) y "Recalcular cierres desde…". */
 import { useEffect, useState } from 'react';
 import type { ArticuloRegla, Equivalencia, Estado } from '../../data/tipos';
-import { CAMPOS_MATERIAL, cierresARecalcular, normalizarCierre, reglasVigentes, traducirCierre, vistaPreviaRecalculo, type LineaTraducida, type VistaRecalculo } from '../../domain/cierres';
+import { CAMPOS_MATERIAL, cierresARecalcular, condicionesLegibles, normalizarCierre, reglasVigentes, traducirCierre, vistaPreviaRecalculo, type LineaTraducida, type VistaRecalculo } from '../../domain/cierres';
 import { fechaHora, hoyISO, num, toNum } from '../../domain/formato';
 import { contenidoDe, find, lineaCierreTxt, nombreVehiculo, qtyTxt } from '../../domain/reglas';
 import { ejecutar, S, useAlmacen } from '../../store/almacen';
@@ -14,8 +14,8 @@ import { SelectorArticulo } from '../../ui/selectorArticulo';
 
 export const FORMULAS: Record<Equivalencia['formula'], string> = { directa: 'Directa (valor × factor)', manguitos: 'Manguitos floor(m/3)+1', fijaciones: 'Fijaciones ceil(m/0,5) × kit', unidad: '1 ud (cargador)' };
 /** Campos del cierre que suelen usarse en las condiciones (se puede escribir cualquier otro) */
-const CAMPOS_COND = ['hardware', 'tipoLinea', 'fase', 'seccion', 'cableDatos', 'equipo', 'tipoInst'];
-const VALORES: Record<string, string[]> = { tipoLinea: ['tubo', 'manguera'], fase: ['mono', 'trif'], seccion: ['6', '10', '16', '25'], cableDatos: ['UTP', 'FTP'] };
+const CAMPOS_COND = ['hardware', 'descInstalacion', 'tipoLinea', 'fase', 'seccion', 'cableDatos', 'equipo', 'tipoInst'];
+const VALORES: Record<string, string[]> = { tipoLinea: ['tubo', 'manguera'], fase: ['mono', 'trif'], seccion: ['6', '10', '16', '25'], cableDatos: ['UTP', 'FTP'], hardware: ['v2c | trydan', 'policharger'], descInstalacion: ['solar', 'solar&monofas', 'solar&trifas'] };
 
 /* ---------- Lista de artículos de una regla o de un kit ---------- */
 export function ArticulosEditor({ valor, onChange, etiquetaFactor = 'Cantidad' }: { valor: ArticuloRegla[]; onChange: (v: ArticuloRegla[]) => void; etiquetaFactor?: string }) {
@@ -55,6 +55,7 @@ function CondicionesEditor({ filas, onChange }: { filas: FilaCond[]; onChange: (
     <datalist id="campos-cierre">{CAMPOS_COND.map(c => <option key={c} value={c} />)}</datalist>
     <button type="button" onClick={() => onChange([...filas, { campo: 'hardware', op: '~', valor: '' }])} className={`${BTN_S} h-10 px-3 self-start`}><Icon n="add" className="ico-18" />Condición</button>
     <p className="text-label-sm text-secondary">Varios valores separados por | (uno u otro). En "contiene", a&b = contiene los dos. Mayúsculas y acentos no cuentan.</p>
+    {filas.some(x => x.campo.trim() && x.valor.trim()) && <p className="text-body-sm rounded-lg bg-surface-container-low p-2"><b>Se aplica si:</b> {condicionesLegibles(deFilas(filas))}</p>}
   </div>);
 }
 
@@ -85,7 +86,7 @@ function FormRegla({ r, duplicar }: { r?: Equivalencia; duplicar: boolean }) {
     <div className="p-5 grid grid-cols-1 lg:grid-cols-2 gap-4">
       <div className="flex flex-col gap-3">
         <Campo label="Partida del wizard (o suma: pvc32+acero32; hardware para el cargador)"><input list="partidas" value={f.campo} onChange={e => setF({ ...f, campo: e.target.value })} className={`${INP} h-12 font-mono`} />
-          <datalist id="partidas">{[...CAMPOS_MATERIAL, 'hardware', 'pvc32+acero32'].map(c => <option key={c} value={c} />)}</datalist></Campo>
+          <datalist id="partidas">{[...CAMPOS_MATERIAL, 'hardware', 'descInstalacion', 'pvc32+acero32'].map(c => <option key={c} value={c} />)}</datalist></Campo>
         <Campo label="Fórmula"><select value={f.formula} onChange={e => setF({ ...f, formula: e.target.value as Equivalencia['formula'] })} className={`${INP} h-12`}>{Object.entries(FORMULAS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></Campo>
         <div><div className={`${LBL} mb-1`}>Condiciones</div><CondicionesEditor filas={conds} onChange={setConds} /></div>
       </div>

@@ -1,5 +1,6 @@
 /* E-012 · Cierres de instalación recibidos del wizard: estado, líneas traducidas, pendientes que resuelve el administrador,
    consumo por equipo y periodo, discrepancias (vehículos en negativo) y recuento de vehículo. */
+import { AvisoMedidor } from './AvisoMedidor';
 import { abrirRecalcularCierres } from './Reglas';
 import { abrirCorregirCierre } from './Corregir';
 import { Contado, lineasContadas } from '../../ui/contado';
@@ -7,7 +8,7 @@ import { Fragment, useState } from 'react';
 import type { CierreApp, Estado, EstadoCierre, LineaCierre, Unidad } from '../../data/tipos';
 import { UNIT } from '../../data/catalogo';
 import { conductoresSueltos, datosLinea, filtroRZ1K, mangueraRZ1K, reglaDeResolucion, type Propuesta } from '../../domain/resolucion';
-import { consumoPorArticulo, descInstalacion, desdeCierresPorDefecto, discrepancias, lineasDe, noEntregadosPorArticulo, noGestionadoPorPartida, ORIGEN_VERSION, textoDiferencia } from '../../domain/cierres';
+import { consumoPorArticulo, descInstalacion, medidorPorRevisar, desdeCierresPorDefecto, discrepancias, lineasDe, noEntregadosPorArticulo, noGestionadoPorPartida, ORIGEN_VERSION, textoDiferencia } from '../../domain/cierres';
 import { vehiculoActualDeCierre, vehiculoHistorialDeCierre } from '../../domain/asignaciones';
 import { descargarCsv } from '../../domain/csv';
 import { fechaHora, hoyISO, num, redondea, toNum } from '../../domain/formato';
@@ -102,8 +103,9 @@ function FilaCierre({ c, abierto, alternar, puede, foco }: { c: CierreApp; abier
       <Tag c={ESTADO[c.estado].c}>{ESTADO[c.estado].t}</Tag><Icon n={abierto ? 'expand_less' : 'expand_more'} className="text-secondary" />
     </button>
     {abierto && <div className="px-4 pb-4 flex flex-col gap-2">
-      {descInstalacion(c) && <p className="text-body-sm">Instalación: <b>{descInstalacion(c)}</b>{/solar/i.test(descInstalacion(c)) ? <Tag c="bg-amber-100 text-amber-800 ml-1">SOLAR · medidor bidireccional</Tag> : null}</p>}
+      {descInstalacion(c) && <p className="text-body-sm">Instalación: <b>{descInstalacion(c)}</b>{/solar/i.test(descInstalacion(c)) ? <Tag c="bg-amber-100 text-amber-800 ml-1">SOLAR</Tag> : null}</p>}
       {c.hardware && <p className="text-body-sm">Cargador: <b>{c.hardware}</b> (sin n.º de serie: lo registra Esbrain)</p>}
+      {medidorPorRevisar(E, c) && <AvisoMedidor c={c} puede={puede} />}
       {c.materialEspecial && <div className={`text-body-sm rounded-lg p-3 flex flex-wrap items-center gap-2 ${c.materialRevisado ? 'bg-surface-container-low' : 'bg-amber-50'}`}>
         <span className="flex-1 min-w-[200px]"><b>Material especial:</b> {c.materialEspecial}{c.materialRevisado ? ' · revisado' : ' · añade a mano lo que corresponda (no se descuenta solo)'}</span>
         {!c.materialRevisado && puede && <button onClick={() => { if (ejecutar({ op: 'revisarMaterialEspecial', args: { id: c.id, nota: '' } })) toast('Marcado como revisado.', 'ok'); }} className={`${BTN_S} h-10 px-3`}>Revisado</button>}</div>}

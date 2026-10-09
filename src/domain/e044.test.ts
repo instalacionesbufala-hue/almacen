@@ -12,7 +12,8 @@ beforeEach(() => { vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new 
 afterEach(() => { vi.useRealTimers(); });
 
 const DESC = 'INSTALACIÓN TIER 1 UNIFAM. Y EMPRESA MONOFÁSICO SOLAR';
-const medidores = (c: Record<string, unknown>) => traducirCierre(normalizarCierre(c), MEDIDORES_SOLAR, {}).map(l => [l.sku, l.cantidad, l.estado]);
+// E-045: con cargador V2C (con otros, el medidor no es automático)
+const medidores = (c: Record<string, unknown>) => traducirCierre(normalizarCierre({ hardware: 'V2C TRYDAN M5', ...c }), MEDIDORES_SOLAR, {}).filter(l => l.campo === 'descInstalacion').map(l => [l.sku, l.cantidad, l.estado]);
 
 describe('qué medidor lleva cada instalación', () => {
   it('SOLAR mono → monofásico; trif → trifásico; sin SOLAR, ninguno; sin fase, la de la descripción; sin nada, para elegir', () => {
@@ -22,7 +23,7 @@ describe('qué medidor lleva cada instalación', () => {
     expect(medidores({ fase: 'mono' })).toEqual([]);
     expect(medidores({ descInstalacion: DESC })).toEqual([[MEDIDOR_MONO, 1, 'aplicable']]);              // "MONOFÁSICO" sin tilde ni mayúsculas
     expect(medidores({ descInstalacion: 'INSTALACIÓN SOLAR' })).toEqual([[null, 1, 'sin_equivalencia']]);
-    expect(traducirCierre(normalizarCierre({ descInstalacion: DESC, fase: 'mono' }), MEDIDORES_SOLAR, {})[0].nota).toMatch(/^Instalación SOLAR/);
+    expect(traducirCierre(normalizarCierre({ descInstalacion: DESC, fase: 'mono', hardware: 'V2C TRYDAN M5' }), MEDIDORES_SOLAR, {}).find(l => l.campo === 'descInstalacion')!.nota).toMatch(/^Instalación SOLAR/);
   });
 });
 
@@ -33,7 +34,7 @@ function estado() {
   S.equivalencias = MEDIDORES_SOLAR.map(r => ({ ...r, confirmada: true }) as Equivalencia);
   return S;
 }
-const WZ = { numInst: 'E2641001', equipo: 'Búfala 1', fechaCierreIso: new Date(Date.now() - 3 * 3600e3).toISOString(), fase: 'mono', tipoLinea: 'tubo', seccion: '6' };
+const WZ = { numInst: 'E2641001', equipo: 'Búfala 1', hardware: 'V2C TRYDAN MONOFÁSICO M5', fechaCierreIso: new Date(Date.now() - 3 * 3600e3).toISOString(), fase: 'mono', tipoLinea: 'tubo', seccion: '6' };
 
 describe('en los cierres', () => {
   it('cierre del wizard con la descripción SOLAR: 1 medidor monofásico de la furgoneta', () => {
@@ -68,7 +69,7 @@ describe('en los cierres', () => {
   it('prefactura con descInstalacion en los atributos; el del wizard manda sobre el de la prefactura', () => {
     const S = estado();
     registrarCierreLocal(S, { origen: 'holded', numInst: 'E2641002', documento: 'PF-1', fechaAprobacion: WZ.fechaCierreIso, equipo: 'Búfala 1',
-      atributos: { fase: 'Trifásica', descInstalacion: 'TIER 2 TRIFÁSICO SOLAR', fechaCierreIso: WZ.fechaCierreIso }, lineas: { metrosLinea: 10 } }, 'holded');
+      atributos: { fase: 'Trifásica', descInstalacion: 'TIER 2 TRIFÁSICO SOLAR', fechaCierreIso: WZ.fechaCierreIso, hardware: 'V2C TRYDAN TRIFÁSICO M5' }, lineas: { metrosLinea: 10 } }, 'holded');
     expect(unidadesABordo(S, 'V-F01', MEDIDOR_TRIF)).toBe(-1);
     const v = prepararVersion({ version: 1, wizard: { ...WZ, descInstalacion: 'SIN PLACAS' }, holded: { documento: 'PF-2', fechaAprobacion: '', lineas: {}, atributos: { descInstalacion: DESC } }, origenes: ['wizard', 'holded'] }, 'holded',
       { numInst: 'E2641001', documento: 'PF-3', lineas: { metrosLinea: 12 } });

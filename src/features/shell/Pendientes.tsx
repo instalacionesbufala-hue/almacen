@@ -1,4 +1,6 @@
 /* Bandeja "Pendientes de validar" del administrador (E-004): mermas grandes o de custodia y diferencias de recuento */
+import { medidorPorRevisar } from '../../domain/cierres';
+import { AvisoMedidor } from '../cierres/AvisoMedidor';
 import { useState } from 'react';
 import { UNIT } from '../../data/catalogo';
 import { find, nombreVehiculo, qtyTxt } from '../../domain/reglas';
@@ -27,7 +29,7 @@ export function BotonPendientes() {
 }
 
 /** E-026: cierres con material especial sin revisar, o sin vehículo (p. ej. una prefactura de Holded sin equipo) */
-const cierresPorRevisar = (E: ReturnType<typeof useAlmacen>) => E.cierres.filter(c => c.estado !== 'ignorado' && ((c.materialEspecial && !c.materialRevisado) || c.estado === 'sin_vehiculo'));
+const cierresPorRevisar = (E: ReturnType<typeof useAlmacen>) => E.cierres.filter(c => c.estado !== 'ignorado' && ((c.materialEspecial && !c.materialRevisado) || c.estado === 'sin_vehiculo' || medidorPorRevisar(E, c)));
 const verCierres = () => { closeModal(); setUI({ eqTab: 'cierres' }); ir('equipos'); };
 
 export const abrirPendientes = () => openModal(<Bandeja />, { ancha: true });
@@ -102,6 +104,7 @@ function CierresPorRevisar() {
     {lista.map(c => <div key={c.id} className="rounded-xl bg-amber-50 p-3 flex flex-wrap items-center gap-3">
       <div className="flex-1 min-w-[200px]"><div className="font-semibold">{c.numInst} · {c.cliente || 'sin cliente'}</div>
         {c.materialEspecial && !c.materialRevisado && <div className="text-body-sm"><b>Revisar material especial:</b> {c.materialEspecial}. Añade a mano lo que corresponda (no se descuenta solo).</div>}
+        {medidorPorRevisar(E, c) && <AvisoMedidor c={c} puede compacto />}
         {c.estado === 'sin_vehiculo' && <div className="text-body-sm text-amber-900">Sin vehículo{c.equipoWizard ? `: el equipo "${c.equipoWizard}" no tiene vehículo asignado` : ': no trae equipo'}. No descuenta hasta reprocesarlo.</div>}</div>
       <button onClick={verCierres} className="h-12 px-4 rounded-lg bg-white font-semibold text-primary">Ver cierre</button>
       {c.materialEspecial && !c.materialRevisado && <button onClick={() => { if (ejecutar({ op: 'revisarMaterialEspecial', args: { id: c.id, nota: '' } })) toast('Material especial marcado como revisado.', 'ok'); }} className="h-12 px-4 rounded-lg bg-primary text-white font-semibold">Revisado</button>}

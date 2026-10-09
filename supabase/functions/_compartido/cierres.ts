@@ -258,13 +258,15 @@ export function traducirCierre(c: Cierre, reglas: Regla[], kits: Kits, kitDefect
 export const MEDIDOR_MONO = '8900500101', MEDIDOR_TRIF = 'WIH24YJX185551';
 const medidor = (id: string, orden: number, condiciones: Regla['condiciones'], sku: string, nota: string): Regla =>
   ({ id, campo: 'descInstalacion', formula: 'unidad', condiciones, articulos: [{ sku, factor: 1 }], estimada: false, activa: true, orden, nota });
+// E-045: solo con cargador V2C (Trydan) se instala siempre; con otro cargador, el cierre queda "por revisar" (medidorPorRevisar)
+const V2C = ['v2c', 'trydan'];
 export const MEDIDORES_SOLAR: Regla[] = [
-  medidor('S1', 1200, { 'descInstalacion~': 'solar', fase: 'mono' }, MEDIDOR_MONO, 'Instalación SOLAR: medidor bidireccional monofásico'),
-  medidor('S2', 1201, { 'descInstalacion~': 'solar', fase: 'trif' }, MEDIDOR_TRIF, 'Instalación SOLAR: medidor bidireccional trifásico'),
-  medidor('S3', 1202, { 'descInstalacion~': 'solar&monofas' }, MEDIDOR_MONO, 'Instalación SOLAR (monofásica según la descripción): medidor bidireccional monofásico'),
-  medidor('S4', 1203, { 'descInstalacion~': 'solar&trifas' }, MEDIDOR_TRIF, 'Instalación SOLAR (trifásica según la descripción): medidor bidireccional trifásico'),
-  // sin fase en el cierre ni en la descripción: queda "sin equivalencia" para elegir el medidor a mano
-  { ...medidor('S5', 1204, { 'descInstalacion~': 'solar' }, '', 'Instalación SOLAR sin fase: elige el medidor bidireccional'), articulos: [] },
+  medidor('S1', 1200, { 'descInstalacion~': 'solar', fase: 'mono', 'hardware~': V2C }, MEDIDOR_MONO, 'Instalación SOLAR: medidor bidireccional monofásico (con cargador V2C)'),
+  medidor('S2', 1201, { 'descInstalacion~': 'solar', fase: 'trif', 'hardware~': V2C }, MEDIDOR_TRIF, 'Instalación SOLAR: medidor bidireccional trifásico (con cargador V2C)'),
+  medidor('S3', 1202, { 'descInstalacion~': 'solar&monofas', 'hardware~': V2C }, MEDIDOR_MONO, 'Instalación SOLAR (monofásica según la descripción): medidor bidireccional monofásico (con cargador V2C)'),
+  medidor('S4', 1203, { 'descInstalacion~': 'solar&trifas', 'hardware~': V2C }, MEDIDOR_TRIF, 'Instalación SOLAR (trifásica según la descripción): medidor bidireccional trifásico (con cargador V2C)'),
+  // con V2C y sin fase en el cierre ni en la descripción: queda "sin equivalencia" para elegir el medidor a mano
+  { ...medidor('S5', 1204, { 'descInstalacion~': 'solar', 'hardware~': V2C }, '', 'Instalación SOLAR con V2C, sin fase: elige el medidor bidireccional'), articulos: [] },
 ];
 
 let n = 0;

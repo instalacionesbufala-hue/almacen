@@ -100,6 +100,7 @@ export type Op =
   | { op: 'kitFijacion'; args: { kit: 'A' | 'B' | 'C'; articulos: ArticuloRegla[] } }
   | { op: 'configCierres'; args: { kit: 'A' | 'B' | 'C'; apertura?: number; cargadoresHasta?: number } }
   | { op: 'revisarMaterialEspecial'; args: { id: string; nota: string } }
+  | { op: 'revisarMedidorSolar'; args: { id: string; nota: string } }
   | { op: 'resolverLinea'; args: { linea: string; sku: string; cantidad?: number } }
   | { op: 'corregirCierre'; args: { id: string; correccion: Correccion } }
   | { op: 'recalcularConsumoPiezas'; args: { sku: string; desde: number } }
@@ -522,6 +523,12 @@ export const OPS: Defs = {
     local: (S, a) => { if (S.rol !== 'admin') throw new Error('Solo el administrador'); const c = S.cierres.find(x => x.id === a.id); if (!c) throw new Error('Cierre no encontrado'); c.materialRevisado = true; },
     rpc: a => ['revisar_material_especial', { p_cierre: a.id, p_nota: a.nota }],
     desc: () => 'Material especial revisado',
+  },
+  /* E-045: instalación SOLAR con cargador no V2C: "No se instaló medidor bidireccional" */
+  revisarMedidorSolar: {
+    local: (S, a) => { if (S.rol !== 'admin') throw new Error('Solo el administrador'); const c = S.cierres.find(x => x.id === a.id); if (!c) throw new Error('Cierre no encontrado'); c.medidorRevisado = true; },
+    rpc: a => ['revisar_medidor_solar', { p_cierre: a.id, p_nota: a.nota }],
+    desc: () => 'Medidor bidireccional revisado (no se instaló)',
   },
   revocarIntegracion: {
     local: (S, a) => { if (S.rol !== 'admin') throw new Error('Solo el administrador'); const i = S.integraciones.find(x => x.id === a.id); if (i && !i.revocado) i.revocado = Date.now(); },

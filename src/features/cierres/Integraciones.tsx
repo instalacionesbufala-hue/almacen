@@ -2,7 +2,7 @@
    apertura, kit de fijación por defecto, tabla de equivalencias (propuesta → confirmar), kits y carga del histórico. */
 import { useRef, useState } from 'react';
 import type { ArticuloRegla } from '../../data/tipos';
-import { cierresDeCsv, condicionesTexto, prepararEnvio } from '../../domain/cierres';
+import { cierresDeCsv, condicionesLegibles, condicionesTexto, prepararEnvio } from '../../domain/cierres';
 import { abrirProbar, abrirRegla, ArticulosEditor, FORMULAS, Recalcular } from './Reglas';
 import { fechaHora } from '../../domain/formato';
 import { find, nombreVehiculo, vehiculoDeEquipo } from '../../domain/reglas';
@@ -90,7 +90,7 @@ export function Integraciones() {
         <thead className="bg-surface-container-low"><tr className="text-left"><th className="p-2">Partida</th><th className="p-2">Condición</th><th className="p-2">Artículos</th><th className="p-2">Fórmula</th><th className="p-2" /></tr></thead>
         <tbody>{E.equivalencias.map(r => <tr key={r.id} className={`border-t border-surface-container align-top ${r.activa ? '' : 'opacity-50'}`}>
           <td className="p-2 font-mono">{r.campo}{!r.confirmada && <Tag c="bg-amber-100 text-amber-800 ml-1">borrador</Tag>}</td>
-          <td className="p-2 font-mono text-label-sm">{condicionesTexto(r.condiciones) || '—'}</td>
+          <td className="p-2 text-label-sm">{condicionesTexto(r.condiciones) ? <><span className="block text-body-sm">{condicionesLegibles(r.condiciones)}</span><span className="block font-mono text-secondary">{condicionesTexto(r.condiciones)}</span></> : '—'}</td>
           <td className="p-2">{r.sinDescuento ? <span className="text-secondary">{r.sinDescuento === 'servicio' ? 'No descuenta material (servicio)' : 'Material no gestionado en el almacén (se cuenta, no descuenta)'}</span> : r.formula === 'fijaciones' ? `kit ${r.kit || E.configApp.kitFijacion || 'A'}` : r.articulos.map((a, i) => { const p = a.sku ? find(E, a.sku) : undefined;
             return <div key={i} className={!a.sku || !p ? 'text-error font-semibold' : ''}>{a.sku ? `${a.sku}${p ? ` · ${p.name}` : ' · NO EXISTE en el catálogo'}` : `${a.nombre || 'artículo'}: sin dar de alta`}{a.factor !== 1 ? ` ×${a.factor}` : ''}</div>; })}
             {r.formula === 'fijaciones' && (E.kits[r.kit || E.configApp.kitFijacion || 'A'] || []).some(a => !a.sku || !find(E, a.sku)) && <div className="text-error font-semibold">el kit tiene artículos que no existen</div>}

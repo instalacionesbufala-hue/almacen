@@ -1298,7 +1298,7 @@ Con 44 m de línea, el usuario espera **unas 88 fijaciones** (44 / 0,5).
    - Hay pruebas de: un cierre con descripción SOLAR y mono descuenta 1 medidor monofásico; trif, el trifásico; sin SOLAR, ninguno; el modo calendario sobre un cierre existente añade el medidor sin duplicar; y la prefactura con `descInstalacion`.
    - En la respuesta, qué artículos de medidor hay en la base y cuántos cierres desde el 30/09 tienen SOLAR (si se puede saber por el wizard o la prefactura; si no, lo dirá el Apps Script).
 
-### E-045 · El medidor SOLAR solo es automático con cargador V2C; con otros, revisión manual · PENDIENTE (urgente, pequeño)
+### E-045 · El medidor SOLAR solo es automático con cargador V2C; con otros, revisión manual · HECHO
 **Corrección del usuario (09/10) a E-044:** el medidor bidireccional (la pinza) **solo se instala siempre con cargadores V2C** (Trydan). Con **Policharger u otro cargador**, en una instalación SOLAR **no siempre** se instala. La regla debe tenerlo en cuenta, y el usuario quiere **poder cambiarla**.
 
 **Qué hacer**
@@ -3834,3 +3834,36 @@ Ajusté 3 pruebas de E-032 (sus reglas no tienen `pvc32`; ahora aparece la líne
 **583 pruebas en verde** (266 de la app + 317 de base de datos); build correcto.
 
 **En el navegador (demo):** cierre de Búfala 1 sin descripción → "datos del calendario" con la descripción SOLAR → 1 medidor monofásico, la descripción con la etiqueta SOLAR y la versión 2 "datos del calendario +1 V2C MEDIDOR BIDIRECCIONAL MONOFÁSICO". Demo restaurada.
+
+### E-045 · El medidor SOLAR solo es automático con cargador V2C; con otros, revisión manual · HECHO (09/10/2026)
+**Producción (solo lectura, antes de cambiar nada).**
+- `completarDescripcionesAlmacen` ya ha pasado: 31 cierres tienen descripción. **Solo uno es SOLAR: E2632493** (V2C Trydan, MONOFÁSICO SOLAR), y descontó el monofásico.
+- **Ningún cierre SOLAR con cargador no V2C recibió medidor**, así que **no hay nada que arreglar** ni hace falta recalcular.
+- E2632493 sigue igual con las reglas nuevas (es V2C).
+
+**Qué he hecho**
+1. **Reglas S1-S5** (migración `20261103000100_e045_medidor_solo_v2c.sql`; la versión anterior de cada una queda en `equivalencias_historial`, operario "E-045 (migración)"):
+   - todas añaden `hardware~v2c|trydan`. Por ejemplo, S1 = descripción contiene "solar" + fase = mono + cargador contiene V2C o Trydan → 8900500101;
+   - S5 (V2C sin fase) sigue dejando "sin equivalencia" para elegirlo;
+   - la propuesta del módulo compartido (`MEDIDORES_SOLAR`) igual; `registrar-cierre` redesplegada.
+2. **SOLAR sin V2C** (Policharger, otro cargador o desconocido): **no se descuenta medidor ni sale "sin equivalencia"**. En su lugar, el aviso **"Instalación SOLAR con <cargador>: ¿se instaló medidor bidireccional?"**:
+   - **dónde:** en el detalle del cierre y en la **bandeja** del administrador (Pendientes → cierres por revisar, como el material especial);
+   - **"Sí, monofásico" / "Sí, trifásico"** (resalta el de la fase del cierre): añade la línea como **Corregir cierre** (E-035): línea fijada a mano, versión "Corrección manual por…" y diferencia aplicada. El medidor es el de la regla de esa fase (el que tenga puesto el usuario);
+   - **"No":** `revisar_medidor_solar` (columna nueva `cierres.medidor_revisado`, solo administrador, con auditoría);
+   - el aviso desaparece en los dos casos. Si el usuario edita la regla para incluir ese cargador, el medidor se descuenta solo y el aviso no sale.
+3. **Reglas editables por el usuario** (Configuración → Integraciones → Equivalencias):
+   - el editor (E-016) ya admitía varias condiciones a la vez. Ahora ofrece `descInstalacion` como campo y como partida, con valores sugeridos (`solar`, `solar&monofas`, `v2c | trydan`, `policharger`);
+   - **lenguaje normal:** en la lista de reglas y debajo de las condiciones del editor: "Se aplica si: Descripción de la instalación contiene: Solar · Fase: mono · Cargador contiene: V2C o Trydan". Para que el medidor también vaya con Policharger, basta añadir `| policharger` en la condición del cargador; queda su versión anterior;
+   - no he puesto un interruptor aparte: la condición visible y editable cubre lo mismo y vale para cualquier cargador.
+
+**Pruebas:** `src/domain/e045.test.ts` (5) y `supabase/tests/e045.test.ts` (2):
+- caso E2632493 (V2C + MONOFÁSICO SOLAR → monofásico, sin aviso);
+- SOLAR + Policharger → sin medidor, sin "sin equivalencia" y con aviso (también sin cargador; sin SOLAR, nada);
+- "Sí, monofásico" → línea manual con versión y diferencia;
+- "No" → revisado (solo administrador, con auditoría);
+- la regla editada con Policharger se aplica;
+- condiciones en lenguaje normal.
+
+Ajusté las pruebas de E-044 para que sus cierres lleven cargador V2C. **590 pruebas en verde** (271 de la app + 319 de base de datos); build correcto.
+
+**En el navegador (demo):** cierre SOLAR con Policharger → aviso "Instalación SOLAR con POLICHARGER NW…: ¿se instaló medidor bidireccional?" en el cierre y en la bandeja. "Sí, monofásico" → 1 medidor monofásico, línea manual y versión "Corrección manual…", y el aviso desaparece. Demo restaurada.
