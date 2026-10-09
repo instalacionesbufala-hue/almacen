@@ -14,8 +14,8 @@ import { SelectorArticulo } from '../../ui/selectorArticulo';
 
 export const FORMULAS: Record<Equivalencia['formula'], string> = { directa: 'Directa (valor × factor)', manguitos: 'Manguitos floor(m/3)+1', fijaciones: 'Fijaciones ceil(m/0,5) × kit', unidad: '1 ud (cargador)' };
 /** Campos del cierre que suelen usarse en las condiciones (se puede escribir cualquier otro) */
-const CAMPOS_COND = ['hardware', 'descInstalacion', 'tipoLinea', 'fase', 'seccion', 'cableDatos', 'equipo', 'tipoInst'];
-const VALORES: Record<string, string[]> = { tipoLinea: ['tubo', 'manguera'], fase: ['mono', 'trif'], seccion: ['6', '10', '16', '25'], cableDatos: ['UTP', 'FTP'], hardware: ['v2c | trydan', 'policharger'], descInstalacion: ['solar', 'solar&monofas', 'solar&trifas'] };
+const CAMPOS_COND = ['hardware', 'descInstalacion', 'medidorBidireccional', 'tipoLinea', 'fase', 'seccion', 'cableDatos', 'equipo', 'tipoInst'];
+const VALORES: Record<string, string[]> = { tipoLinea: ['tubo', 'manguera'], fase: ['mono', 'trif'], seccion: ['6', '10', '16', '25'], cableDatos: ['UTP', 'FTP'], hardware: ['v2c | trydan', 'policharger'], descInstalacion: ['solar', 'solar&monofas', 'solar&trifas'], medidorBidireccional: ['mono', 'trif', 'no'] };
 
 /* ---------- Lista de artículos de una regla o de un kit ---------- */
 export function ArticulosEditor({ valor, onChange, etiquetaFactor = 'Cantidad' }: { valor: ArticuloRegla[]; onChange: (v: ArticuloRegla[]) => void; etiquetaFactor?: string }) {

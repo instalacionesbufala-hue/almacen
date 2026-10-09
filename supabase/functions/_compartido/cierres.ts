@@ -39,7 +39,7 @@ export interface LineaTraducida {
 export const CAMPOS_FACTURABLES = ['metrosLinea', 'metrosUtp', 'rj45', 'corr32', 'acero32', 'acero40', 'canaleta', 'sot50', 'sot90', 'bornasMono', 'bornasTrif',
   'caja6', 'caja12', 'caja18', 'cerradura', 'cajaReg', 'mag1025', 'mag32', 'mag40', 'pica', 'preinst'] as const;
 /** Lo que identifica qué material lleva un cierre (si no cambia nada de esto, la versión no trae cambios) */
-const CAMPOS_IDENTICOS = [...CAMPOS_MATERIAL, 'hardware', 'equipo', 'despFallido', 'tipoLinea', 'fase', 'seccion', 'cableDatos', 'materialEspecial', 'descInstalacion'];
+const CAMPOS_IDENTICOS = [...CAMPOS_MATERIAL, 'hardware', 'equipo', 'despFallido', 'tipoLinea', 'fase', 'seccion', 'cableDatos', 'materialEspecial', 'descInstalacion', 'medidorBidireccional'];
 /** E-044 · Campos de texto que valen 1 por instalación si vienen (para reglas de "1 ud") */
 const CAMPOS_TEXTO_UNIDAD = ['hardware', 'descInstalacion'];
 
@@ -53,13 +53,18 @@ export function normalizarCierre(raw: Record<string, unknown>): Cierre {
     ...raw,
     numInst: txt(raw.numInst), esbrainUuid: txt(raw.esbrainUuid), cliente: txt(raw.cliente), direccion: txt(raw.direccion),
     fechaCierreIso: txt(raw.fechaCierreIso || raw.fechaIso), equipo: txt(raw.equipo), hardware: txt(raw.hardware), materialEspecial: materialEspecial(raw.materialEspecial),
-    descInstalacion: txt(raw.descInstalacion),
+    descInstalacion: txt(raw.descInstalacion), medidorBidireccional: medidorBidireccional(raw.medidorBidireccional),
     despFallido: raw.despFallido === true || raw.despFallido === 'true' || raw.despFallido === 1, version: Math.max(1, Math.trunc(numero(raw.version)) || 1),
   };
   for (const k of CAMPOS_MATERIAL) c[k] = Math.max(0, numero(raw[k]));
   return c;
 }
 
+/** E-046 · Lo que confirma el técnico en el wizard (instalaciones SOLAR): 'mono' | 'trif' | 'no'; vacío = no lo dice */
+export function medidorBidireccional(v: unknown): '' | 'mono' | 'trif' | 'no' {
+  const t = norm(v);
+  return /^(mono|monofasic)/.test(t) ? 'mono' : /^(trif|trifasic)/.test(t) ? 'trif' : /^(no|no instalado|ninguno)$/.test(t) ? 'no' : '';
+}
 /** "SÍ — 1× CUADRO…" se guarda; "", "no", "-" o "NO" = sin material especial */
 export function materialEspecial(v: unknown): string {
   const t = txt(v);
@@ -174,7 +179,8 @@ export function prepararVersion(previo: PrevioCierre | null, origen: OrigenVersi
 }
 
 /** Valor de un campo o de una suma de campos ("pvc32+acero32") */
-export const valorCampo = (c: Cierre, campo: string) => CAMPOS_TEXTO_UNIDAD.includes(campo) ? (txt(c[campo]) ? 1 : 0) : campo.split('+').reduce((a, k) => a + numero(c[k.trim()]), 0);
+// E-046: el grupo del medidor (descInstalacion) también se evalúa si solo viene la confirmación del técnico
+export const valorCampo = (c: Cierre, campo: string) => campo === 'descInstalacion' ? (txt(c.descInstalacion) || txt(c.medidorBidireccional) ? 1 : 0) : CAMPOS_TEXTO_UNIDAD.includes(campo) ? (txt(c[campo]) ? 1 : 0) : campo.split('+').reduce((a, k) => a + numero(c[k.trim()]), 0);
 
 export function cumple(c: Cierre, cond: Record<string, string | string[]>): boolean {
   return Object.entries(cond || {}).every(([k, v]) => {
@@ -258,6 +264,12 @@ export function traducirCierre(c: Cierre, reglas: Regla[], kits: Kits, kitDefect
 export const MEDIDOR_MONO = '8900500101', MEDIDOR_TRIF = 'WIH24YJX185551';
 const medidor = (id: string, orden: number, condiciones: Regla['condiciones'], sku: string, nota: string): Regla =>
   ({ id, campo: 'descInstalacion', formula: 'unidad', condiciones, articulos: [{ sku, factor: 1 }], estimada: false, activa: true, orden, nota });
+// E-046: lo que confirma el técnico en el wizard manda sobre S1-S5 (mismo grupo, antes por orden; "no" = sin medidor ni aviso)
+export const MEDIDOR_TECNICO: Regla[] = [
+  medidor('M1', 1190, { medidorBidireccional: 'mono' }, MEDIDOR_MONO, 'Medidor bidireccional monofásico (confirmado por el técnico)'),
+  medidor('M2', 1191, { medidorBidireccional: 'trif' }, MEDIDOR_TRIF, 'Medidor bidireccional trifásico (confirmado por el técnico)'),
+  { ...medidor('M0', 1192, { medidorBidireccional: 'no' }, '', 'Sin medidor bidireccional (lo dice el técnico)'), articulos: [], sinDescuento: 'servicio' },
+];
 // E-045: solo con cargador V2C (Trydan) se instala siempre; con otro cargador, el cierre queda "por revisar" (medidorPorRevisar)
 const V2C = ['v2c', 'trydan'];
 export const MEDIDORES_SOLAR: Regla[] = [
@@ -304,6 +316,7 @@ export const EQUIVALENCIAS_PROPUESTA: Regla[] = [
   R('metrosUtp', 'directa', { 'cableDatos~': ['f/utp', 'ftp'] }, [['7270021010', 1]], { id: 'P-UTP-F', orden: 65, nota: 'Cat6 F/UTP (sin cargador: lo dice el cable de datos)' }),
   R('metrosUtp', 'directa', { 'cableDatos~': 'utp' }, [['7270020010', 1]], { id: 'P-UTP-U', orden: 66, nota: 'Cat6 U/UTP (sin cargador: lo dice el cable de datos)' }),
   // E-044: medidor bidireccional, 1 por instalación SOLAR (el título del calendario lleva "SOLAR"). La fase del cierre; si no viene, la de la descripción
+  ...MEDIDOR_TECNICO,
   ...MEDIDORES_SOLAR,
 ];
 

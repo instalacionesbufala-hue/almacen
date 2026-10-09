@@ -1,7 +1,7 @@
 /* E-012 · Cierres en la app: la misma lógica que el servidor (_registrar_cierre y _sincronizar_cierre) para la demostración
    y para la carga del histórico en local; y los resúmenes para las pantallas (consumo por obra, por equipo y periodo, discrepancias). */
 import type { CierreApp, Equivalencia, Estado, LineaCierre } from '../data/tipos';
-import { aplicarCorreccion, claveCierre, MEDIDOR_MONO, MEDIDOR_TRIF, normalizarCierre, prepararVersion, traducirCierre, type Cierre, type LineaTraducida, type OrigenVersion, type PrefacturaHolded, type PrevioCierre, type Regla, type Version } from '../../supabase/functions/_compartido/cierres';
+import { aplicarCorreccion, claveCierre, MEDIDOR_MONO, MEDIDOR_TRIF, medidorBidireccional, normalizarCierre, prepararVersion, traducirCierre, type Cierre, type LineaTraducida, type OrigenVersion, type PrefacturaHolded, type PrevioCierre, type Regla, type Version } from '../../supabase/functions/_compartido/cierres';
 import { applyMovement, consumoPorPieza, contenidoDe, find, unidadesABordo, vehiculoDeEquipo } from './reglas';
 import { redondea, uid } from './formato';
 
@@ -197,9 +197,11 @@ export const ORIGEN_VERSION: Record<string, string> = { wizard: 'wizard (directo
 /** E-045 · Instalación SOLAR sin línea de medidor (cargador no V2C, o desconocido): "¿se instaló medidor bidireccional?" hasta que se
     añada (Sí: línea fijada a mano) o se diga que no (revisado). No cuenta como "sin equivalencia". */
 export function medidorPorRevisar(S: Pick<Estado, 'lineasCierre'>, c: CierreApp): boolean {
-  if (c.medidorRevisado || c.despFallido || c.estado === 'ignorado' || !/solar/i.test(descInstalacion(c).normalize('NFD').replace(/[\u0300-\u036f]/g, ''))) return false;
+  if (c.medidorRevisado || c.despFallido || c.estado === 'ignorado' || medidorTecnico(c) || !/solar/i.test(descInstalacion(c).normalize('NFD').replace(/[\u0300-\u036f]/g, ''))) return false;
   return !S.lineasCierre.some(l => l.cierre === c.id && l.campo === 'descInstalacion' && l.estado !== 'quitada');
 }
+/** E-046 · Lo que confirmó el técnico en el wizard: 'mono' | 'trif' | 'no' (vacío = no lo dice) */
+export const medidorTecnico = (c: Pick<CierreApp, 'datosWizard' | 'datos'>) => medidorBidireccional(c.datosWizard?.medidorBidireccional || c.datos?.medidorBidireccional);
 /** El medidor de cada fase según las reglas (el que el usuario tenga puesto); si no hay regla, el de la propuesta */
 export function medidorDe(S: Pick<Estado, 'equivalencias'>, fase: 'mono' | 'trif'): string {
   const r = S.equivalencias.find(x => x.campo === 'descInstalacion' && x.activa && String(x.condiciones?.fase || '') === fase && x.articulos[0]?.sku);
@@ -207,7 +209,7 @@ export function medidorDe(S: Pick<Estado, 'equivalencias'>, fase: 'mono' | 'trif
 }
 /** E-045 · Condiciones de una regla en lenguaje normal: "Cargador contiene: V2C o Trydan · Fase: mono" */
 const NOMBRE_COND: Record<string, string> = { hardware: 'Cargador', descInstalacion: 'Descripción de la instalación', fase: 'Fase', tipoLinea: 'Tipo de línea', seccion: 'Sección',
-  cableDatos: 'Cable de datos', equipo: 'Equipo', tipoInst: 'Tipo de instalación' };
+  cableDatos: 'Cable de datos', equipo: 'Equipo', tipoInst: 'Tipo de instalación', medidorBidireccional: 'Medidor confirmado por el técnico' };
 export function condicionesLegibles(c: Record<string, string | string[]>): string {
   const may = (v: string) => v.split('&').map(t => t.trim()).map(t => t.length <= 4 ? t.toUpperCase() : t[0].toUpperCase() + t.slice(1)).join(' y ');
   return Object.entries(c || {}).map(([k, v]) => { const campo = k.replace(/~$/, ''), vals = (Array.isArray(v) ? v : [v]).map(x => k.endsWith('~') ? may(String(x)) : String(x));

@@ -1317,7 +1317,7 @@ Con 44 m de línea, el usuario espera **unas 88 fijaciones** (44 / 0,5).
    - Hay pruebas de: SOLAR + V2C mono → medidor monofásico; SOLAR + Policharger → sin medidor y con aviso "¿se instaló?"; "Sí, monofásico" lo añade; "No" lo marca como revisado; y la regla editada por el usuario (por ejemplo, añadiendo Policharger) se aplica.
    - El cierre E2632493 (V2C Trydan, MONOFÁSICO SOLAR) sigue descontando el monofásico.
 
-### E-046 · El técnico confirma el medidor bidireccional en el wizard: manda sobre las reglas · PENDIENTE (urgente, pequeño)
+### E-046 · El técnico confirma el medidor bidireccional en el wizard: manda sobre las reglas · HECHO
 **Novedad (09/10):** el wizard (`bufala/cierre-esbrain.html` v1.4.0) tiene una **página propia en las instalaciones SOLAR**: "¿Se ha instalado medidor bidireccional?", con las opciones "Sí · Monofásico" (por defecto), "Sí · Trifásico" y "No". En el POST envía:
 - **`descInstalacion`:** siempre (la descripción de la instalación);
 - **`medidorBidireccional`:** `'mono'` | `'trif'` | `'no'`. Va vacío si no es SOLAR o si la visita es fallida.
@@ -3888,3 +3888,37 @@ Ajusté 3 pruebas de E-032 (sus reglas no tienen `pvc32`; ahora aparece la líne
 Ajusté las pruebas de E-044 para que sus cierres lleven cargador V2C. **590 pruebas en verde** (271 de la app + 319 de base de datos); build correcto.
 
 **En el navegador (demo):** cierre SOLAR con Policharger → aviso "Instalación SOLAR con POLICHARGER NW…: ¿se instaló medidor bidireccional?" en el cierre y en la bandeja. "Sí, monofásico" → 1 medidor monofásico, línea manual y versión "Corrección manual…", y el aviso desaparece. Demo restaurada.
+
+### E-046 · El técnico confirma el medidor bidireccional en el wizard: manda sobre las reglas · HECHO (09/10/2026)
+**Qué he hecho**
+1. **`medidorBidireccional`** en el módulo compartido de cierres (`registrar-cierre`, redesplegada, y la app):
+   - se acepta en el cierre del wizard y del histórico, y se normaliza a `mono` | `trif` | `no` (también "Monofásico", "TRIFÁSICO", "No instalado"…); vacío = no lo dice;
+   - queda en los datos del wizard del cierre y en la entrada de la versión;
+   - cuenta para saber si una versión trae cambios;
+   - una versión posterior del wizard que no lo traiga no lo borra; el modo calendario y la prefactura no lo tocan.
+2. **Manda sobre S1-S5, sea cual sea el cargador.** Migración `20261104000100_e046_medidor_tecnico.sql`, aplicada en producción con tres reglas nuevas, **confirmadas y editables** en Equivalencias como las demás:
+   - **M1** `medidorBidireccional = mono` → 1 × 8900500101;
+   - **M2** `medidorBidireccional = trif` → 1 × WIH24YJX185551;
+   - **M0** `medidorBidireccional = no` → "no descuenta" (servicio): sin línea, sin aviso "¿se instaló?" y sin pendiente.
+   - **Decisión:** van en el **mismo grupo que S1-S5** (partida `descInstalacion`, fórmula "1 ud") y **antes por orden** (1190-1192). Dentro de un grupo manda la primera regla que cumple, así que con el dato del técnico nunca se aplica además S1-S5. Sin el dato (cierres antiguos, no SOLAR, visita fallida o por la prefactura), siguen S1-S5 de E-045. El motor no cambia.
+   - El editor de reglas ofrece `medidorBidireccional` como condición (valores mono, trif, no) y la lee como "Medidor confirmado por el técnico: mono".
+3. **Precedencia:**
+   - el técnico (wizard) sobre el calendario y la prefactura;
+   - **una corrección manual (E-035) sobre todo**: la línea fijada a mano de esa partida no se toca aunque llegue otra versión del wizard con otro valor (tiene prueba).
+4. **En el detalle del cierre:** "Medidor bidireccional (confirmado por el técnico): Monofásico / Trifásico / No instalado", y la línea con la nota "Medidor bidireccional monofásico (confirmado por el técnico)". Con el dato del técnico no sale el aviso de E-045.
+
+**Producción:** aún no ha llegado ningún cierre con `medidorBidireccional` (ninguno del wizard v1.4.0). El primer cierre SOLAR que llegue con él lo mostrará en su detalle y descontará según lo que diga el técnico.
+
+**Pruebas:** `src/domain/e046.test.ts` (5) y `supabase/tests/e046.test.ts` (1):
+- lectura del valor;
+- Policharger SOLAR + "mono" → monofásico, sin aviso;
+- V2C SOLAR + "no" → nada, sin aviso ni pendiente;
+- "trif" → trifásico;
+- vacío → reglas de E-045;
+- el calendario no lo cambia;
+- la corrección manual manda;
+- en el servidor, los tres casos y el valor guardado en la versión.
+
+**596 pruebas en verde** (276 de la app + 320 de base de datos); build correcto.
+
+**En el navegador (demo):** cierre SOLAR con Policharger y "mono" → "Medidor bidireccional (confirmado por el técnico): Monofásico", línea del medidor con su nota y sin aviso. Demo restaurada.
